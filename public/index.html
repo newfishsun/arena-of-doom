@@ -33744,10 +33744,27 @@
             modal.style.display = 'flex';
         };
 
+        window._lastNonDayumHero = 'paul';
         window.isOnlineHeroLocked = function(heroKey, modeKey) {
             const hKey = String(heroKey !== undefined ? heroKey : (typeof selectedHeroType !== 'undefined' ? selectedHeroType : '')).toLowerCase().trim();
             const mKey = String(modeKey !== undefined ? modeKey : (typeof gameMode !== 'undefined' ? gameMode : '')).toLowerCase().trim();
-            return hKey === 'dayum' && (mKey.includes('online') || mKey === 'ffa_online' || mKey === 'duel_online' || mKey === '5v5_online');
+            const inOnlineQueue = (typeof isInQueue !== 'undefined' && isInQueue);
+            return hKey === 'dayum' && (inOnlineQueue || mKey.includes('online') || mKey === 'ffa_online' || mKey === 'duel_online' || mKey === '5v5_online');
+        };
+
+        window.enforceNoDayumInOnlineQueue = function(targetMode) {
+            const mKey = String(targetMode !== undefined ? targetMode : (typeof gameMode !== 'undefined' ? gameMode : '')).toLowerCase().trim();
+            const isOnline = mKey.includes('online') || mKey === 'ffa_online' || mKey === 'duel_online' || mKey === '5v5_online' || (typeof isInQueue !== 'undefined' && isInQueue);
+            if (isOnline && String(selectedHeroType || '').toLowerCase().trim() === 'dayum') {
+                if (typeof cancelQueue === 'function' && typeof isInQueue !== 'undefined' && isInQueue) {
+                    try { cancelQueue(); } catch (_) {}
+                }
+                const qModal = document.getElementById('matchmakingModal');
+                if (qModal) qModal.style.display = 'none';
+                window.showHeroLockedScreen('DAYUM');
+                return true;
+            }
+            return false;
         };
 
         window.selectHero = function(h) {
@@ -33759,10 +33776,13 @@
                 return; // Don't select disabled heroes
             }
 
-            // Exclude Dayum from online modes and show HERO LOCKED!!! screen
+            // Exclude Dayum from online modes/queues and show HERO LOCKED!!! screen
             if (window.isOnlineHeroLocked(h, gameMode)) {
                 window.showHeroLockedScreen('DAYUM');
                 return;
+            }
+            if (String(h || '').toLowerCase() !== 'dayum') {
+                window._lastNonDayumHero = h;
             }
             
             selectedHeroType=h;
@@ -34580,6 +34600,9 @@
         }
 
         window.startGame = function() {
+            if (window.enforceNoDayumInOnlineQueue && window.enforceNoDayumInOnlineQueue(gameMode)) {
+                return;
+            }
             // Handle Online FFA/duel mode differently
             if(gameMode === 'ffa_online' || gameMode === 'duel_online'){
                 // Start online multiplayer session
@@ -48965,6 +48988,12 @@
             window.onlineSocket = onlineSocket;
             console.log('   Creating new Socket.IO connection...');
             
+            onlineSocket.on('heroLocked', () => {
+              isInQueue = false;
+              const qModal = document.getElementById('matchmakingModal');
+              if (qModal) qModal.style.display = 'none';
+              if (typeof window.showHeroLockedScreen === 'function') window.showHeroLockedScreen('DAYUM');
+            });
             onlineSocket.on('connect', () => {
               mySocketId = onlineSocket.id;
               window.mySocketId = mySocketId;
@@ -49308,6 +49337,11 @@
         let queueUpdateTimer = null;
 
         function showQueueUI() {
+          if (String(selectedHeroType || '').toLowerCase() === 'dayum') {
+            isInQueue = false;
+            if (typeof window.showHeroLockedScreen === 'function') window.showHeroLockedScreen('DAYUM');
+            return;
+          }
           let modal = document.getElementById('matchmakingModal');
           if (!modal) {
             modal = document.createElement('div');
@@ -49490,7 +49524,7 @@
             else if(heroType==='everdawn'){if(q)q.innerText='✨';if(e)e.innerText='🪞';if(f)f.innerText='⛓️';if(g)g.innerText='🔮';player=new Everdawn(playerData.x,playerData.y,true);}
             else if(heroType==='bruno'){if(q)q.innerText='🧪';if(e)e.innerText='⚔️';if(f)f.innerText='☄️';if(g)g.innerText='✦';player=new BrunoAlexander(playerData.x,playerData.y,true);}
             else if(heroType==='bounty')player=new BountyHunter(playerData.x,playerData.y,true);
-            else if(heroType==='dayum')player=new Dayum(playerData.x,playerData.y,true);
+            else if(heroType==='dayum'){window.showHeroLockedScreen('DAYUM');selectedHeroType=window._lastNonDayumHero||'paul';player=new Paul(playerData.x,playerData.y,true);}
             else if(heroType==='winston')player=new Winston(playerData.x,playerData.y,true);
             else if(heroType==='amir')player=new Amir(playerData.x,playerData.y,true);
             else if(heroType==='steven')player=new Steven(playerData.x,playerData.y,true);
@@ -52483,7 +52517,7 @@
                 else if(heroType==='bai')player=new Bai(playerData.x,playerData.y,true);
                 else if(heroType==='apollo')player=new Apollo(playerData.x,playerData.y,true);
                 else if(heroType==='bounty')player=new BountyHunter(playerData.x,playerData.y,true);
-                else if(heroType==='dayum')player=new Dayum(playerData.x,playerData.y,true);
+                else if(heroType==='dayum'){window.showHeroLockedScreen('DAYUM');selectedHeroType=window._lastNonDayumHero||'paul';player=new Paul(playerData.x,playerData.y,true);}
                 else if(heroType==='gregory')player=new Gregory(playerData.x,playerData.y,true);
                 else if(heroType==='winston')player=new Winston(playerData.x,playerData.y,true);
                 else if(heroType==='amir')player=new Amir(playerData.x,playerData.y,true);
@@ -53971,6 +54005,14 @@ class FFAMultiplayer {
    * Join FFA matchmaking queue
    */
   async joinFFAQueue(heroType, playerName = 'Player', gameMode = 'ffa', maxPlayers = 50) {
+    const checkHero = String(heroType || (typeof selectedHeroType !== 'undefined' ? selectedHeroType : '')).toLowerCase();
+    if (checkHero === 'dayum') {
+      this.isInQueue = false;
+      if (typeof window !== 'undefined' && typeof window.showHeroLockedScreen === 'function') {
+        window.showHeroLockedScreen('DAYUM');
+      }
+      return false;
+    }
     if (typeof window !== 'undefined' && typeof window.startOnlineFFA === 'function' && gameMode === 'ffa') {
       window.startOnlineFFA();
       return true;

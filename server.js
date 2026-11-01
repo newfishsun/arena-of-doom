@@ -618,7 +618,7 @@ class GameRoom {
     }
     player.lastUpdate = now;
 
-    if (typeof data.heroType === 'string' && data.heroType) {
+    if (typeof data.heroType === 'string' && data.heroType && String(data.heroType).toLowerCase() !== 'dayum') {
       player.heroType = data.heroType;
     }
     if (typeof data.color === 'string' && data.color) {
@@ -791,6 +791,10 @@ io.on('connection', (socket) => {
 
   // Player joins matchmaking queue
   socket.on('joinMatchmaking', (data) => {
+    if (data && String(data.heroType || '').toLowerCase() === 'dayum') {
+      socket.emit('heroLocked', { heroType: 'dayum', message: 'HERO LOCKED!!!' });
+      return;
+    }
     const rawMode = (data && data.gameMode) ? String(data.gameMode) : 'ffa';
     const mode = rawMode.replace('_online', '');
     const defaultMax = mode === '5v5' ? 10 : (mode === 'duel' ? 2 : 4);
@@ -975,6 +979,10 @@ io.on('connection', (socket) => {
 
   // Allow players in matchmaking queue or pre-match countdown to update their selected heroType and currentSkin
   socket.on('playerQueueUpdate', (data) => {
+    if (data && String(data.heroType || '').toLowerCase() === 'dayum') {
+      socket.emit('heroLocked', { heroType: 'dayum', message: 'HERO LOCKED!!!' });
+      return;
+    }
     if (!data) return;
     for (const [, q] of queues.entries()) {
       const entry = q.find(p => p.socketId === socket.id);
