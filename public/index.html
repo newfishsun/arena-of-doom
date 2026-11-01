@@ -6529,39 +6529,33 @@
                             console.warn('Projectile hit error:', hitErr);
                         }
                         
-                        // Handle Melvin basic attack burn
-                        if(this.melvinBasic) {
+                        // Handle Melvin basic attack burn (only from authoritative/local projectile)
+                        if (!this.isRemote && this.melvinBasic) {
+                            e.burnDamagePerSec = 50;
+                            e.lastBurnTick = 0;
                             safeApplyStatus(e, 'burnTimer', Math.max(e.burnTimer || 0, 2), this.owner || this);
                             e.burnDamagePerSec = 50;
                         }
                         
                         // Handle Melvin Q ability - create pedal on hit
-                        if(this.melvinQ && this.onHit) {
+                        if (!this.isRemote && this.melvinQ && this.onHit) {
                             this.onHit(e);
                         }
                         
-                        if(this.onHit && !this.melvinQ) this.onHit(e);
-                        if(this.isBasketball && this.owner.isPlayer) addKillMsg('DAYUM!');
-                        if(this.stun>0) safeApplyStatus(e, 'stun', this.stun, this.owner || this);
-                        if(this.slow>0) safeApplyStatus(e, 'slow', this.slow, this.owner || this);
-                        if(this.isBrick) safeApplyStatus(e, 'slow', 3, this.owner || this);
-                        if(this.debuff && e.debuffImmuneTimer<=0) safeApplyStatus(e, 'defDebuff', 5.0, this.owner || this);
-                        // Handle Neo's hook pull
-                        if(this.isPullHook && this.hookCaster) {
+                        if (!this.isRemote && this.onHit && !this.melvinQ) this.onHit(e);
+                        if (!this.isRemote && this.isBasketball && this.owner && this.owner.isPlayer) addKillMsg('DAYUM!');
+                        if (!this.isRemote && this.stun > 0) safeApplyStatus(e, 'stun', this.stun, this.owner || this);
+                        if (!this.isRemote && this.slow > 0) safeApplyStatus(e, 'slow', this.slow, this.owner || this);
+                        if (!this.isRemote && this.isBrick) safeApplyStatus(e, 'slow', 3, this.owner || this);
+                        if (!this.isRemote && this.debuff && e.debuffImmuneTimer <= 0) safeApplyStatus(e, 'defDebuff', 5.0, this.owner || this);
+                        // Handle Neo's hook pull (syncDirectStatusEffectsToServer handles wall-clamped online pull broadcast)
+                        if (!this.isRemote && this.isPullHook && this.hookCaster) {
                             let dx = e.x - this.hookCaster.x, dy = e.y - this.hookCaster.y, d = Math.sqrt(dx*dx + dy*dy);
                             let pull = Math.min(d, 150);
                             let angle = Math.atan2(dy, dx);
                             e.x -= Math.cos(angle) * pull;
                             e.y -= Math.sin(angle) * pull;
-                            // Broadcast pull effect to remote players if this entity is a proxy
-                            if (gameMode && gameMode.includes('online') && e instanceof OnlinePlayerProxy && this.hookCaster && this.hookCaster.isPlayer && typeof onlineSocket !== 'undefined' && onlineSocket) {
-                                onlineSocket.emit('playerEffect', {
-                                    socketId: e.socketId,
-                                    effect: { type: 'pull', value: { dx: -Math.cos(angle) * pull, dy: -Math.sin(angle) * pull } },
-                                    attackerSocketId: mySocketId || (onlineSocket && onlineSocket.id) || null
-                                });
-                            }
-                            if(this.blockDuration) safeApplyStatus(e, 'stun', this.blockDuration, this.hookCaster || this.owner || this);
+                            if (this.blockDuration) safeApplyStatus(e, 'stun', this.blockDuration, this.hookCaster || this.owner || this);
                         }
                         if(this.recoil!==0&&this.owner&&!this.owner.dead){
                             if(this.recoil>0){this.owner.takeDamage(this.recoil,null);particles.push(new Particle(this.owner.x,this.owner.y,'#f00',2,0.5));}
@@ -7454,7 +7448,7 @@
                 this.distance = 0;
                 this.maxDistance = 1000;
                 this.hit = false;
-                this.damage = 650;
+                this.damage = 350;
                 this.boomTriggered = false;
             }
             triggerMagicalBoom() {
@@ -7462,7 +7456,7 @@
                 this.boomTriggered = true;
                 for (let e of entities) {
                     if (e !== this.owner && !e.dead && e instanceof Entity && e.team !== this.owner.team && Math.sqrt((this.x - e.x)**2 + (this.y - e.y)**2) < 140) {
-                        e.takeDamage(850, this.owner);
+                        e.takeDamage(600, this.owner);
                         if (typeof e.applyStatus === 'function') safeApplyStatus(e, 'slowness', 1.8, this.owner);
                         if (typeof e.slowTimer === 'number') e.slowTimer = Math.max(e.slowTimer || 0, 1.8);
                     }
@@ -7599,16 +7593,9 @@
                         let dy = this.y - e.y;
                         let dist = Math.sqrt(dx*dx + dy*dy);
                         if (dist > 0) {
-                            e.x += (dx / dist) * 150 * dt;
-                            e.y += (dy / dist) * 150 * dt;
-                            // Broadcast pull effect to remote players if this entity is a proxy
-                            if (gameMode && gameMode.includes('online') && e instanceof OnlinePlayerProxy && this.owner.isPlayer && typeof onlineSocket !== 'undefined' && onlineSocket) {
-                                onlineSocket.emit('playerEffect', {
-                                    socketId: e.socketId,
-                                    effect: { type: 'pull', value: { dx: (dx / dist) * 150, dy: (dy / dist) * 150 } },
-                                    attackerSocketId: mySocketId || (onlineSocket && onlineSocket.id) || null
-                                });
-                            }
+                            const pullStep = Math.min(dist, 150 * dt);
+                            e.x += (dx / dist) * pullStep;
+                            e.y += (dy / dist) * pullStep;
                         }
                     }
                 }
@@ -7616,7 +7603,7 @@
                 if (Math.floor((this.timer + dt) / interval) > Math.floor(this.timer / interval)) {
                     for (let e of entities) {
                         if (e !== this.owner && !e.dead && e instanceof Entity && e.team !== this.owner.team && Math.sqrt((this.x - e.x)**2 + (this.y - e.y)**2) < 300) {
-                            e.takeDamage(50, this.owner);
+                            e.takeDamage(30, this.owner);
                             if (!this.hitEnemies.has(e)) {
                                 this.hitEnemies.add(e);
                                 e.defDebuff = 5.0; // 5 seconds of defense debuff
@@ -8069,7 +8056,13 @@
                     this.moonMark = Math.max(this.moonMark || 0, Number(value) || 0);
                     if (src instanceof Entity) this.moonMarkOwner = src;
                 } else if (type === 'burnTimer') {
-                    this.burnTimer = Math.max(this.burnTimer || 0, Number(value) || 0);
+                    const bDur = (value && typeof value === 'object') ? (Number(value.duration ?? value.value) || 0) : (Number(value) || 0);
+                    this.burnTimer = Math.max(this.burnTimer || 0, bDur);
+                    if (value && typeof value === 'object' && typeof value.dps === 'number') {
+                        this.burnDamagePerSec = value.dps;
+                    } else if (src && ((typeof Melvin !== 'undefined' && src instanceof Melvin) || String(src.heroType || '').toLowerCase() === 'melvin')) {
+                        this.burnDamagePerSec = 50;
+                    }
                     if (src instanceof Entity) this.burnOwner = src;
                 } else if (type === 'fightingTimer') {
                     this.fightingTimer = Math.max(this.fightingTimer || 0, Number(value) || 0);
@@ -8892,26 +8885,24 @@
                 if(this.stunImmuneTimer > 0) this.stunImmuneTimer -= dt;
                 if(this.attackLockoutTimer > 0) this.attackLockoutTimer -= dt;
                 if(this.burnTimer > 0) {
-                    this.burnTimer -= dt;
                     this.lastBurnTick = (this.lastBurnTick || 0) + dt;
-                    let burnDmg = this.burnDamagePerSec || 150; // Default 150 per 0.5s = 300/sec, Melvin uses 50/sec
+                    let burnDmg = this.burnDamagePerSec || 150;
                     let tickRate = 0.5;
-                    if(this.lastBurnTick >= tickRate) {
-                        let burnAmount = burnDmg * tickRate;
-                        this.hp -= burnAmount;
-                        
-                        // Track burn damage in training mode
-                        if(gameMode === 'training' && this.burnOwner && this.burnOwner.isPlayer && window.trainingStats) {
-                            if(!window.trainingStats.countingStarted) {
-                                window.trainingStats.countingStarted = true;
-                                window.trainingStats.startTime = Date.now();
-                            }
-                            window.trainingStats.totalDamage += burnAmount;
-                        }
-                        
-                        if(this.hp <= 0) this.die(this.burnOwner);
+                    while(this.lastBurnTick >= tickRate - 1e-5) {
                         this.lastBurnTick -= tickRate;
+                        let burnAmount = burnDmg * tickRate;
+                        // In online mode, the attacker's OnlinePlayerProxy authoritatively ticks and emits burn damage to the server
+                        if (!(gameMode && gameMode.includes('online'))) {
+                            if (typeof this.takeDamage === 'function') {
+                                this.takeDamage(burnAmount, this.burnOwner || null, { isTrue: true, ignoreKnockback: true });
+                            } else {
+                                this.hp -= burnAmount;
+                                if(this.hp <= 0) this.die(this.burnOwner);
+                            }
+                        }
                     }
+                    this.burnTimer = Math.max(0, this.burnTimer - dt);
+                    if (this.burnTimer <= 0) this.lastBurnTick = 0;
                 }
 
                 // Apollo sun-mark DOT handling (75 damage per 0.5s for the duration of apolloFireTimer)
@@ -10225,11 +10216,11 @@
                     for (let e of entities) {
                         if(e === this || e.dead || !(e instanceof Entity) || e.team === this.team) continue;
                         let d = Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2);
-                        if (d < 70 && !this._ultHitEnemies.has(e)) {
+                        if (d < 60 && !this._ultHitEnemies.has(e)) {
                             this._ultHitEnemies.add(e);
-                            let dmg = 900;
+                            let dmg = 600;
                             let hadMark = (e.moonMark && e.moonMark > 0);
-                            if (hadMark) { dmg += 250; this._ultHitMoon = true; }
+                            if (hadMark) { dmg += 150; this._ultHitMoon = true; }
                             e.takeDamage(dmg, this);
                             effectsAdd(new WaveShockwave(e.x, e.y, hadMark ? 135 : 95, 0.42, '#e0f2fe', '#818cf8'));
                             visualEffects.push(new SpinningRing(e.x, e.y, hadMark ? 65 : 45, '#c084fc', 0.36, 12, 4));
@@ -10280,7 +10271,7 @@
                 const sy = this.y + Math.sin(this.angle) * (this.radius + 8);
                 particles.push(new Slash(sx, sy, this.angle, 62, Math.PI * 0.55, '#bae6fd'));
                 effectsAdd(new ImpactFlash(sx, sy, this.angle, 45, 0.22, '#c084fc'));
-                let proj=new Projectile(this,sx,sy,this.angle,speed,160,900,'#aee7ff',8,false,false,false,0,0,true,0);
+                let proj=new Projectile(this,sx,sy,this.angle,speed,110,900,'#aee7ff',8,false,false,false,0,0,true,0);
                 proj.isLunarCrescent = true;
                 proj.onHit = (enemy)=>{
                     try{
@@ -10306,7 +10297,7 @@
                 this.lunarCastAnim = 0.35;
                 const ox = this.x+Math.cos(this.angle)*(this.radius+8);
                 const oy = this.y+Math.sin(this.angle)*(this.radius+8);
-                let orb = new MoonOrb(this,ox,oy,this.angle,1500,1000,850,900);
+                let orb = new MoonOrb(this,ox,oy,this.angle,1500,1000,700,750);
                 if (typeof window.projectiles !== 'undefined') window.projectiles.push(orb); else entities.push(orb);
                 this.revealTimer=1.0;
                 effectsAdd(new RadialBeam(this.x, this.y, this.angle, 165, 0.38, 0.35, '#bae6fd'));
@@ -10329,7 +10320,7 @@
                 }
                 for(let i=0;i<44;i++){ let a=Math.random()*Math.PI*2; let s=240+Math.random()*280; let px = this.x + Math.cos(a)*20; let py = this.y + Math.sin(a)*20; particles.push(new Particle(px, py, i%2===0?'#dfefff':'#c4b5fd', 4.2, 0.95, Math.cos(a)*s, Math.sin(a)*s)); }
                 for(let i=0;i<16;i++){ let a=(Math.PI*2*i)/16; particles.push(new Particle(this.x + Math.cos(a)*105, this.y + Math.sin(a)*105, '#f7f2ff', 3.5, 1.0)); }
-                for(let e of entities) if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team){ let d=Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2); if(d<eRadius){ e.takeDamage(600,this); let ang=Math.atan2(e.y-this.y,e.x-this.x); e.kbx = Math.cos(ang) * 900; e.kby = Math.sin(ang) * 900; e.moonMark = Math.max(e.moonMark||0,6.0); e.moonMarkOwner = this; e.revealTimer = 1.0; e.slowTimer = Math.max(e.slowTimer || 0, 2.0); e.enhancedKBTimer = Math.max(e.enhancedKBTimer || 0, 0.9); for(let i=0;i<12;i++)particles.push(new Particle(e.x,e.y,'#dfefff',4,0.6)); } }
+                for(let e of entities) if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team){ let d=Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2); if(d<eRadius){ e.takeDamage(450,this); let ang=Math.atan2(e.y-this.y,e.x-this.x); e.kbx = Math.cos(ang) * 900; e.kby = Math.sin(ang) * 900; e.moonMark = Math.max(e.moonMark||0,6.0); e.moonMarkOwner = this; e.revealTimer = 1.0; e.slowTimer = Math.max(e.slowTimer || 0, 2.0); e.enhancedKBTimer = Math.max(e.enhancedKBTimer || 0, 0.9); for(let i=0;i<12;i++)particles.push(new Particle(e.x,e.y,'#dfefff',4,0.6)); } }
                 if(this.isPlayer) screenShake(14);
             }
             abilityF(){ // ultimate: float + astral eclipse dash (shorter distance, locked direction)
@@ -11472,15 +11463,15 @@
                 }else{
                     if(this.currentSkin==='Real Top G'){
                         // Enhanced punch pair with glow trails linked to projectiles
-                        let p1 = new Projectile(this,this.x,this.y,this.angle-0.2,600,110,85,'#ff6b35',14);
-                        let p2 = new Projectile(this,this.x,this.y,this.angle+0.2,600,110,85,'#ff6b35',14);
+                        let p1 = new Projectile(this,this.x,this.y,this.angle-0.2,600,70,80,'#ff6b35',14);
+                        let p2 = new Projectile(this,this.x,this.y,this.angle+0.2,600,70,80,'#ff6b35',14);
                         entities.push(p1,p2);
                         let glow1=new GlowProjectile(this.x,this.y,this.angle-0.2,600,p1);
                         let glow2=new GlowProjectile(this.x,this.y,this.angle+0.2,600,p2);
                         effectsAdd([glow1,glow2]);
                     } else {
-                        entities.push(new Projectile(this,this.x,this.y,this.angle-0.2,600,110,85,'#ffd700',12));
-                        entities.push(new Projectile(this,this.x,this.y,this.angle+0.2,600,110,85,'#ffd700',12));
+                        entities.push(new Projectile(this,this.x,this.y,this.angle-0.2,600,70,80,'#ffd700',12));
+                        entities.push(new Projectile(this,this.x,this.y,this.angle+0.2,600,70,80,'#ffd700',12));
                     }
                 }
             }
@@ -11570,19 +11561,19 @@
                     } else {
                         for(let i=0;i<30;i++)particles.push(new Particle(this.x,this.y,'#f40',8,1.0));
                     }
-                    for(let e of entities)if(e!==this&&!e.dead&&e instanceof Entity&&e.team!==this.team&&Math.sqrt((this.x-e.x)**2+(this.y-e.y)**2)<200){e.takeDamage(1200,this);e.stunTimer=1.0;e.revealTimer=1.0;}
+                    for(let e of entities)if(e!==this&&!e.dead&&e instanceof Entity&&e.team!==this.team&&Math.sqrt((this.x-e.x)**2+(this.y-e.y)**2)<200){e.takeDamage(800,this);e.stunTimer=1.0;e.revealTimer=1.0;}
                     if(this.isPlayer)screenShake(20);
                 }
             firePunch(){
                 if(this.currentSkin==='Real Top G'){
                     let a=this.angle+(Math.random()-0.5)*0.5;
-                    let proj = new Projectile(this,this.x,this.y,a,700,55,220,'#ff6700',11);
+                    let proj = new Projectile(this,this.x,this.y,a,700,38,220,'#ff6700',11);
                     entities.push(proj);
                     let glow=new GlowProjectile(this.x,this.y,a,700,proj);
                     effectsAdd(glow);
                 } else {
                     let a=this.angle+(Math.random()-0.5)*0.5;
-                    entities.push(new Projectile(this,this.x,this.y,a,700,52,200,'#ff6d00',10));
+                    entities.push(new Projectile(this,this.x,this.y,a,700,35,200,'#ff6d00',10));
                 }
             }
             draw(ctx){
@@ -11767,7 +11758,7 @@
                 const isOvercharged = this.currentSkin === 'Overcharged';
                 if(this.empStab){
                     this.empStab=false;
-                    let proj = new Projectile(this,this.x,this.y,this.angle,800,850,200,isOvercharged?'#c084fc':'#8e44ad',isOvercharged?13:10,false,false,false,-420,0,isOvercharged,3);
+                    let proj = new Projectile(this,this.x,this.y,this.angle,800,700,200,isOvercharged?'#c084fc':'#8e44ad',isOvercharged?13:10,false,false,false,-420,0,isOvercharged,3);
                     if (isOvercharged) {
                         const tipX = this.x + Math.cos(this.angle) * 165;
                         const tipY = this.y + Math.sin(this.angle) * 165;
@@ -11781,7 +11772,7 @@
                     }
                     entities.push(proj);
                 } else {
-                    let proj = new Projectile(this,this.x,this.y,this.angle,800,150,150,isOvercharged?'#d8b4fe':'#fff',isOvercharged?7:5,false,false,false,0,0,true);
+                    let proj = new Projectile(this,this.x,this.y,this.angle,800,100,150,isOvercharged?'#d8b4fe':'#fff',isOvercharged?7:5,false,false,false,0,0,true);
                     if (isOvercharged) {
                         const boltX = this.x + Math.cos(this.angle) * 115;
                         const boltY = this.y + Math.sin(this.angle) * 115;
@@ -11795,14 +11786,6 @@
                 const oldX = this.x, oldY = this.y;
                 this.x+=Math.cos(this.angle)*150;this.y+=Math.sin(this.angle)*150;
                 this.empStab=true;this.regenT=3.0;
-                for (let e of entities) {
-                    if (e !== this && !e.dead && e instanceof Entity && e.isTargetable !== false && e.team !== this.team) {
-                        if (Math.hypot(e.x - this.x, e.y - this.y) < 160 || Math.hypot(e.x - (oldX + this.x) * 0.5, e.y - (oldY + this.y) * 0.5) < 120) {
-                            e.takeDamage(450, this);
-                            e.revealTimer = 1.0;
-                        }
-                    }
-                }
                 if (this.currentSkin === 'Overcharged') {
                     visualEffects.push(new OverchargedLightningBolt(oldX, oldY, this.x, this.y, '#a855f7', '#ffffff', 0.34, 8));
                     visualEffects.push(new OverchargedLightningBolt(oldX, oldY, this.x + (Math.random()-0.5)*28, this.y + (Math.random()-0.5)*28, '#e879f9', '#f5d0fe', 0.28, 6));
@@ -11815,7 +11798,7 @@
             } 
             knifeSwing(){this.eCD=8.0;this.swinging=true;this.swingCount=0;this.swingT=0;}
             doSwing(c){
-                let dmg=c==4?600:260;let st=c==4?0.5:0;let r=120;let arc=Math.PI/2;
+                let dmg=c==4?500:200;let st=c==4?0.5:0;let r=120;let arc=Math.PI/2;
                 const isOvercharged = this.currentSkin === 'Overcharged';
                 if (isOvercharged) {
                     particles.push(new Slash(this.x,this.y,this.angle,r+14,arc*1.15,c==4?'#f0abfc':'#a855f7'));
@@ -12400,9 +12383,9 @@
                     this.y += Math.sin(this.angle) * 800 * dt;
                     
                     for(let e of entities) {
-                        if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team && Math.sqrt((this.x-e.x)**2+(this.y-e.y)**2) < 60 && !this.hitEnemies.has(e)) {
+                        if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team && Math.sqrt((this.x-e.x)**2+(this.y-e.y)**2) < 50 && !this.hitEnemies.has(e)) {
                              this.hitEnemies.add(e);
-                             let dmg = this.empowered ? 750 * 1.15 : 750;
+                             let dmg = this.empowered ? 500 * 1.15 : 500;
                              e.takeDamage(dmg, this);
                              this.hp = Math.min(this.maxHp, this.hp + dmg); // 100% Lifesteal logic assumed from prompt
                              if(this.isPlayer) addKillMsg(`Dash Hit +${Math.ceil(dmg)} HP`);
@@ -12595,7 +12578,7 @@
                      for(let e of entities) {
                          if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team && Math.sqrt((this.x-e.x)**2+(this.y-e.y)**2) < 120) {
                              let ad=Math.abs(Math.atan2(e.y-this.y,e.x-this.x)-this.angle);if(ad>Math.PI)ad=2*Math.PI-ad;
-                             if(ad < Math.PI/3) e.takeDamage(170, this);
+                             if(ad < Math.PI/3) e.takeDamage(100, this);
                          }
                      }
                 }
@@ -12996,9 +12979,9 @@
                     this.x += Math.cos(this.angle) * 600 * dt;
                     this.y += Math.sin(this.angle) * 600 * dt;
                     for (let e of entities) {
-                        if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.sqrt((this.x - e.x)**2 + (this.y - e.y)**2) < 52 && !this.dashHits.has(e)) {
+                        if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.sqrt((this.x - e.x)**2 + (this.y - e.y)**2) < 40 && !this.dashHits.has(e)) {
                             this.dashHits.add(e);
-                            e.takeDamage(650, this);
+                            e.takeDamage(450, this);
                             // Only trigger extra dash if we haven't reached max
                             if (this.dashCount < 5) {
                                 this.doExtraDash();
@@ -13076,7 +13059,7 @@
                 this.revealTimer = 0.5;
                 let ball = new EnergyBall(this, this.x, this.y, this.angle);
                 ball.speed = 1500;
-                ball.damage = 380;
+                ball.damage = 200;
                 this.energyBalls.push(ball);
                 entities.push(ball);
                 // Only trigger one dash per F press during dash window
@@ -13334,21 +13317,17 @@
                     if(this.helicopterTimer<=0) this.helicopterActive=false;
                     // Check for hits during helicopter flight
                     if(this.helicopterActive){
-                        let crashed = false;
                         for(let e of entities) if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team){
                             let d=Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2);
                             if(d<250){
-                                crashed = true;
-                                e.takeDamage(800,this);
-                                e.revealTimer=1.5;
+                                // Helicopter hits enemy - explode immediately
+                                this.helicopterTimer = 0;
+                                this.helicopterActive = false;
+                                e.takeDamage(200,this);
+                                for(let i=0;i<50;i++) particles.push(new Particle(this.x,this.y,'#ff0000',10,1.2));
                                 for(let i=0;i<10;i++) particles.push(new Particle(e.x,e.y,'#ff0000',8,1.0));
+                                break;
                             }
-                        }
-                        if(crashed){
-                            this.helicopterTimer = 0;
-                            this.helicopterActive = false;
-                            effectsAdd(new WaveShockwave(this.x, this.y, 260, 0.45, '#ff0000', '#fde047'));
-                            for(let i=0;i<50;i++) particles.push(new Particle(this.x,this.y,'#ff0000',10,1.2));
                         }
                     }
                 }
@@ -13407,7 +13386,7 @@
                     }
                 } else {
                     for(let e of entities) if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team && Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2)<80){
-                        e.takeDamage(180,this);
+                        e.takeDamage(120,this);
                         e.revealTimer=0.6;
                         effectsAdd(new ImpactFlash(e.x, e.y, this.angle, 65, 0.2, '#ff8c00'));
                         for(let i=0;i<6;i++) particles.push(new Particle(e.x,e.y,i%2===0?'#ff8c00':'#ffd700',4,0.55));
@@ -13702,7 +13681,7 @@
             slash() {
                 this.revealTimer = 0.5;
                 const isOvercharged = this.currentSkin === 'Overcharged';
-                let dmg = this.transformed ? 175 * 1.5 : 175;
+                let dmg = this.transformed ? 120 * 1.5 : 120;
                 if (this.transformed) this.totalDamage += dmg;
                 
                 if (this.transformed) {
@@ -14487,7 +14466,7 @@
                                 if(d < 60){
                                     if(!this.hitEnemies.has(e)){
                                         this.hitEnemies.add(e);
-                                        const dashDmg = 650;
+                                        const dashDmg = 390;
                                         e.hp -= dashDmg; 
                                         this.totalDamage = (this.totalDamage || 0) + dashDmg;
                                         if(gameMode === 'training' && this.isPlayer && window.trainingStats) {
@@ -14516,7 +14495,7 @@
                 const slashColor = this.currentSkin === 'Shattered Persona' ? '#1b1b1b' : '#fff';
                 const impactColor = this.currentSkin === 'Shattered Persona' ? '#ff3b30' : '#fff';
                 particles.push(new Slash(this.x,this.y,this.angle,80,Math.PI/2,slashColor)); 
-                for(let e of entities) if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team && Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2)<90){ e.takeDamage(150,this); e.revealTimer=0.6; particles.push(new Particle(e.x,e.y,impactColor,5,0.5)); } 
+                for(let e of entities) if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team && Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2)<80){ e.takeDamage(90,this); e.revealTimer=0.6; particles.push(new Particle(e.x,e.y,impactColor,5,0.5)); } 
             }
             doQ(){
                 this.qCD = 5; // spin
@@ -14562,7 +14541,7 @@
                 if(this.realm) { /* if realm active, do dash but no mirror creation */ }
                 this.eCD=4; // dash
                 let dist=300; let oldX = this.x, oldY = this.y; this.x += Math.cos(this.angle)*dist; this.y += Math.sin(this.angle)*dist; let hitAny=false;
-                for(let e of entities) if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team){ let d=Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2); if(d<110){ e.takeDamage(450,this); hitAny=true; for(let i=0;i<6;i++) particles.push(new Particle(e.x,e.y,'#aff',4,0.6)); }}
+                for(let e of entities) if(e!==this && !e.dead && e instanceof Entity && e.team!==this.team){ let d=Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2); if(d<90){ e.takeDamage(220,this); hitAny=true; for(let i=0;i<6;i++) particles.push(new Particle(e.x,e.y,'#aff',4,0.6)); }}
                 // heal 220 and extra 220 if hit enemies
                 this.hp = Math.min(this.maxHp, this.hp + 220); if(hitAny) this.hp = Math.min(this.maxHp, this.hp + 220);
                 this.gCharges = Math.min(this.maxGCharges, this.gCharges + 1);
@@ -14954,13 +14933,13 @@
             basicAtk() {
                 this.revealTimer = 0.5;
                 this.basicCD = this.icebergActive ? 0.5 : 0.75;
-                let dmg = this.icebergActive ? 180 : 140;
+                let dmg = this.icebergActive ? 100 : 80;
                 let size = this.icebergActive ? 10 : 8;
                 let enhanced = false;
                 if (this.icebergActive) {
                     this.arrowCount++;
                     if (this.arrowCount >= 3) {
-                        dmg = 380;
+                        dmg = 250;
                         size = 15;
                         enhanced = true;
                         this.arrowCount = 0;
@@ -17399,7 +17378,7 @@
                         this.auraActive = false;
                         this.damageAmp = 1;
                     }
-                    // Deal 360 damage per second to enemies in aura (ticked every 0.25s = 90 dmg)
+                    // Deal 80 damage per second to enemies in aura (ticked every 0.25s = 20 dmg to avoid 60Hz tick flood)
                     this._auraTickAccum = (this._auraTickAccum || 0) + dt;
                     const shouldTickAura = this._auraTickAccum >= 0.25;
                     if (shouldTickAura) this._auraTickAccum -= 0.25;
@@ -17407,7 +17386,7 @@
                         if(e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                             let dx = e.x - this.auraX, dy = e.y - this.auraY, d = Math.sqrt(dx*dx + dy*dy);
                             if(d < 250) {
-                                if (shouldTickAura) e.takeDamage(90, this);
+                                if (shouldTickAura) e.takeDamage(20, this);
                                 e.slowTimer = Math.max(e.slowTimer, 0.15);
                             }
                         }
@@ -17526,7 +17505,7 @@
             basicAtk() {
                 this.revealTimer = 0.5;
                 this.basicCD = 1.5;
-                let dmg = 110 * this.damageAmp;
+                let dmg = 50 * this.damageAmp;
                 let hitEnemies = new Set();
                 
                 // Fire 5 light shots
@@ -17914,12 +17893,16 @@
                 // Update trap - deal instant damage when trap ends and force enemy position
                 if(this.trapActive && this.trappedEnemy && !this.trappedEnemy.dead) {
                     this.trapTimer -= dt;
-                    // Force trapped enemy back to trap location (disable movement)
+                    // Force trapped enemy back to trap location (disable movement & knockback drift)
+                    this.trappedEnemy.kbx = 0;
+                    this.trappedEnemy.kby = 0;
+                    this.trappedEnemy._localKbVx = 0;
+                    this.trappedEnemy._localKbVy = 0;
                     this.trappedEnemy.x = this.trappedEnemyX;
                     this.trappedEnemy.y = this.trappedEnemyY;
                     if(this.trapTimer <= 0) {
                         // Deal total meltdown damage instantly (1200 total)
-                        this.trappedEnemy.takeDamage(1200, this);
+                        this.trappedEnemy.takeDamage(1200, this, { ignoreKnockback: true });
                         this.trapActive = false;
                         this.trappedEnemy = null;
                     }
@@ -17935,15 +17918,24 @@
                     let fireInterval = Math.floor(this.qTimer / this.qFireRate);
                     let lastFireInterval = Math.floor((this.qTimer - dt) / this.qFireRate);
                     if(fireInterval > lastFireInterval) {
-                        // Shoot one lava with slight spread
+                        // Shoot one lava with slight spread (80 impact damage + spawns melt puddle)
                         let spreadAngle = (Math.random() - 0.5) * 0.4; // Random spread ±0.2 radians
                         let angle = this.angle + spreadAngle;
-                        let proj = new Projectile(this, this.x, this.y, angle, 500, 0, 350, this.currentSkin === 'Nuclear' ? '#39ff14' : '#ff6b1a', 12);
+                        let proj = new Projectile(this, this.x, this.y, angle, 500, 80, 350, this.currentSkin === 'Nuclear' ? '#39ff14' : '#ff6b1a', 12);
                         proj.maxDistance = 350;
                         proj.melvinQ = true;
+                        proj._pedalSpawned = false;
                         proj.onHit = (target) => {
+                            proj._pedalSpawned = true;
                             this.pedals.push({x: target.x, y: target.y, createTime: Date.now(), damageCD: 0});
-                            target.slowTimer = Math.max(target.slowTimer, 0.5);
+                            safeApplyStatus(target, 'slow', 0.5, this);
+                            safeApplyStatus(target, 'stun', 0.15, this);
+                        };
+                        proj.onExplode = () => {
+                            if (!proj._pedalSpawned) {
+                                proj._pedalSpawned = true;
+                                this.pedals.push({x: proj.x, y: proj.y, createTime: Date.now(), damageCD: 0});
+                            }
                         };
                         entities.push(proj);
                     }
@@ -17969,15 +17961,24 @@
                     }
                 }
                 
-                for(let p of this.pedals) {
-                    p.damageCD -= dt;
-                    if(p.damageCD <= 0) {
-                        p.damageCD = 0.1;
-                        for(let e of entities) {
-                            if(!e.dead && e instanceof Entity && e.team !== this.team && e !== this) {
-                                let d = Math.sqrt((e.x - p.x)**2 + (e.y - p.y)**2);
-                                if(d < 60) {
-                                    e.takeDamage(35, this);
+                // Deal consistent lava puddle damage (only 1 puddle ticks per enemy every 0.1s, matching 75px visual puddle radius)
+                if (this.pedals.length > 0) {
+                    this.pedalDamageTimer = (this.pedalDamageTimer || 0) - dt;
+                    if (this.pedalDamageTimer <= 0) {
+                        this.pedalDamageTimer = 0.1;
+                        for (let e of entities) {
+                            if (!e.dead && e instanceof Entity && e.isTargetable !== false && e.team !== this.team && e !== this) {
+                                const hitRadius = 75 + (e.radius || 20);
+                                let inAnyPedal = false;
+                                for (let p of this.pedals) {
+                                    let d = Math.hypot(e.x - p.x, e.y - p.y);
+                                    if (d < hitRadius) {
+                                        inAnyPedal = true;
+                                        break;
+                                    }
+                                }
+                                if (inAnyPedal) {
+                                    e.takeDamage(35, this, { ignoreKnockback: true });
                                 }
                             }
                         }
@@ -18095,8 +18096,13 @@
                     this.trappedEnemy = closest;
                     this.trappedEnemyX = closest.x;
                     this.trappedEnemyY = closest.y;
-                    // Deal 500 base damage immediately
-                    closest.takeDamage(500, this);
+                    closest.kbx = 0;
+                    closest.kby = 0;
+                    closest._localKbVx = 0;
+                    closest._localKbVy = 0;
+                    safeApplyStatus(closest, 'movementLockdownTimer', 2.0, this);
+                    // Deal 500 base damage immediately without knocking enemy out of the volcano trap
+                    closest.takeDamage(500, this, { ignoreKnockback: true });
                     this.meltdownDamage = 0;
                     this.revealTimer = 0.5;
                     if(this.isPlayer) addKillMsg('Trapped ' + closest.name + '! Meltdown damage incoming!');
@@ -18689,7 +18695,7 @@
                             let dx = this.tornadoX - e.x, dy = this.tornadoY - e.y;
                             let d = Math.sqrt(dx*dx + dy*dy);
                             if(d < 150) {
-                                if (shouldTickTornado) e.takeDamage(140, this);
+                                if (shouldTickTornado) e.takeDamage(90, this);
                                 let pullForce = 400;
                                 if (d > 0.001) {
                                     e.x += (dx/d) * pullForce * dt;
@@ -18711,8 +18717,8 @@
                         this.x += Math.cos(dAng) * 1200 * dt;
                         this.y += Math.sin(dAng) * 1200 * dt;
                         for(let e of entities) {
-                            if(e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2) < 65 && !this.dashHitEnemies.has(e)) {
-                                e.takeDamage(550, this);
+                            if(e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2) < 55 && !this.dashHitEnemies.has(e)) {
+                                e.takeDamage(300, this);
                                 this.dashHitEnemies.add(e);
                                 this.markedEnemies.set(e, 3);
                                 for(let i = 0; i < 5; i++) particles.push(new Particle(e.x, e.y, '#a335ee', 3, 0.5));
@@ -19925,7 +19931,7 @@
                     if(e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                         let d = Math.sqrt((e.x-pX)**2 + (e.y-pY)**2);
                         if(d < 100) {
-                            e.takeDamage(150, this);
+                            e.takeDamage(70, this);
                             for(let i = 0; i < 6; i++) {
                                 let angle = Math.random() * Math.PI * 2;
                                 particles.push(new Particle(e.x, e.y, '#FF69B4', 3, 0.4, Math.cos(angle)*180, Math.sin(angle)*180));
@@ -19965,7 +19971,7 @@
                 this.eCD = 3;
                 if(this.isPlayer) addKillMsg('Love Ball!');
                 // Shoot love ball projectile - bigger size with explosion
-                let proj = new Projectile(this, this.x, this.y, this.angle, 600, 450, 350, '#FF69B4', 15, false, false, true, 0, 1.0);
+                let proj = new Projectile(this, this.x, this.y, this.angle, 600, 250, 350, '#FF69B4', 15, false, false, true, 0, 1.0);
                 // Add custom explosion callback
                 proj.onExplode = () => {
                     // Explosion particles
@@ -20534,7 +20540,7 @@
                 this.shieldTimer = 0;
                 this.fieldTimer = 0;
                 this.fieldRadius = 300;
-                this.fieldDamage = 180;
+                this.fieldDamage = 50;
                 this.fieldDt = 0;
             }
             update(dt) {
@@ -21231,7 +21237,7 @@
                 this.basicCD = 0.6;
                 
                 // Pixel throw projectile
-                let proj = new Projectile(this, this.x, this.y, this.angle, 600, 135, 340, '#00FF00', 4);
+                let proj = new Projectile(this, this.x, this.y, this.angle, 600, 60, 300, '#00FF00', 3);
                 proj.maxDistance = 300;
                 entities.push(proj);
             }
@@ -22029,7 +22035,7 @@
                     return;
                 }
                 if (this.damageTimer <= 0) {
-                    this.damageTimer = 0.25;
+                    this.damageTimer = 0.3;
                     // Damage enemies in rectangle
                     for (let e of entities) {
                         if (e !== this.owner && !e.dead && e instanceof Entity && e.team !== this.team) {
@@ -22037,7 +22043,7 @@
                             let localX = dx * Math.cos(-this.angle) - dy * Math.sin(-this.angle);
                             let localY = dx * Math.sin(-this.angle) + dy * Math.cos(-this.angle);
                             if (localX >= 0 && localX <= this.length && Math.abs(localY) <= this.width / 2) {
-                                e.takeDamage(260, this.owner);
+                                e.takeDamage(150, this.owner);
                             }
                         }
                     }
@@ -23819,7 +23825,7 @@
                             if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                                 let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                                 if (d < 450) {
-                                    e.takeDamage(40, this);
+                                    e.takeDamage(27, this);
                                 }
                             }
                         }
@@ -23887,7 +23893,7 @@
             basicAtk() {
                 this.revealTimer = 0.5;
                 if (this.brickNext) {
-                    let proj = new Projectile(this, this.x, this.y, this.angle, 600, 750, 500, '#8b4513', 10);
+                    let proj = new Projectile(this, this.x, this.y, this.angle, 600, 600, 500, '#8b4513', 10);
                     proj.isBrick = true;
                     proj.damageBuff = this.damageBuffMultiplier;
                     proj.owner = this;
@@ -23898,7 +23904,7 @@
                     this.trueDmgBuff = 0;
                     this.damageBuffMultiplier = 1;
                 } else {
-                    let proj = new Projectile(this, this.x, this.y, this.angle, 500, 210, 180, '#fff', 7);
+                    let proj = new Projectile(this, this.x, this.y, this.angle, 500, 150, 150, '#fff', 7);
                     proj.maxDistance = 250;
                     entities.push(proj);
                 }
@@ -23909,7 +23915,7 @@
                 this.qCD = 4;
                 const isRapper = this.currentSkin === 'c00l rapper';
                 // Faster projectile speed (700 instead of 500)
-                let proj = new Projectile(this, this.x, this.y, this.angle, 700, 680, 400, isRapper ? '#e2e8f0' : '#ff4500', 15);
+                let proj = new Projectile(this, this.x, this.y, this.angle, 700, 500, 400, isRapper ? '#e2e8f0' : '#ff4500', 15);
                 proj.isPizza = true;
                 if (isRapper) proj.isMicrophone = true;
                 proj.onHit = (target) => {
@@ -24755,39 +24761,25 @@
                 if (this.shockedTimer > 0) this.shockedTimer = Math.max(0, this.shockedTimer - dt);
                 this.timePrediction = this.getPredictionPos();
 
+                if (!this.qMultiTargets) this.qMultiTargets = new Map();
                 if (this.qDash) {
                     this.qDash.time = Math.max(0, this.qDash.time - dt);
                     const t = 1 - (this.qDash.time / this.qDash.maxTime);
                     this.x = this.qDash.fromX + (this.qDash.toX - this.qDash.fromX) * t;
                     this.y = this.qDash.fromY + (this.qDash.toY - this.qDash.fromY) * t;
-                    if (!this.qDash.tickCounts) this.qDash.tickCounts = new Map();
-                    const tickInterval = (this.qDash.maxTime || 0.18) / 12;
-                    this.qDash.tickAccum = (this.qDash.tickAccum || 0) + dt;
-                    let ticksDue = 0;
-                    while (this.qDash.tickAccum >= tickInterval) {
-                        this.qDash.tickAccum -= tickInterval;
-                        ticksDue++;
-                    }
-                    // Guarantee immediate first tick on initial contact
                     for (let e of entities) {
-                        if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
+                        if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && e.isTargetable !== false) {
                             const dx = this.x - e.x;
                             const dy = this.y - e.y;
                             const dist = Math.hypot(dx, dy);
-                            if (dist < 185) {
-                                const pull = 580 * dt;
+                            if (dist < 190) {
+                                const pull = Math.min(dist * 0.65, 920 * dt);
                                 const nx = dx / (dist || 1);
                                 const ny = dy / (dist || 1);
                                 e.x += nx * pull;
                                 e.y += ny * pull;
-                                let usedTicks = this.qDash.tickCounts.get(e) || 0;
-                                const applyCount = (usedTicks === 0) ? Math.max(1, ticksDue) : ticksDue;
-                                for (let tc = 0; tc < applyCount && usedTicks < 13 && !e.dead; tc++) {
-                                    usedTicks++;
-                                    this.qDash.tickCounts.set(e, usedTicks);
-                                    const dealt = 70;
-                                    e.takeDamage(dealt, this, { ignoreKnockback: true });
-                                    this.hp = Math.min(this.maxHp, this.hp + dealt * 0.2);
+                                if (!this.qMultiTargets.has(e)) {
+                                    this.qMultiTargets.set(e, { ticks: 0, maxTicks: 14, timer: 0 });
                                 }
                             }
                         }
@@ -24796,18 +24788,55 @@
                         this.x = this.qDash.toX;
                         this.y = this.qDash.toY;
                         for (let e of entities) {
-                            if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
+                            if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && e.isTargetable !== false) {
                                 const dist = Math.hypot(e.x - this.x, e.y - this.y);
-                                if (dist < 175) {
-                                    let usedTicks = this.qDash.tickCounts ? (this.qDash.tickCounts.get(e) || 0) : 0;
-                                    if (usedTicks < 13) {
-                                        e.takeDamage(70, this);
-                                        this.hp = Math.min(this.maxHp, this.hp + 16);
-                                    }
+                                if (dist < 185 && !this.qMultiTargets.has(e)) {
+                                    this.qMultiTargets.set(e, { ticks: 0, maxTicks: 14, timer: 0 });
                                 }
                             }
                         }
                         this.qDash = null;
+                    }
+                }
+                if (this.qMultiTargets && this.qMultiTargets.size > 0) {
+                    const tickStep = 0.022;
+                    for (const [e, state] of Array.from(this.qMultiTargets.entries())) {
+                        if (!e || e.dead || state.ticks >= state.maxTicks) {
+                            this.qMultiTargets.delete(e);
+                            continue;
+                        }
+                        const dx = this.x - e.x;
+                        const dy = this.y - e.y;
+                        const dist = Math.hypot(dx, dy);
+                        if (dist < 260 && dist > 28) {
+                            const pullStep = Math.min(dist - 24, 480 * dt);
+                            e.x += (dx / (dist || 1)) * pullStep;
+                            e.y += (dy / (dist || 1)) * pullStep;
+                        }
+                        state.timer -= dt;
+                        while (state.timer <= 0 && state.ticks < state.maxTicks && !e.dead) {
+                            state.ticks++;
+                            state.timer += tickStep;
+                            const dealt = 70;
+                            e.takeDamage(dealt, this, { ignoreKnockback: true });
+                            this.hp = Math.min(this.maxHp, this.hp + dealt * 0.2);
+                            if (this.isPlayer && !(typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) && typeof damageTexts !== 'undefined' && Array.isArray(damageTexts)) {
+                                if (damageTexts.length > 40) damageTexts.splice(0, damageTexts.length - 40);
+                                damageTexts.push({
+                                    x: e.x + (Math.random() - 0.5) * 26,
+                                    y: e.y - 26 - (state.ticks % 4) * 7,
+                                    text: `-${dealt}`,
+                                    color: '#67e8f9',
+                                    life: 0.55
+                                });
+                            }
+                            if (particles.length < 420) {
+                                particles.push(new Particle(e.x + (Math.random() - 0.5) * 18, e.y + (Math.random() - 0.5) * 18, '#67e8f9', 3.2, 0.28));
+                            }
+                        }
+                        if (state.ticks >= state.maxTicks || e.dead) {
+                            this.qMultiTargets.delete(e);
+                        }
                     }
                 }
 
@@ -24840,7 +24869,7 @@
                             if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                                 const dist = Math.hypot(e.x - this.futureMark.x, e.y - this.futureMark.y);
                                 if (dist < 210) {
-                                    e.takeDamage(45, this);
+                                    e.takeDamage(20, this);
                                 }
                             }
                         }
@@ -24877,7 +24906,7 @@
                 if (this.futureTimeline) {
                     if (this.futureBasicCD > 0) return;
                     this.futureBasicCD = 0.4;
-                    const shot = new Projectile(this, this.x + Math.cos(this.angle) * 26, this.y + Math.sin(this.angle) * 26, this.angle, 760, 160, 240, '#d8b4fe', 7);
+                    const shot = new Projectile(this, this.x + Math.cos(this.angle) * 26, this.y + Math.sin(this.angle) * 26, this.angle, 760, 100, 160, '#d8b4fe', 7);
                     shot.onHit = (target) => {
                         if (target && !target.dead) {
                             for (let i = 0; i < 8; i++) {
@@ -24907,8 +24936,14 @@
             }
 
             skill1() {
-                if (this.qCD > 0) return;
-                this.qCD = 4;
+                if (this.futureTimeline) {
+                    if (this.futureQCD > 0) return;
+                    this.futureQCD = 4;
+                } else {
+                    if (this.qCD > 0) return;
+                    this.qCD = 4;
+                }
+                if (this.qMultiTargets) this.qMultiTargets.clear();
                 const startX = this.x;
                 const startY = this.y;
                 const angle = this.angle || 0;
@@ -24980,7 +25015,7 @@
                         const dist = Math.hypot(e.x - this.x, e.y - this.y);
                         if (dist < attackRadius) {
                             hitCount++;
-                            e.takeDamage(580, this);
+                            e.takeDamage(450, this);
                             e.shockedTimer = 2.2;
                             e.qCD = Math.max(0, Number(e.qCD) || 0) + 2;
                             e.eCD = Math.max(0, Number(e.eCD) || 0) + 2;
@@ -26330,10 +26365,10 @@
                 
                 if (this.ultimateActive) {
                     // Aurora Light Burst - ranged projectile during ultimate
-                    entities.push(new Projectile(this, this.x, this.y, this.angle, 600, 180, 500, '#00CED1', 12));
+                    entities.push(new Projectile(this, this.x, this.y, this.angle, 600, 65, 500, '#00CED1', 12));
                 } else {
                     // Normal Aurora Light - ranged projectile
-                    entities.push(new Projectile(this, this.x, this.y, this.angle, 600, 130, 500, '#00CED1', 10));
+                    entities.push(new Projectile(this, this.x, this.y, this.angle, 600, 50, 500, '#00CED1', 10));
                 }
             }
             
@@ -28154,8 +28189,8 @@
                     this.eDashTimer -= dt;
                     this.x += Math.cos(this.eDashDir) * 720 * dt;
                     this.y += Math.sin(this.eDashDir) * 720 * dt;
-                    for (const enemy of entities) if (enemy !== this && !enemy.dead && enemy instanceof Entity && enemy.team !== this.team && !this.eDashHits.has(enemy) && Math.hypot(enemy.x - this.x, enemy.y - this.y) < 62) {
-                        this.eDashHits.add(enemy); enemy.takeDamage(460, this, { trueDamageRatio: 160 / 460, sourceHero: 'Kujou' }); this.addResolve();
+                    for (const enemy of entities) if (enemy !== this && !enemy.dead && enemy instanceof Entity && enemy.team !== this.team && !this.eDashHits.has(enemy) && Math.hypot(enemy.x - this.x, enemy.y - this.y) < 55) {
+                        this.eDashHits.add(enemy); enemy.takeDamage(320, this, { trueDamageRatio: 120 / 320, sourceHero: 'Kujou' }); this.addResolve();
                         for (let i = 0; i < 10; i++) particles.push(new Particle(enemy.x, enemy.y, '#fff1a8', 3, 0.55));
                     }
                     for (let i = 0; i < 3; i++) particles.push(new Particle(this.x, this.y, '#ffd700', 3, 0.3));
@@ -28173,7 +28208,7 @@
                     }
                     if (qDx || qDy) { const qMove = new Vector2(qDx, qDy).norm().mult(this.speed * 0.7 * dt); this.x += qMove.x; this.y += qMove.y; }
                     if (this.qVisualTimer <= 0) { this.qVisualTimer = 0.07; particles.push(new Slash(this.x, this.y, this.angle + (Math.random() - 0.5) * 0.7, 145, Math.PI * 0.7, '#ffd700')); particles.push(new Particle(this.x, this.y, '#fff1a8', 4, 0.35)); }
-                    if (this.qTickTimer <= 0) { this.qTickTimer = 0.2; for (const enemy of entities) if (enemy !== this && !enemy.dead && enemy instanceof Entity && enemy.team !== this.team && Math.hypot(enemy.x - this.x, enemy.y - this.y) < 155) { enemy.takeDamage(175, this); if (this.qSlashCount === 0) safeApplyStatus(enemy, 'stun', 0.25, this); this.addResolve(); } this.qSlashCount++; }
+                    if (this.qTickTimer <= 0) { this.qTickTimer = 0.2; for (const enemy of entities) if (enemy !== this && !enemy.dead && enemy instanceof Entity && enemy.team !== this.team && Math.hypot(enemy.x - this.x, enemy.y - this.y) < 150) { enemy.takeDamage(130, this); if (this.qSlashCount === 0) safeApplyStatus(enemy, 'stun', 0.25, this); this.addResolve(); } this.qSlashCount++; }
                     if (this.qTimer <= 0) this.finishQ();
                 }
                 if (this.fCharging) {
@@ -28203,9 +28238,9 @@
                 if (keys.f && this.fCD <= 0 && !this.fCharging && !this.qActive) { this.fCharging = true; this.isTargetable = false; this.fChargeTimer = 0; this.fAirTimer = 0; this.fStartX = this.x; this.fStartY = this.y; }
                 if (keys.r && this.rCD <= 0) this.useGear();
             }
-            basicAtk() { this.basicCD = 0.8; particles.push(new Slash(this.x, this.y, this.angle, 110, Math.PI / 2, '#ffd700')); particles.push(new RectSlash(this.x, this.y, this.angle, 95, 16, '#fff1a8')); for (const enemy of entities) if (enemy !== this && !enemy.dead && enemy instanceof Entity && enemy.team !== this.team) { const dx = enemy.x - this.x, dy = enemy.y - this.y, distance = Math.hypot(dx, dy), offset = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - this.angle), Math.cos(Math.atan2(dy, dx) - this.angle))); if (distance < 115 && offset < Math.PI / 3) { enemy.takeDamage(180, this); this.addResolve(); for (let i = 0; i < 10; i++) particles.push(new Particle(enemy.x, enemy.y, '#ffd700', 3, 0.5)); ringEffects.push({ x: enemy.x, y: enemy.y, life: 0.45, duration: 0.45, maxRadius: 34, color: '#ffd700' }); } } ringEffects.push({ x: this.x, y: this.y, life: 0.25, duration: 0.25, maxRadius: 34, color: '#fff1a8' }); }
+            basicAtk() { this.basicCD = 0.8; particles.push(new Slash(this.x, this.y, this.angle, 110, Math.PI / 2, '#ffd700')); particles.push(new RectSlash(this.x, this.y, this.angle, 95, 16, '#fff1a8')); for (const enemy of entities) if (enemy !== this && !enemy.dead && enemy instanceof Entity && enemy.team !== this.team) { const dx = enemy.x - this.x, dy = enemy.y - this.y, distance = Math.hypot(dx, dy), offset = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - this.angle), Math.cos(Math.atan2(dy, dx) - this.angle))); if (distance < 110 && offset < Math.PI / 3) { enemy.takeDamage(120, this); this.addResolve(); for (let i = 0; i < 10; i++) particles.push(new Particle(enemy.x, enemy.y, '#ffd700', 3, 0.5)); ringEffects.push({ x: enemy.x, y: enemy.y, life: 0.45, duration: 0.45, maxRadius: 34, color: '#ffd700' }); } } ringEffects.push({ x: this.x, y: this.y, life: 0.25, duration: 0.25, maxRadius: 34, color: '#fff1a8' }); }
             abilityQ() { this.qCD = 6.5; this.qActive = true; this.qMaxTimer = 1.5 + this.resolve * 0.3; this.qTimer = this.qMaxTimer; this.qVisualTimer = 0; this.qTickTimer = 0; this.qSlashCount = 0; this.damageReductionTimer = this.qTimer; this.damageReduction = 0.25; ringEffects.push({ x: this.x, y: this.y, life: 0.8, duration: 0.8, maxRadius: 180, color: '#ffd700' }); for (let i = 0; i < 28; i++) particles.push(new Particle(this.x, this.y, '#ffd700', 4, 0.7)); }
-            finishQ() { this.qActive = false; this.qTimer = 0; this.qMaxTimer = 0; this.damageReductionTimer = 0; const stacks = this.resolve; this.resolve = 0; for (const e of entities) { if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.hypot(e.x - this.x, e.y - this.y) < 185) { e.takeDamage(300 + stacks * 120, this); if (stacks > 0) e.takeDamage(stacks * 110, this, { isTrue: true, sourceHero: 'Kujou' }); } } ringEffects.push({ x: this.x, y: this.y, life: 0.6, duration: 0.6, maxRadius: 180, color: '#ffd700' }); }
+            finishQ() { this.qActive = false; this.qTimer = 0; this.qMaxTimer = 0; this.damageReductionTimer = 0; const stacks = this.resolve; this.resolve = 0; for (const e of entities) { if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.hypot(e.x - this.x, e.y - this.y) < 180) { e.takeDamage(100 + stacks * 100, this); e.takeDamage(stacks * 100, this, { isTrue: true, sourceHero: 'Kujou' }); } } ringEffects.push({ x: this.x, y: this.y, life: 0.6, duration: 0.6, maxRadius: 180, color: '#ffd700' }); }
             abilityE() { if (this.qActive) this.finishQ(); if (this.eStage === 0) { this.eCD = 7.5; this.eStage = 1; } else if (this.eStage === 1) { this.eStage = 2; } this.eDashing = true; this.eDashTimer = 0.22; this.eDashDir = this.isPlayer ? getMouseAimAngle(this.x, this.y) : this.angle; this.eDashHits.clear(); ringEffects.push({ x: this.x, y: this.y, life: 0.5, duration: 0.5, maxRadius: 70, color: '#fff1a8' }); }
             releaseF() { this.fCharging = false; this.isTargetable = true; this.fCD = 28; this.fSpeedTimer = 4; const x = this.fTargetX, y = this.fTargetY; this.x = x; this.y = y; this.shield = this.maxHp * 0.15; for (const e of entities) if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.hypot(e.x - x, e.y - y) < this.fRadius) { e.takeDamage(1270, this, { sourceHero: 'Kujou' }); e.slowTimer = Math.max(e.slowTimer || 0, 1); if (e.hp < 500) e.die(this); this.addResolve(); } for (let i = 0; i < 42; i++) particles.push(new Particle(x, y, '#ffd700', 5, 0.8)); ringEffects.push({ x, y, life: 1.1, duration: 1.1, maxRadius: this.fRadius, color: '#ffd700' }); }
             ai(dt, spd) {
@@ -37524,18 +37559,24 @@
                 if (this.gCD > 0) this.gCD -= dt;
                 if (this.rCD > 0) this.rCD -= dt;
                 
-                // Flow charge timers
-                for (let i = 0; i < this.maxFlowCharges; i++) {
-                    if (this.flowCharges < this.maxFlowCharges && this.flowTimers[i] <= 0) {
-                        this.flowTimers[i] = this.deepBreathActive ? this.flowChargeTimeBuffed : this.flowChargeTime;
+                // Flow charge timer: refill 1 dodge per refill cycle (instead of 3 simultaneously)
+                if (this.flowCharges < this.maxFlowCharges) {
+                    const targetRefill = this.deepBreathActive ? this.flowChargeTimeBuffed : this.flowChargeTime;
+                    if (this.flowTimers[0] <= 0) {
+                        this.flowTimers[0] = targetRefill;
+                    } else if (this.deepBreathActive && this.flowTimers[0] > targetRefill) {
+                        this.flowTimers[0] = targetRefill;
                     }
-                    if (this.flowTimers[i] > 0) {
-                        this.flowTimers[i] -= dt;
-                        if (this.flowTimers[i] <= 0) {
-                            this.flowCharges = Math.min(this.maxFlowCharges, this.flowCharges + 1);
-                        }
+                    this.flowTimers[0] -= dt;
+                    if (this.flowTimers[0] <= 0) {
+                        this.flowCharges = Math.min(this.maxFlowCharges, this.flowCharges + 1);
+                        this.flowTimers[0] = (this.flowCharges < this.maxFlowCharges) ? targetRefill : 0;
                     }
+                } else {
+                    this.flowTimers[0] = 0;
                 }
+                this.flowTimers[1] = 0;
+                this.flowTimers[2] = 0;
                 
                 // Dash update
                 if (this.dashing) {
@@ -37636,9 +37677,11 @@
                     setTimeout(() => {
                         if (!this.dead) {
                             let target = null;
-                            let minDist = Infinity;
+                            let minDist = 300;
                             for (let e of entities) {
                                 if (e instanceof Entity && e !== this && !e.dead && e.team !== this.team && e.isTargetable !== false) {
+                                    const inBush = !!(e.bush || (Array.isArray(bushes) && bushes.some(b => b && typeof b.contains === 'function' && b.contains(e))));
+                                    if (inBush || (typeof e.isVisibleTo === 'function' && !e.isVisibleTo(this))) continue;
                                     let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                                     if (d < minDist) {
                                         minDist = d;
@@ -39376,7 +39419,7 @@
                                     let angleDiff = Math.abs(angle - this.angle);
                                     if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
                                     if (angleDiff < Math.PI / 3) { // 60 degree cone
-                                        e.takeDamage(120, this);
+                                        e.takeDamage(80, this);
                                         hitEnemies.push(e);
                                     }
                                 }
@@ -39444,7 +39487,7 @@
             basicAtk() {
                 this.revealTimer = 0.5;
                 this.basicCD = 0.4;
-                let dmg = 160;
+                let dmg = 100;
                 let hit = false;
                 // Rectangular range: 150 length, 80 width
                 for (let e of entities) {
@@ -40114,8 +40157,8 @@
                     for (let e of entities) {
                         if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                             let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
-                            if (d < this.radius + (e.radius || 20) + 15 && !this.gDashDamaged.has(e)) {
-                                e.takeDamage(550, this);
+                            if (d < this.radius + 5 && !this.gDashDamaged.has(e)) {
+                                e.takeDamage(250, this);
                                 this.gDashDamaged.add(e);
                             }
                         }
@@ -40178,7 +40221,7 @@
             basicAtk() {
                 this.revealTimer = 0.5;
                 this.basicCD = 0.5;
-                let dmg = 210;
+                let dmg = 150;
                 // Create sharp dart projectile with proper constructor: (owner, x, y, angle, speed, damage, range, color, size)
                 let proj = new Projectile(this, this.x + Math.cos(this.angle) * 20, this.y + Math.sin(this.angle) * 20, this.angle, 800, dmg, 600, '#FF1493', 6);
                 proj.trail = true; // Add trailing particles
@@ -41580,7 +41623,7 @@
                 this.revealTimer = 0.5;
                 this.qCD = 4;
                 const isDivine = this.currentSkin === 'Sins of the Divine';
-                let proj = new Projectile(this, this.x, this.y, this.angle, 800, 800, 400, isDivine ? '#facc15' : '#FFD700', isDivine ? 18 : 12, false, false, false, 0, 0, isDivine);
+                let proj = new Projectile(this, this.x, this.y, this.angle, 800, 1200, 400, isDivine ? '#facc15' : '#FFD700', isDivine ? 18 : 12, false, false, false, 0, 0, isDivine);
                 proj.isSword = true;
                 if (isDivine) {
                     proj.isDivineSinSword = true;
@@ -43596,7 +43639,7 @@
                             }
                         }
                         if (typeof OnlinePlayerProxy !== 'undefined' && ent instanceof OnlinePlayerProxy) {
-                            if (Math.hypot(ent.x - (ent._lastOwnX ?? ent.x), ent.y - (ent._lastOwnY ?? ent.y)) > 1.0 ||
+                            if (Math.hypot(ent.x - (ent._lastOwnX ?? ent.x), ent.y - (ent._lastOwnY ?? ent.y)) > 0.02 ||
                                 Math.hypot(ent.kbx || 0, ent.kby || 0) > 15 ||
                                 (ent.knockbackDuration > 0 && Math.hypot(ent.knockbackX || 0, ent.knockbackY || 0) > 5)) {
                                 ent.syncDirectStatusEffectsToServer();
@@ -45028,8 +45071,8 @@
                         if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                             let d = Math.sqrt((e.x-this.x)**2 + (e.y-this.y)**2);
                             if (d < this.radius + e.radius + 20) {
-                                e.takeDamage(850, this);
-                                this.applyElectro(e, 850);
+                                e.takeDamage(600, this);
+                                this.applyElectro(e, 600);
                                 // Apply knockback
                                 let dx = e.x - this.x;
                                 let dy = e.y - this.y;
@@ -45071,8 +45114,8 @@
                             if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                                 let dist = Math.sqrt((e.x-d.x)**2 + (e.y-d.y)**2);
                                 if (dist < 80) {
-                                    e.takeDamage(350, this);
-                                    this.applyElectro(e, 350);
+                                    e.takeDamage(250, this);
+                                    this.applyElectro(e, 250);
                                 }
                             }
                         }
@@ -45262,7 +45305,7 @@
             basicAtk() {
                 this.revealTimer = 0.5;
                 this.basicCD = 0.8;
-                let dmg = 160;
+                let dmg = 80;
                 let proj = new Projectile(this, this.x, this.y, this.angle + (Math.random()-0.5)*0.1, 600, dmg, 350, '#FFD700', 4);
                 proj.maxDistance = 350;
                 proj.onHit = (target) => {
@@ -47519,7 +47562,7 @@
                     this.hurricaneTick -= dt;
                     if (this.hurricaneTick <= 0) {
                         this.hurricaneTick += 1.0; // damage each second
-                        let dmg = Math.floor(this.speed * 1.75);
+                        let dmg = Math.floor(this.speed * 1.2);
                         for (let e of entities) if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                             let dx = e.x - this.x, dy = e.y - this.y; let d = Math.sqrt(dx*dx + dy*dy);
                             if (d < 320) { e.takeDamage(dmg, this); e.stunTimer = Math.max(e.stunTimer || 0, 0.25); }
@@ -47565,7 +47608,7 @@
                 if (this.basicCD > 0) return; this.basicCD = 0.6;
                 this.revealTimer = 0.5;
                 // Wind projectile basic attack
-                let dmg = 180;
+                let dmg = 90;
                 let wx = this.x + Math.cos(this.angle) * (this.radius + 6);
                 let wy = this.y + Math.sin(this.angle) * (this.radius + 6);
                 let w = new WindProjectile(this, wx, wy, this.angle, 700, 600, dmg, '#bfefff', 18);
@@ -47583,7 +47626,7 @@
                     let spread = 0.18; // radians
                     let ang = baseAngle + (i - 1) * spread;
                     let speed = 900;
-                    let dmg = Math.floor(self.speed * 1.9);
+                    let dmg = Math.floor(self.speed * 1.5);
                     let wx = self.x + Math.cos(ang) * (self.radius + 6);
                     let wy = self.y + Math.sin(ang) * (self.radius + 6);
                     let w = new WindProjectile(self, wx, wy, ang, speed, 700, dmg, '#aee7ff', 28);
@@ -47798,7 +47841,7 @@
                     this.lastCrashTick -= dt;
                     if (this.lastCrashTick <= 0) {
                         this.lastCrashTick = this.crashTickInterval;
-                        let crashDmg = 350;
+                        let crashDmg = 160;
                         for (let e of entities) if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                             let dx = e.x - this.x, dy = e.y - this.y; let d = Math.sqrt(dx*dx + dy*dy);
                             if (d < 150) {
@@ -47889,7 +47932,7 @@
             skill1() {
                 if (this.qCD > 0) return; this.qCD = 7;
                 let speed = 850;
-                let dmg = Math.floor(this.getEffectiveSpeed() * 2.8); // scale with current effective speed
+                let dmg = Math.floor(this.getEffectiveSpeed() * 2.4); // scale with current effective speed
                 let wx = this.x + Math.cos(this.angle) * (this.radius + 6);
                 let wy = this.y + Math.sin(this.angle) * (this.radius + 6);
                 // larger bag, non-piercing: set to remove on first hit via callback
@@ -48214,7 +48257,7 @@
             basicAtk() {
                 if (this.basicCD > 0) return; this.basicCD = 1.0;
                 // Blade slash attack
-                let range = 120; let dmg = 220;
+                let range = 120; let dmg = 160;
                 for (let e of entities) if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                     let dx = e.x - this.x, dy = e.y - this.y; let d = Math.sqrt(dx*dx + dy*dy);
                     if (d < range) {
@@ -48264,7 +48307,7 @@
                         speed: 580,
                         distance: 0,
                         maxDistance: 2650, // Extended projectile range
-                        damage: 520,
+                        damage: 320,
                         connectRadius: 85, // Generous blade-to-blade connection detection radius
                         connectBurstRadius: 165, // Wide cross-slash AoE when the two blades connect
                         owner: owner,
@@ -50809,12 +50852,12 @@
             syncDirectStatusEffectsToServer() {
                 if (!(gameMode && gameMode.includes('online') && typeof onlineSocket !== 'undefined' && onlineSocket)) return;
 
-                // 1. Detect direct position displacement (pushes/pulls/drags like Ian's F ability, Blackhole, Tornado, Hook, etc.)
+                // 1. Detect direct position displacement (pushes/pulls/drags like Ian's F ability, Blackhole, Tornado, Hook, Gregory Q, Winston Wind, etc.)
                 if (typeof this._lastOwnX === 'number' && typeof this._lastOwnY === 'number') {
                     const rawDx = this.x - this._lastOwnX;
                     const rawDy = this.y - this._lastOwnY;
                     const rawDist = Math.hypot(rawDx, rawDy);
-                    if (rawDist > 1.0 && rawDist < 1200) {
+                    if (rawDist > 0.02 && rawDist < 1200) {
                         this._lastKnockbackOrHitMs = Date.now();
                         this._postDashWallGrace = 0;
                         if (typeof clampEntityKnockbackWalls === 'function') {
@@ -50824,12 +50867,14 @@
                         const pushedDy = this.y - this._lastOwnY;
                         this._lastOwnX = this.x;
                         this._lastOwnY = this.y;
-                        this.serverX = this.x;
-                        this.serverY = this.y;
-                        this.prevServerX = this.x;
-                        this.prevServerY = this.y;
-                        this._lastLocalPushAt = Date.now();
-                        if (Math.hypot(pushedDx, pushedDy) > 0.5) {
+                        this.serverX = (typeof this.serverX === 'number' ? this.serverX : this.x) + pushedDx;
+                        this.serverY = (typeof this.serverY === 'number' ? this.serverY : this.y) + pushedDy;
+                        this.prevServerX = this.serverX;
+                        this.prevServerY = this.serverY;
+                        if (Math.hypot(pushedDx, pushedDy) >= 12) {
+                            this._lastLocalPushAt = Date.now();
+                        }
+                        if (Math.hypot(pushedDx, pushedDy) > 0.02) {
                             this._pendingPushDx = (this._pendingPushDx || 0) + pushedDx;
                             this._pendingPushDy = (this._pendingPushDy || 0) + pushedDy;
                             const flushPushNow = () => {
@@ -50837,12 +50882,12 @@
                                     clearTimeout(this._pushFlushTimer);
                                     this._pushFlushTimer = null;
                                 }
-                                const sendDx = Math.round(this._pendingPushDx || 0);
-                                const sendDy = Math.round(this._pendingPushDy || 0);
-                                this._pendingPushDx = 0;
-                                this._pendingPushDy = 0;
-                                this._lastPushEmitMs = Date.now();
+                                const sendDx = Math.trunc(this._pendingPushDx || 0);
+                                const sendDy = Math.trunc(this._pendingPushDy || 0);
                                 if (sendDx === 0 && sendDy === 0) return;
+                                this._pendingPushDx = (this._pendingPushDx || 0) - sendDx;
+                                this._pendingPushDy = (this._pendingPushDy || 0) - sendDy;
+                                this._lastPushEmitMs = Date.now();
                                 try {
                                     onlineSocket.emit('playerEffect', {
                                         socketId: this.socketId,
@@ -50860,7 +50905,7 @@
                                 } catch (_) {}
                             };
                             const nowPushMs = Date.now();
-                            if ((nowPushMs - (this._lastPushEmitMs || 0)) >= 16 || Math.hypot(this._pendingPushDx || 0, this._pendingPushDy || 0) >= 14) {
+                            if ((nowPushMs - (this._lastPushEmitMs || 0)) >= 16 || Math.hypot(this._pendingPushDx || 0, this._pendingPushDy || 0) >= 10) {
                                 flushPushNow();
                             } else if (!this._pushFlushTimer) {
                                 this._pushFlushTimer = setTimeout(flushPushNow, 16);
@@ -51000,13 +51045,17 @@
                     }
                 }
                 if (this.burnTimer > 0) {
-                    this.burnTimer = Math.max(0, this.burnTimer - dt);
                     this.lastBurnTick = (this.lastBurnTick || 0) + dt;
-                    if (this.lastBurnTick >= 0.5) {
+                    while (this.lastBurnTick >= 0.5 - 1e-5) {
                         this.lastBurnTick -= 0.5;
-                        const bDmg = (this.burnDamagePerSec || 150) * 0.5;
-                        this.takeDamage(bDmg, this.burnOwner || player, { isTrue: true });
+                        if (this.burnOwner === player) {
+                            const defaultDps = (player && typeof Melvin !== 'undefined' && player instanceof Melvin) ? 50 : 150;
+                            const bDmg = (this.burnDamagePerSec || defaultDps) * 0.5;
+                            this.takeDamage(bDmg, player, { isTrue: true, ignoreKnockback: true });
+                        }
                     }
+                    this.burnTimer = Math.max(0, this.burnTimer - dt);
+                    if (this.burnTimer <= 0) this.lastBurnTick = 0;
                 }
                 if (this.moonMark > 0) this.moonMark = Math.max(0, this.moonMark - dt);
                 if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt);
