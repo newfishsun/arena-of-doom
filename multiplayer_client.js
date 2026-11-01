@@ -97,9 +97,12 @@ class MultiplayerManager {
     }
 
     this.roomId = roomId;
+    const resolvedHero = heroType || (typeof selectedHeroType !== 'undefined' ? selectedHeroType : 'paul');
+    const resolvedSkin = (typeof selectedSkins !== 'undefined' && selectedSkins[resolvedHero]) ? selectedSkins[resolvedHero] : 'default';
     this.socket.emit('joinGame', {
       roomId: roomId,
-      heroType: heroType || 'paul',
+      heroType: resolvedHero,
+      currentSkin: resolvedSkin,
       playerName: playerName || 'Player',
       gameMode: gameMode
     });

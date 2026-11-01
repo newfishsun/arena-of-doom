@@ -58,9 +58,12 @@ class FFAMultiplayer {
       this.showQueueUI();
     }
 
+    const resolvedHero = heroType || (typeof selectedHeroType !== 'undefined' ? selectedHeroType : 'paul');
+    const resolvedSkin = (typeof selectedSkins !== 'undefined' && selectedSkins[resolvedHero]) ? selectedSkins[resolvedHero] : 'default';
     this.multiplayer.socket.emit('joinMatchmaking', {
       gameMode: gameMode,
-      heroType: heroType || (typeof selectedHeroType !== 'undefined' ? selectedHeroType : 'paul'),
+      heroType: resolvedHero,
+      currentSkin: resolvedSkin,
       playerName: playerName || 'Player',
       maxPlayers: maxPlayers
     });

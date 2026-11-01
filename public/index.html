@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hero Arena: Battle of 50</title>
+    <title>Arena of DOOM</title>
             <style>
         :root {
             --bg-dark: #120906;
@@ -3341,12 +3341,147 @@
                 const moved = Math.hypot((entity.x || 0) - startX, (entity.y || 0) - startY);
                 const effSpd = typeof entity.getEffectiveSpeed === 'function' ? entity.getEffectiveSpeed() : (entity.speed || entity.baseSpd || 250);
                 const maxNormalStep = Math.max(effSpd, (entity.baseSpd || 250) * (entity.speedsterTimer > 0 ? 1.5 : 1.0)) * dt;
-                // Any movement faster than 1.35x normal walking step is an ability dash / blink / lunge at any frame rate
-                if (moved > Math.max(2.5, maxNormalStep * 1.35)) {
+                // Never classify knockback, push, pull, stun, or external displacement as a dash!
+                const isBeingKnockedBack =
+                    Math.hypot(entity.kbx || 0, entity.kby || 0) > 1 ||
+                    Math.hypot(entity._localKbVx || 0, entity._localKbVy || 0) > 1 ||
+                    (entity.knockbackDuration && entity.knockbackDuration > 0) ||
+                    (entity.enhancedKBTimer && entity.enhancedKBTimer > 0) ||
+                    (entity.stunTimer && entity.stunTimer > 0) ||
+                    (entity.freezeTimer && entity.freezeTimer > 0) ||
+                    (entity.fightingTimer && entity.fightingTimer > 0) ||
+                    (entity.terrifedTimer && entity.terrifedTimer > 0) ||
+                    (entity.movementLockdownTimer && entity.movementLockdownTimer > 0) ||
+                    ((Date.now() - (entity._lastKnockbackOrHitMs || 0)) < 260) ||
+                    (window._currentlyUpdatingEntity && window._currentlyUpdatingEntity !== entity);
+                if (!isBeingKnockedBack && moved > Math.max(2.5, maxNormalStep * 1.35)) {
                     return true;
                 }
             }
             return false;
+        }
+
+        // Swept segment-vs-AABB obstacle clamp so neither velocity knockbacks (kbx/kby) nor instant displacements (e.x += ...) can EVER tunnel or phase through walls!
+        function clampEntityKnockbackWalls(entity, fromX, fromY) {
+            if (!entity || entity.dead || !(entity instanceof Entity)) return;
+            if (entity instanceof FallenStatue || entity instanceof DefenseTower || entity instanceof MainTower) return;
+            if (entity.isTargetable === false) return;
+
+            const r = entity.radius || 18;
+            entity.x = Math.max(20, Math.min(WORLD_SIZE - 20, entity.x));
+            entity.y = Math.max(20, Math.min(WORLD_SIZE - 20, entity.y));
+
+            const hasStart = (typeof fromX === 'number' && Number.isFinite(fromX) && typeof fromY === 'number' && Number.isFinite(fromY));
+            let sx = hasStart ? fromX : entity.x;
+            let sy = hasStart ? fromY : entity.y;
+
+            if (Array.isArray(mapWalls) && mapWalls.length > 0) {
+                for (let pass = 0; pass < 2; pass++) {
+                    for (let i = 0; i < mapWalls.length; i++) {
+                        const w = mapWalls[i];
+                        if (!w) continue;
+                        const halfW = w.width * 0.5 + r;
+                        const halfH = w.height * 0.5 + r;
+                        const minX = w.x - halfW, maxX = w.x + halfW;
+                        const minY = w.y - halfH, maxY = w.y + halfH;
+
+                        const startInside = (sx > minX && sx < maxX && sy > minY && sy < maxY);
+                        const segDx = entity.x - sx;
+                        const segDy = entity.y - sy;
+
+                        // 1. Swept slab ray-vs-AABB intersection when starting outside the wall
+                        if (!startInside && (Math.abs(segDx) > 0.001 || Math.abs(segDy) > 0.001)) {
+                            let t0 = 0.0, t1 = 1.0;
+                            let hitAxis = '';
+                            let validSweep = true;
+
+                            if (Math.abs(segDx) < 1e-6) {
+                                if (sx <= minX || sx >= maxX) validSweep = false;
+                            } else {
+                                const invDx = 1.0 / segDx;
+                                let tx1 = (minX - sx) * invDx;
+                                let tx2 = (maxX - sx) * invDx;
+                                if (tx1 > tx2) { const tmp = tx1; tx1 = tx2; tx2 = tmp; }
+                                if (tx1 > t0) { t0 = tx1; hitAxis = 'x'; }
+                                if (tx2 < t1) t1 = tx2;
+                                if (t0 > t1) validSweep = false;
+                            }
+
+                            if (validSweep) {
+                                if (Math.abs(segDy) < 1e-6) {
+                                    if (sy <= minY || sy >= maxY) validSweep = false;
+                                } else {
+                                    const invDy = 1.0 / segDy;
+                                    let ty1 = (minY - sy) * invDy;
+                                    let ty2 = (maxY - sy) * invDy;
+                                    if (ty1 > ty2) { const tmp = ty1; ty1 = ty2; ty2 = tmp; }
+                                    if (ty1 > t0) { t0 = ty1; hitAxis = 'y'; }
+                                    if (ty2 < t1) t1 = ty2;
+                                    if (t0 > t1) validSweep = false;
+                                }
+                            }
+
+                            if (validSweep && t0 >= 0.0 && t0 <= 1.0) {
+                                if (hitAxis === 'x') {
+                                    entity.x = segDx > 0 ? (minX - 0.5) : (maxX + 0.5);
+                                    if (entity.kbx) entity.kbx = 0;
+                                    if (entity._localKbVx) entity._localKbVx = 0;
+                                    if (entity.knockbackX) entity.knockbackX = 0;
+                                } else if (hitAxis === 'y') {
+                                    entity.y = segDy > 0 ? (minY - 0.5) : (maxY + 0.5);
+                                    if (entity.kby) entity.kby = 0;
+                                    if (entity._localKbVy) entity._localKbVy = 0;
+                                    if (entity.knockbackY) entity.knockbackY = 0;
+                                } else {
+                                    const tSafe = Math.max(0, t0 - 0.01);
+                                    entity.x = sx + segDx * tSafe;
+                                    entity.y = sy + segDy * tSafe;
+                                }
+                            }
+                        }
+
+                        // 2. Overlap resolution (using origin side when known so entities never pop out the far side of a wall)
+                        const dx = entity.x - w.x;
+                        const dy = entity.y - w.y;
+                        if (Math.abs(dx) < halfW && Math.abs(dy) < halfH) {
+                            const refDx = hasStart && !startInside ? (sx - w.x) : dx;
+                            const refDy = hasStart && !startInside ? (sy - w.y) : dy;
+                            const penX = halfW - Math.abs(dx);
+                            const penY = halfH - Math.abs(dy);
+                            if (penX < penY) {
+                                entity.x = w.x + (refDx < 0 ? -halfW - 0.5 : halfW + 0.5);
+                                if (entity.kbx) entity.kbx = 0;
+                                if (entity._localKbVx) entity._localKbVx = 0;
+                                if (entity.knockbackX) entity.knockbackX = 0;
+                            } else {
+                                entity.y = w.y + (refDy < 0 ? -halfH - 0.5 : halfH + 0.5);
+                                if (entity.kby) entity.kby = 0;
+                                if (entity._localKbVy) entity._localKbVy = 0;
+                                if (entity.knockbackY) entity.knockbackY = 0;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Also respect Rico's Expanded Q Box and Farmhouse walls during knockback
+            if (Array.isArray(ricoExpandedBoxes) && ricoExpandedBoxes.length > 0) {
+                for (let i = ricoExpandedBoxes.length - 1; i >= 0; i--) {
+                    const box = ricoExpandedBoxes[i];
+                    if (!box || box.duration <= 0) continue;
+                    if (entity === box.owner || entity.team === box.team) continue;
+                    const bound = Math.max(20, box.halfSize - r * 0.5);
+                    const wasInside = hasStart && Math.abs(sx - box.x) <= box.halfSize && Math.abs(sy - box.y) <= box.halfSize;
+                    const isInside = Math.abs(entity.x - box.x) <= box.halfSize && Math.abs(entity.y - box.y) <= box.halfSize;
+                    if (wasInside || isInside) {
+                        entity.x = Math.max(box.x - bound, Math.min(box.x + bound, entity.x));
+                        entity.y = Math.max(box.y - bound, Math.min(box.y + bound, entity.y));
+                    }
+                }
+            }
+            try { enforceFarmlandHouse(entity); } catch (_) {}
+            entity.x = Math.max(20, Math.min(WORLD_SIZE - 20, entity.x));
+            entity.y = Math.max(20, Math.min(WORLD_SIZE - 20, entity.y));
         }
 
         function enforceMapWallsAndRicoBoxes(entity, startX, startY, dt) {
@@ -3368,20 +3503,27 @@
                 }
                 entity._postDashWallGrace = 0.14;
             } else if (entity._postDashWallGrace && entity._postDashWallGrace > 0) {
-                entity._postDashWallGrace = Math.max(0, entity._postDashWallGrace - (dt || 0.016));
+                const isKnocked =
+                    Math.hypot(entity.kbx || 0, entity.kby || 0) > 1 ||
+                    Math.hypot(entity._localKbVx || 0, entity._localKbVy || 0) > 1 ||
+                    ((Date.now() - (entity._lastKnockbackOrHitMs || 0)) < 260);
+                if (isKnocked) {
+                    entity._postDashWallGrace = 0;
+                } else {
+                    entity._postDashWallGrace = Math.max(0, entity._postDashWallGrace - (dt || 0.016));
+                }
             }
 
-            // 1. Solid Map Walls block player/entity movement unless dashing
+            // 1. Solid Map Walls block player/entity movement (including swept knockback anti-tunneling!) unless actively dashing
             if (!dashing && mapWalls.length > 0) {
-                for (let i = 0; i < mapWalls.length; i++) {
-                    const w = mapWalls[i];
-                    const halfW = w.width * 0.5 + r;
-                    const halfH = w.height * 0.5 + r;
-                    const dx = entity.x - w.x;
-                    const dy = entity.y - w.y;
-                    if (Math.abs(dx) < halfW && Math.abs(dy) < halfH) {
-                        // If a dash just ended while inside a wall, push the hero forward along their dash direction so dashes always cross walls cleanly
-                        if (entity._postDashWallGrace && entity._postDashWallGrace > 0) {
+                if (entity._postDashWallGrace && entity._postDashWallGrace > 0) {
+                    for (let i = 0; i < mapWalls.length; i++) {
+                        const w = mapWalls[i];
+                        const halfW = w.width * 0.5 + r;
+                        const halfH = w.height * 0.5 + r;
+                        const dx = entity.x - w.x;
+                        const dy = entity.y - w.y;
+                        if (Math.abs(dx) < halfW && Math.abs(dy) < halfH) {
                             const ddx = entity._lastDashDirX || Math.cos(entity.angle || 0);
                             const ddy = entity._lastDashDirY || Math.sin(entity.angle || 0);
                             if (w.width < w.height) {
@@ -3395,16 +3537,10 @@
                                 else entity.y = w.y + (ddy >= 0 ? halfH + 2 : -halfH - 2);
                             }
                             entity._postDashWallGrace = 0;
-                        } else {
-                            const penX = halfW - Math.abs(dx);
-                            const penY = halfH - Math.abs(dy);
-                            if (penX < penY) {
-                                entity.x = w.x + (dx < 0 ? -halfW : halfW);
-                            } else {
-                                entity.y = w.y + (dy < 0 ? -halfH : halfH);
-                            }
                         }
                     }
+                } else {
+                    clampEntityKnockbackWalls(entity, startX, startY);
                 }
             }
 
@@ -4014,7 +4150,9 @@
                             x: Math.round(player.x),
                             y: Math.round(player.y),
                             angle: Number((player.angle || 0).toFixed(3)),
-                            color: player.color
+                            color: player.color,
+                            heroType: selectedHeroType,
+                            currentSkin: player.currentSkin || (selectedSkins && selectedSkins[selectedHeroType]) || 'default'
                         }
                     });
                 } catch (_) {}
@@ -4047,7 +4185,7 @@
             'isBrick','isPizza','isArrow','isSword','isSquare','isHexagon','isWheel','isTire','isRifle',
             'isInsaneShot','isBasketball','isProSniper','isStormBall','isStormBolt','austinVisualType',
             'invisible','isLunarCrescent','isSolarLance','isSunballUlt','isColeBullet','isColeHeadshot',
-            'isColeFlashbang','isColeLightBullet','isMicrophone','isRicoBall','isRicoUltBall','isRicoBoxProj','noobRocketSlow','isDivineSinSword'
+            'isColeFlashbang','isColeLightBullet','isMicrophone','isRicoBall','isRicoUltBall','isRicoBoxProj','noobRocketSlow','isDivineSinSword','canBounce','bouncesLeft','hasBounced','bounceCount','bonusRangeOnBounce','maxDistance'
         ];
 
         function captureProjectileSpawnForOnline(proj) {
@@ -4236,6 +4374,47 @@
                 queueOnlineFxEntry({ k: 'DishBlast', t: targetArray, x: Math.round(item.x || 0), y: Math.round(item.y || 0) });
             } else if (cname === 'ClassicNoobKillEffect') {
                 queueOnlineFxEntry({ k: 'ClassicNoobKillEffect', t: targetArray, x: Math.round(item.x || 0), y: Math.round(item.y || 0) });
+            } else if (cname === 'NoobLaserBeamEffect') {
+                queueOnlineFxEntry({
+                    k: 'NoobLaserBeamEffect', t: targetArray,
+                    x: Math.round(item.x || 0), y: Math.round(item.y || 0),
+                    angle: Number(item.angle) || 0, length: Number(item.length) || 800,
+                    halfWidth: Number(item.halfWidth) || 42, isClassic: !!item.isClassic,
+                    duration: Number(item.duration) || 0.38
+                });
+            } else if (cname === 'DivineSinFeatherScytheEffect') {
+                queueOnlineFxEntry({
+                    k: 'DivineSinFeatherScytheEffect', t: targetArray,
+                    x: Math.round(item.x || 0), y: Math.round(item.y || 0),
+                    angle: Number(item.angle) || 0, radius: Number(item.radius) || 145,
+                    duration: Number(item.duration) || 0.34
+                });
+            } else if (cname === 'DivineSinJudgementPillarEffect') {
+                queueOnlineFxEntry({
+                    k: 'DivineSinJudgementPillarEffect', t: targetArray,
+                    x: Math.round(item.x || 0), y: Math.round(item.y || 0),
+                    radius: Number(item.radius) || 200, duration: Number(item.duration) || 0.62
+                });
+            } else if (cname === 'DivineSinCrossRiftEffect') {
+                queueOnlineFxEntry({
+                    k: 'DivineSinCrossRiftEffect', t: targetArray,
+                    x: Math.round(item.x || 0), y: Math.round(item.y || 0),
+                    angle: Number(item.angle) || 0, swingIdx: Number(item.swingIdx) || 0,
+                    duration: Number(item.duration) || 0.44
+                });
+            } else if (cname === 'DivineSinBabylonLanceEffect') {
+                queueOnlineFxEntry({
+                    k: 'DivineSinBabylonLanceEffect', t: targetArray,
+                    x: Math.round(item.x || 0), y: Math.round(item.y || 0),
+                    angle: Number(item.angle) || 0, length: Number(item.length) || 185,
+                    duration: Number(item.duration) || 0.42
+                });
+            } else if (cname === 'DivineSinSwordRainStompEffect') {
+                queueOnlineFxEntry({
+                    k: 'DivineSinSwordRainStompEffect', t: targetArray,
+                    x: Math.round(item.x || 0), y: Math.round(item.y || 0),
+                    radius: Number(item.radius) || 180, duration: Number(item.duration) || 0.65
+                });
             } else if (cname === 'GlowProjectile') {
                 queueOnlineFxEntry({
                     k: 'GlowProjectile', t: targetArray,
@@ -4330,6 +4509,49 @@
                         ringEffects.push({ x: target.x, y: target.y, life: 0.32, duration: 0.32, maxRadius: 48, color: '#bae6fd' });
                     } catch (_) {}
                     window._suppressOnlineFxCapture = false;
+                };
+            } else if (proj.isDivineSinSword) {
+                proj.onHit = function(target) {
+                    const bx = target ? target.x : this.x;
+                    const by = target ? target.y : this.y;
+                    window._suppressOnlineFxCapture = true;
+                    try {
+                        visualEffects.push(new DivineSinJudgementPillarEffect(bx, by, 200, 0.62));
+                    } catch (_) {}
+                    window._suppressOnlineFxCapture = false;
+                };
+            } else if (proj.isRicoBoxProj) {
+                const spawnRemoteRicoBox = (bx, by) => {
+                    if (proj._boxExpanded) return;
+                    proj._boxExpanded = true;
+                    window._suppressOnlineFxCapture = true;
+                    try {
+                        const halfSize = 115;
+                        const ownerRef = proj.owner || null;
+                        const dup = Array.isArray(ricoExpandedBoxes) && ricoExpandedBoxes.some(b => b && b.duration > 1.5 && Math.hypot(b.x - bx, b.y - by) < 40);
+                        if (!dup && Array.isArray(ricoExpandedBoxes)) {
+                            ricoExpandedBoxes.push({
+                                x: bx,
+                                y: by,
+                                halfSize: halfSize,
+                                duration: 2.0,
+                                maxDuration: 2.0,
+                                owner: ownerRef,
+                                team: ownerRef ? ownerRef.team : undefined,
+                                containsPoint(px, py) {
+                                    return Math.abs(px - this.x) <= this.halfSize && Math.abs(py - this.y) <= this.halfSize;
+                                }
+                            });
+                        }
+                        effectsAdd(new WaveShockwave(bx, by, halfSize * 1.25, 0.38, '#22d3ee', '#fde047'));
+                    } catch (_) {}
+                    window._suppressOnlineFxCapture = false;
+                };
+                proj.onHit = function(target) {
+                    spawnRemoteRicoBox(target ? target.x : this.x, target ? target.y : this.y);
+                };
+                proj.onExplode = function() {
+                    spawnRemoteRicoBox(this.x, this.y);
                 };
             }
         }
@@ -4452,6 +4674,44 @@
                     case 'ClassicNoobKillEffect':
                         inst = new ClassicNoobKillEffect(fxX, fxY);
                         break;
+                    case 'NoobLaserBeamEffect':
+                        inst = new NoobLaserBeamEffect(fxX, fxY, fx.angle || 0, fx.length || 800, fx.halfWidth || 42, !!fx.isClassic, fx.duration || 0.38);
+                        break;
+                    case 'DivineSinFeatherScytheEffect':
+                        inst = new DivineSinFeatherScytheEffect(fxX, fxY, fx.angle || 0, fx.radius || 145, fx.duration || 0.34);
+                        break;
+                    case 'DivineSinJudgementPillarEffect':
+                        inst = new DivineSinJudgementPillarEffect(fxX, fxY, fx.radius || 200, fx.duration || 0.62);
+                        break;
+                    case 'DivineSinCrossRiftEffect':
+                        inst = new DivineSinCrossRiftEffect(fxX, fxY, fx.angle || 0, fx.swingIdx || 0, fx.duration || 0.44);
+                        break;
+                    case 'DivineSinBabylonLanceEffect':
+                        inst = new DivineSinBabylonLanceEffect(fxX, fxY, fx.angle || 0, fx.length || 185, fx.duration || 0.42);
+                        break;
+                    case 'DivineSinSwordRainStompEffect':
+                        inst = new DivineSinSwordRainStompEffect(fxX, fxY, fx.radius || 180, fx.duration || 0.65);
+                        break;
+                    case 'RicoExpandedBox':
+                        if (Array.isArray(ricoExpandedBoxes)) {
+                            const halfSize = fx.halfSize || 115;
+                            const dup = ricoExpandedBoxes.some(b => b && b.duration > 1.5 && Math.hypot(b.x - fxX, b.y - fxY) < 40);
+                            if (!dup) {
+                                ricoExpandedBoxes.push({
+                                    x: fxX,
+                                    y: fxY,
+                                    halfSize: halfSize,
+                                    duration: fx.duration || 2.0,
+                                    maxDuration: fx.duration || 2.0,
+                                    owner: ownerProxy || null,
+                                    team: ownerProxy ? ownerProxy.team : undefined,
+                                    containsPoint(px, py) {
+                                        return Math.abs(px - this.x) <= this.halfSize && Math.abs(py - this.y) <= this.halfSize;
+                                    }
+                                });
+                            }
+                        }
+                        return;
                     case 'GlowProjectile':
                         inst = new GlowProjectile(fxX, fxY, fx.angle || 0, fx.speed || 700);
                         break;
@@ -4630,18 +4890,28 @@
                         target.injuredTimer = Math.max(target.injuredTimer || 0, Number(value) || 0);
                         return true;
                     case 'knockback':
+                        target._lastKnockbackOrHitMs = Date.now();
+                        target._postDashWallGrace = 0;
                         if (value && typeof value.x === 'number') target.kbx = (target.kbx || 0) + value.x;
                         if (value && typeof value.y === 'number') target.kby = (target.kby || 0) + value.y;
                         return true;
-                    case 'push':
-                        if (value && typeof value.x === 'number' && typeof value.y === 'number' && Math.hypot(value.x - (target.x || 0), value.y - (target.y || 0)) < 900) {
+                    case 'push': {
+                        const prePushX = target.x || 0;
+                        const prePushY = target.y || 0;
+                        target._lastKnockbackOrHitMs = Date.now();
+                        target._postDashWallGrace = 0;
+                        if (value && typeof value.dx === 'number' && typeof value.dy === 'number' && (Math.abs(value.dx) > 0 || Math.abs(value.dy) > 0)) {
+                            target.x = Math.max(20, Math.min(WORLD_SIZE - 20, prePushX + value.dx));
+                            target.y = Math.max(20, Math.min(WORLD_SIZE - 20, prePushY + value.dy));
+                        } else if (value && typeof value.x === 'number' && typeof value.y === 'number' && Math.hypot(value.x - prePushX, value.y - prePushY) < 900) {
                             target.x = Math.max(20, Math.min(WORLD_SIZE - 20, value.x));
                             target.y = Math.max(20, Math.min(WORLD_SIZE - 20, value.y));
-                        } else if (value && typeof value.dx === 'number' && typeof value.dy === 'number') {
-                            target.x = Math.max(20, Math.min(WORLD_SIZE - 20, (target.x || 0) + value.dx));
-                            target.y = Math.max(20, Math.min(WORLD_SIZE - 20, (target.y || 0) + value.dy));
+                        }
+                        if (typeof clampEntityKnockbackWalls === 'function') {
+                            clampEntityKnockbackWalls(target, prePushX, prePushY);
                         }
                         return true;
+                    }
                     default:
                         if (typeof value !== 'undefined') target[type] = value;
                         return true;
@@ -7458,7 +7728,7 @@
                 this.id = globalEntityID++;
                 this.team = this.id;
                 this.x=x;this.y=y;this.radius=r;this.color=c;this.maxHp=hp;this.hp=hp;this.shield=0;
-                this.dead=false;this.speed=150;this.angle=0;this.isPlayer=false;this.name="Bot";this.kills=0;
+                this.dead=false;this.speed=150;this.angle=0;this.isPlayer=false;this.name="Bot";this.currentSkin='default';this.kills=0;
                 this.deaths=0;this.assists=0;
                 this.totalDamage = 0; // total damage dealt by this entity
                 this.totalDamageTaken = 0; // total damage taken by this entity
@@ -7727,30 +7997,57 @@
                     this.revealTimer = Math.max(this.revealTimer || 0, Number(value) || 0);
                 } else if (type === 'knockback') {
                     // value expected {x: vx, y: vy}
+                    this._lastKnockbackOrHitMs = Date.now();
+                    this._postDashWallGrace = 0;
                     if (value && typeof value.x === 'number') this.kbx = (this.kbx || 0) + value.x;
                     if (value && typeof value.y === 'number') this.kby = (this.kby || 0) + value.y;
+                    if (typeof OnlinePlayerProxy !== 'undefined' && this instanceof OnlinePlayerProxy) {
+                        this._localKbVx = (this._localKbVx || 0) + (Number(value && value.x) || 0);
+                        this._localKbVy = (this._localKbVy || 0) + (Number(value && value.y) || 0);
+                        this.kbx = 0;
+                        this.kby = 0;
+                        this._lastLocalPushAt = Date.now();
+                    }
                 } else if (type === 'pull') {
-                    // Pull is an immediate position change
+                    // Pull is an immediate position change (clamped against map walls!)
+                    const prePullX = this.x;
+                    const prePullY = this.y;
+                    this._lastKnockbackOrHitMs = Date.now();
+                    this._postDashWallGrace = 0;
                     if (value && typeof value.dx === 'number') this.x = Math.max(20, Math.min(WORLD_SIZE - 20, this.x + value.dx));
                     if (value && typeof value.dy === 'number') this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + value.dy));
+                    if (typeof clampEntityKnockbackWalls === 'function') {
+                        clampEntityKnockbackWalls(this, prePullX, prePullY);
+                    }
                     if (typeof OnlinePlayerProxy !== 'undefined' && this instanceof OnlinePlayerProxy) {
                         this.serverX = this.x;
                         this.serverY = this.y;
+                        this.prevServerX = this.x;
+                        this.prevServerY = this.y;
                         this._lastOwnX = this.x;
                         this._lastOwnY = this.y;
                         this._lastLocalPushAt = Date.now();
                     }
                 } else if (type === 'push') {
-                    if (value && typeof value.x === 'number' && typeof value.y === 'number' && Math.hypot(value.x - this.x, value.y - this.y) < 900) {
-                        this.x = Math.max(20, Math.min(WORLD_SIZE - 20, value.x));
-                        this.y = Math.max(20, Math.min(WORLD_SIZE - 20, value.y));
-                    } else if (value && typeof value.dx === 'number' && typeof value.dy === 'number') {
+                    const prePushX = this.x;
+                    const prePushY = this.y;
+                    this._lastKnockbackOrHitMs = Date.now();
+                    this._postDashWallGrace = 0;
+                    if (value && typeof value.dx === 'number' && typeof value.dy === 'number' && (Math.abs(value.dx) > 0 || Math.abs(value.dy) > 0)) {
                         this.x = Math.max(20, Math.min(WORLD_SIZE - 20, this.x + value.dx));
                         this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + value.dy));
+                    } else if (value && typeof value.x === 'number' && typeof value.y === 'number' && Math.hypot(value.x - this.x, value.y - this.y) < 900) {
+                        this.x = Math.max(20, Math.min(WORLD_SIZE - 20, value.x));
+                        this.y = Math.max(20, Math.min(WORLD_SIZE - 20, value.y));
+                    }
+                    if (typeof clampEntityKnockbackWalls === 'function') {
+                        clampEntityKnockbackWalls(this, prePushX, prePushY);
                     }
                     if (typeof OnlinePlayerProxy !== 'undefined' && this instanceof OnlinePlayerProxy) {
                         this.serverX = this.x;
                         this.serverY = this.y;
+                        this.prevServerX = this.x;
+                        this.prevServerY = this.y;
                         this._lastOwnX = this.x;
                         this._lastOwnY = this.y;
                         this._lastLocalPushAt = Date.now();
@@ -8157,6 +8454,8 @@
                     let ang = Math.atan2(this.y - src.y, this.x - src.x);
                     this.kbx = Math.cos(ang) * 500;
                     this.kby = Math.sin(ang) * 500;
+                    this._lastKnockbackOrHitMs = Date.now();
+                    this._postDashWallGrace = 0;
                 }
                 } finally {
                     this._takeDamageDepth = Math.max(0, (this._takeDamageDepth || 1) - 1);
@@ -8782,13 +9081,34 @@
                     }
                 } catch(_) {}
 
-                // Physics
-                this.x += this.kbx * dt;
-                this.y += this.kby * dt;
-                this.kbx *= 0.9;
-                this.kby *= 0.9;
+                // Physics (including knockback velocity + Twins knockbackDuration, clamped against map walls so knockbacks never phase through walls!)
+                const preKbX = this.x;
+                const preKbY = this.y;
+                const hasKbVel = Math.hypot(this.kbx || 0, this.kby || 0) > 0.5 || (this.knockbackDuration > 0 && !(typeof Twins !== 'undefined' && this instanceof Twins));
+                if (hasKbVel) {
+                    this._lastKnockbackOrHitMs = Date.now();
+                    this._postDashWallGrace = 0;
+                }
+                this.x += (this.kbx || 0) * dt;
+                this.y += (this.kby || 0) * dt;
+                this.kbx = (this.kbx || 0) * 0.9;
+                this.kby = (this.kby || 0) * 0.9;
+                if (Math.abs(this.kbx) < 0.5) this.kbx = 0;
+                if (Math.abs(this.kby) < 0.5) this.kby = 0;
+                if (this.knockbackDuration > 0 && !(typeof Twins !== 'undefined' && this instanceof Twins)) {
+                    this.x += (this.knockbackX || 0) * dt;
+                    this.y += (this.knockbackY || 0) * dt;
+                    this.knockbackDuration = Math.max(0, this.knockbackDuration - dt);
+                    if (this.knockbackDuration <= 0) {
+                        this.knockbackX = 0;
+                        this.knockbackY = 0;
+                    }
+                }
 
                 this.x=Math.max(20,Math.min(WORLD_SIZE-20,this.x));this.y=Math.max(20,Math.min(WORLD_SIZE-20,this.y));
+                if (hasKbVel && typeof clampEntityKnockbackWalls === 'function') {
+                    clampEntityKnockbackWalls(this, preKbX, preKbY);
+                }
                 // Enforce blueprint traps: if an entity is marked trappedBy a BlueprintZone,
                 // keep it inside the blueprint bounds until the zone expires.
                 try {
@@ -33345,6 +33665,12 @@
             let c=document.getElementById('card-'+h);
             console.log('   Card element found?', !!c);
             if(c)c.classList.add('selected');
+            if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) {
+                onlineSocket.emit('playerQueueUpdate', {
+                    heroType: selectedHeroType,
+                    currentSkin: (typeof selectedSkins !== 'undefined' && selectedSkins[selectedHeroType]) ? selectedSkins[selectedHeroType] : 'default'
+                });
+            }
         }
 
         document.querySelectorAll('.hero-card').forEach(card => {
@@ -38689,6 +39015,16 @@
                     }
                 };
                 ricoExpandedBoxes.push(box);
+                if (this.isPlayer && typeof queueOnlineFxEntry === 'function' && typeof gameMode === 'string' && gameMode.includes('online')) {
+                    queueOnlineFxEntry({
+                        k: 'RicoExpandedBox',
+                        t: 'visualEffects',
+                        x: Math.round(bx),
+                        y: Math.round(by),
+                        halfSize: halfSize,
+                        duration: 2.0
+                    });
+                }
                 effectsAdd(new WaveShockwave(bx, by, halfSize * 1.25, 0.38, '#22d3ee', '#fde047'));
             }
 
@@ -43221,6 +43557,37 @@
                     }
                 }
 
+                const clampDisplacedTargetsAfterStep = (actor) => {
+                    for (let k = 0; k < entities.length; k++) {
+                        const ent = entities[k];
+                        if (!ent || ent === actor || ent.dead || !(ent instanceof Entity)) continue;
+                        if (typeof ent._preStepX === 'number' && typeof ent._preStepY === 'number') {
+                            const disp = Math.hypot(ent.x - ent._preStepX, ent.y - ent._preStepY);
+                            if (disp > 0.5) {
+                                ent._lastKnockbackOrHitMs = Date.now();
+                                ent._postDashWallGrace = 0;
+                                clampEntityKnockbackWalls(ent, ent._preStepX, ent._preStepY);
+                            }
+                        }
+                        if (typeof OnlinePlayerProxy !== 'undefined' && ent instanceof OnlinePlayerProxy) {
+                            if (Math.hypot(ent.x - (ent._lastOwnX ?? ent.x), ent.y - (ent._lastOwnY ?? ent.y)) > 1.0 ||
+                                Math.hypot(ent.kbx || 0, ent.kby || 0) > 15 ||
+                                (ent.knockbackDuration > 0 && Math.hypot(ent.knockbackX || 0, ent.knockbackY || 0) > 5)) {
+                                ent.syncDirectStatusEffectsToServer();
+                            }
+                        }
+                        ent._preStepX = ent.x;
+                        ent._preStepY = ent.y;
+                    }
+                };
+                for (let k = 0; k < entities.length; k++) {
+                    const ent = entities[k];
+                    if (ent && ent instanceof Entity) {
+                        ent._preStepX = ent.x;
+                        ent._preStepY = ent.y;
+                    }
+                }
+
                 entities.forEach(e=>{
                     const movementStartX = e && typeof e.x === 'number' ? e.x : 0;
                     const movementStartY = e && typeof e.y === 'number' ? e.y : 0;
@@ -43228,11 +43595,14 @@
                     try {
                         const isRemoteEnt = !!(e && ((typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) || e.isRemote || (e.owner && e.owner._isRemoteOwner)));
                         if (isRemoteEnt) window._suppressOnlineFxCapture = true;
+                        window._currentlyUpdatingEntity = e;
                         try {
                             if (e && typeof e.update === 'function') e.update(dt);
                         } finally {
+                            window._currentlyUpdatingEntity = null;
                             if (isRemoteEnt) window._suppressOnlineFxCapture = false;
                         }
+                        clampDisplacedTargetsAfterStep(e);
                         // Universal AI Combat-Footwork Fallback: ensure no AI hero ever stands frozen when able to move (excluding stationary Practice Dummy and online proxies)
                         if (e && !e.isPlayer && !(typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) && !(gameMode && gameMode.includes('online')) && !e.isTrainingPracticeDummy && !(gameMode === 'training' && trainingDummyMode === 'practice' && e === trainingDummy) && e.countsAsFFAHero === true && !e.dead && !(e instanceof FallenStatue) && !(e instanceof DefenseTower) && !(e instanceof MainTower)) {
                             const canMove = !(e.stunTimer > 0) && !(e.freezeTimer > 0) && !(e.fightingTimer > 0) && !(e.movementLockdownTimer > 0) && !e.eCharging && !(e.deathLaserTimer > 0) && !(e.droneActive) && !(e.mountedTarget) && (e.baseSpd !== 0) && (e.speed !== 0);
@@ -43283,6 +43653,7 @@
                     try { if(e && e.mirror && typeof e.mirror.update === 'function') e.mirror.update(dt); } catch(_){ }
                     try { enforceFarmlandHouse(e); } catch(_){ }
                     try { enforceMapWallsAndRicoBoxes(e, movementStartX, movementStartY, dt); } catch(_){ }
+                    if (e && e instanceof Entity) { e._preStepX = e.x; e._preStepY = e.y; }
                     if (storeBoosted && e && !e.dead) {
                         e.x = movementStartX + (e.x - movementStartX) * 1.15;
                         e.y = movementStartY + (e.y - movementStartY) * 1.15;
@@ -43315,6 +43686,7 @@
                     for(let i=particles.length-1;i>=0;i--){const p=particles[i];if(!p){particles.splice(i,1);continue;}try{p.update(dt);}catch(err){console.error('particle.update error',err);}if(!particles[i] || particles[i].del || particles[i].life<=0)particles.splice(i,1);}
                     // Update visual effects (beams, waves, blasts)
                     for(let i=visualEffects.length-1;i>=0;i--){const v=visualEffects[i];if(!v){visualEffects.splice(i,1);continue;}try{v.update(dt);}catch(err){console.error('visualEffect.update error',err);}if(!visualEffects[i] || visualEffects[i].del)visualEffects.splice(i,1);}
+                    try { if (typeof clampDisplacedTargetsAfterStep === 'function') clampDisplacedTargetsAfterStep(null); } catch (_) {}
                 } finally {
                     window._suppressOnlineFxCapture = false;
                 }
@@ -48738,6 +49110,7 @@
           const payload = {
               playerName: 'Player',
               heroType: selectedHeroType || 'paul',
+              currentSkin: (typeof selectedSkins !== 'undefined' && selectedSkins[selectedHeroType]) ? selectedSkins[selectedHeroType] : 'default',
               gameMode: currentMatchmakingMode,
               maxPlayers: currentMatchmakingMaxPlayers,
               selectedMap: selectedMap || 'classic'
@@ -49547,14 +49920,16 @@
             'kills', 'deaths', 'assists', 'totalDamage', 'totalDamageTaken', 'damageContributors',
             'lastDamageTime', 'stunTimer', 'freezeTimer', 'slowTimer', 'blindTimer', 'injuredTimer',
             'revealTimer', 'defDebuff', 'defenseShred', 'defenseShredTimer', 'movementLockdownTimer',
-            'hallucinationTimer', 'stunImmuneTimer', 'debuffImmuneTimer',
+            'hallucinationTimer', 'stunImmuneTimer', 'debuffImmuneTimer', 'enhancedKBTimer',
+            'fightingTimer', 'terrifedTimer', 'echoTimer', 'austinMarkTimer', 'austinMarkedBy',
+            'knockbackX', 'knockbackY', 'knockbackDuration',
             'invulnerableTimer', 'invincibleTimer', 'invincibleLockTimer', 'floatingTimer',
             'isTargetable', 'apolloFireTimer', 'lastApolloFireTick', 'apolloFireOwner',
             'moonMark', 'moonMarkOwner', 'burnTimer', 'lastBurnTick', 'burnOwner',
             'suspectedTimer', 'suspectedPosters', 'suspectedBy', 'mindControlledBy',
             'mountedByJeffrey', 'mountedTarget',
             'inRealm', 'realmTimer', 'realmId', 'realmTarget', 'realmReturnPos',
-            'skinIcon', 'skinImageCache', 'dmgMult', 'speedMult',
+            'currentSkin', 'skinIcon', 'skinImageCache', 'dmgMult', 'speedMult',
             'basicCD', 'qCD', 'eCD', 'fCD', 'gCD', 'rCD', 'maxRCD', 'passiveCD', 'evadeCooldown',
             'darkProjFireCD', 'target',
             'wanderTimer', 'wanderAngle', 'aiState', 'strafeDir', 'qLungeHits', 'hitEnemies',
@@ -50238,9 +50613,19 @@
                         this.setAuthoritativeHp(nextHp);
                     }
 
-                    // Broadcast BOTH shield damage and HP damage (plus exact trueDamageAmount) to the server!
+                    // Apply standard hit knockback when finalCombinedDamage > 200 (matching offline Entity.prototype.takeDamage!)
                     const isRemoteSrc = !!(src && (src._isRemoteOwner || src instanceof OnlinePlayerProxy));
+                    if (!isRemoteSrc && src && finalCombinedDamage > 200 && !(meta && meta.ignoreKnockback) && typeof src.x === 'number' && typeof src.y === 'number') {
+                        const kbAng = Math.atan2(this.y - src.y, this.x - src.x);
+                        this.kbx = (this.kbx || 0) + Math.cos(kbAng) * 500;
+                        this.kby = (this.kby || 0) + Math.sin(kbAng) * 500;
+                        this._lastKnockbackOrHitMs = Date.now();
+                        this._lastLocalPushAt = Date.now();
+                    }
+
+                    // Broadcast BOTH shield damage and HP damage (plus exact trueDamageAmount) to the server!
                     if (gameMode && gameMode.includes('online') && !isRemoteSrc && finalCombinedDamage > 0) {
+                        this._lastLocalDamageAt = Date.now();
                         const outMeta = Object.assign({}, meta || {}, {
                             trueDamageAmount: trueDamagePart,
                             shieldAbsorbed: shieldAbsorbed,
@@ -50248,6 +50633,7 @@
                             isTrue: (normalDamagePart <= 0 && trueDamagePart > 0)
                         });
                         this.broadcastDamageToServer(finalCombinedDamage, src || player, outMeta);
+                        this.syncDirectStatusEffectsToServer();
                     } else if (!gameMode || !gameMode.includes('online')) {
                         if (this._hp <= 0) {
                             this.setAuthoritativeHp(0);
@@ -50298,8 +50684,8 @@
                     }
                 }
 
-                // Do not let stale periodic gameStateUpdate overwrite lower local HP while an attack packet is in-flight (< 350ms)
-                const recentlyDamagedLocally = (nowMs - (this._lastLocalDamageAt || 0)) < 350;
+                // Do not let stale periodic gameStateUpdate overwrite lower local HP while an attack packet is in-flight (< 650ms)
+                const recentlyDamagedLocally = (nowMs - (this._lastLocalDamageAt || 0)) < 650;
                 if (typeof data.hp === 'number' && Number.isFinite(data.hp)) {
                     if (!recentlyDamagedLocally || data.hp <= this._hp || data.hp <= 0) {
                         this.setAuthoritativeHp(data.hp);
@@ -50399,55 +50785,65 @@
 
                 // 1. Detect direct position displacement (pushes/pulls/drags like Ian's F ability, Blackhole, Tornado, Hook, etc.)
                 if (typeof this._lastOwnX === 'number' && typeof this._lastOwnY === 'number') {
-                    const pushedDx = this.x - this._lastOwnX;
-                    const pushedDy = this.y - this._lastOwnY;
-                    const pushDist = Math.hypot(pushedDx, pushedDy);
-                    if (pushDist > 1.0 && pushDist < 1200) {
-                        this.x = Math.max(20, Math.min(WORLD_SIZE - 20, this.x));
-                        this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y));
+                    const rawDx = this.x - this._lastOwnX;
+                    const rawDy = this.y - this._lastOwnY;
+                    const rawDist = Math.hypot(rawDx, rawDy);
+                    if (rawDist > 1.0 && rawDist < 1200) {
+                        this._lastKnockbackOrHitMs = Date.now();
+                        this._postDashWallGrace = 0;
+                        if (typeof clampEntityKnockbackWalls === 'function') {
+                            clampEntityKnockbackWalls(this, this._lastOwnX, this._lastOwnY);
+                        }
+                        const pushedDx = this.x - this._lastOwnX;
+                        const pushedDy = this.y - this._lastOwnY;
+                        this._lastOwnX = this.x;
+                        this._lastOwnY = this.y;
                         this.serverX = this.x;
                         this.serverY = this.y;
                         this.prevServerX = this.x;
                         this.prevServerY = this.y;
                         this._lastLocalPushAt = Date.now();
-                        this._pendingPushDx = (this._pendingPushDx || 0) + pushedDx;
-                        this._pendingPushDy = (this._pendingPushDy || 0) + pushedDy;
-                        const flushPushNow = () => {
-                            if (this._pushFlushTimer) {
-                                clearTimeout(this._pushFlushTimer);
-                                this._pushFlushTimer = null;
+                        if (Math.hypot(pushedDx, pushedDy) > 0.5) {
+                            this._pendingPushDx = (this._pendingPushDx || 0) + pushedDx;
+                            this._pendingPushDy = (this._pendingPushDy || 0) + pushedDy;
+                            const flushPushNow = () => {
+                                if (this._pushFlushTimer) {
+                                    clearTimeout(this._pushFlushTimer);
+                                    this._pushFlushTimer = null;
+                                }
+                                const sendDx = Math.round(this._pendingPushDx || 0);
+                                const sendDy = Math.round(this._pendingPushDy || 0);
+                                this._pendingPushDx = 0;
+                                this._pendingPushDy = 0;
+                                this._lastPushEmitMs = Date.now();
+                                if (sendDx === 0 && sendDy === 0) return;
+                                try {
+                                    onlineSocket.emit('playerEffect', {
+                                        socketId: this.socketId,
+                                        effect: {
+                                            type: 'push',
+                                            value: {
+                                                x: Math.round(this.x),
+                                                y: Math.round(this.y),
+                                                dx: sendDx,
+                                                dy: sendDy
+                                            }
+                                        },
+                                        attackerSocketId: (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId
+                                    });
+                                } catch (_) {}
+                            };
+                            const nowPushMs = Date.now();
+                            if ((nowPushMs - (this._lastPushEmitMs || 0)) >= 16 || Math.hypot(this._pendingPushDx || 0, this._pendingPushDy || 0) >= 14) {
+                                flushPushNow();
+                            } else if (!this._pushFlushTimer) {
+                                this._pushFlushTimer = setTimeout(flushPushNow, 16);
                             }
-                            const sendDx = Math.round(this._pendingPushDx || 0);
-                            const sendDy = Math.round(this._pendingPushDy || 0);
-                            this._pendingPushDx = 0;
-                            this._pendingPushDy = 0;
-                            this._lastPushEmitMs = Date.now();
-                            try {
-                                onlineSocket.emit('playerEffect', {
-                                    socketId: this.socketId,
-                                    effect: {
-                                        type: 'push',
-                                        value: {
-                                            x: Math.round(this.x),
-                                            y: Math.round(this.y),
-                                            dx: sendDx,
-                                            dy: sendDy
-                                        }
-                                    },
-                                    attackerSocketId: (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId
-                                });
-                            } catch (_) {}
-                        };
-                        const nowPushMs = Date.now();
-                        if ((nowPushMs - (this._lastPushEmitMs || 0)) >= 16 || Math.hypot(this._pendingPushDx || 0, this._pendingPushDy || 0) >= 14) {
-                            flushPushNow();
-                        } else if (!this._pushFlushTimer) {
-                            this._pushFlushTimer = setTimeout(flushPushNow, 16);
                         }
                     }
                 }
 
-                // 2. Detect direct status timer assignments
+                // 2. Detect direct status timer assignments (including enhancedKBTimer!)
                 const snap = this._syncedStatusSnapshot || (this._syncedStatusSnapshot = {});
                 const statusKeys = [
                     ['stunTimer', 'stun'],
@@ -50462,6 +50858,7 @@
                     ['burnTimer', 'burnTimer'],
                     ['fightingTimer', 'fightingTimer'],
                     ['movementLockdownTimer', 'movementLockdownTimer'],
+                    ['enhancedKBTimer', 'enhancedKBTimer'],
                     ['hallucinationTimer', 'hallucinationTimer'],
                     ['suspectedTimer', 'suspectedTimer'],
                     ['echoTimer', 'echoTimer'],
@@ -50488,16 +50885,25 @@
                     }
                 }
 
-                // 3. Detect direct knockback velocity assignments (kbx, kby) and also apply locally for instant visual feedback
+                // Convert Twins/Ken knockbackX/knockbackY/knockbackDuration into kbx/kby so it replicates seamlessly
+                if (this.knockbackDuration > 0 && Math.hypot(this.knockbackX || 0, this.knockbackY || 0) > 5) {
+                    const mult = Math.max(1.0, (this.knockbackDuration || 0.3) * 5.5);
+                    this.kbx = (this.kbx || 0) + (this.knockbackX || 0) * mult;
+                    this.kby = (this.kby || 0) + (this.knockbackY || 0) * mult;
+                    this.knockbackX = 0;
+                    this.knockbackY = 0;
+                    this.knockbackDuration = 0;
+                }
+
+                // 3. Detect direct knockback velocity assignments (kbx, kby), emit to server, and transfer to _localKbVx/_localKbVy for smooth wall-clamped 60fps knockback!
                 if (Math.hypot(this.kbx || 0, this.kby || 0) > 15) {
                     const kx = Math.round(this.kbx || 0);
                     const ky = Math.round(this.kby || 0);
                     this.kbx = 0;
                     this.kby = 0;
-                    this.x = Math.max(20, Math.min(WORLD_SIZE - 20, this.x + kx * 0.12));
-                    this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + ky * 0.12));
-                    this.serverX = this.x;
-                    this.serverY = this.y;
+                    this._localKbVx = (this._localKbVx || 0) + kx;
+                    this._localKbVy = (this._localKbVy || 0) + ky;
+                    this._lastKnockbackOrHitMs = Date.now();
                     this._lastLocalPushAt = Date.now();
                     try {
                         onlineSocket.emit('playerEffect', {
@@ -50611,23 +51017,47 @@
                     this.angle = (this.angle || 0) + diff * Math.min(1, 28 * dt);
                 }
 
-                // Always interpolate position toward serverX/serverY even when stunned so pushes/knockbacks during stun (like Ian's F) move smoothly!
-                const now = Date.now();
-                const isImmobilized = (this.stunTimer > 0 || this.freezeTimer > 0 || this.fightingTimer > 0);
-                const age = isImmobilized ? 0 : Math.min(0.055, Math.max(0, (now - this.lastServerUpdate) / 1000));
-                const predictX = this.serverX + (isImmobilized ? 0 : this.vx * age);
-                const predictY = this.serverY + (isImmobilized ? 0 : this.vy * age);
+                if (this.enhancedKBTimer > 0) this.enhancedKBTimer = Math.max(0, this.enhancedKBTimer - dt);
 
-                const dxTotal = predictX - this.x;
-                const dyTotal = predictY - this.y;
-                const dist = Math.hypot(dxTotal, dyTotal);
-                if (dist > 300) {
-                    this.x = predictX;
-                    this.y = predictY;
-                } else if (dist > 0.1) {
-                    const lerpFactor = Math.min(1, 28 * dt);
-                    this.x += dxTotal * lerpFactor;
-                    this.y += dyTotal * lerpFactor;
+                // Integrate active local knockback velocity (_localKbVx / _localKbVy) with wall collision so knockbacks look and feel identical to offline mode!
+                if (Math.hypot(this._localKbVx || 0, this._localKbVy || 0) > 8) {
+                    const preKbX = this.x;
+                    const preKbY = this.y;
+                    this.x += (this._localKbVx || 0) * dt;
+                    this.y += (this._localKbVy || 0) * dt;
+                    this._localKbVx = (this._localKbVx || 0) * 0.9;
+                    this._localKbVy = (this._localKbVy || 0) * 0.9;
+                    if (Math.hypot(this._localKbVx, this._localKbVy) <= 8) {
+                        this._localKbVx = 0;
+                        this._localKbVy = 0;
+                    }
+                    if (typeof clampEntityKnockbackWalls === 'function') {
+                        clampEntityKnockbackWalls(this, preKbX, preKbY);
+                    }
+                    this.serverX = this.x;
+                    this.serverY = this.y;
+                    this.prevServerX = this.x;
+                    this.prevServerY = this.y;
+                    this._lastLocalPushAt = Date.now();
+                } else {
+                    // Always interpolate position toward serverX/serverY even when stunned so pushes/knockbacks during stun (like Ian's F) move smoothly!
+                    const now = Date.now();
+                    const isImmobilized = (this.stunTimer > 0 || this.freezeTimer > 0 || this.fightingTimer > 0 || this.enhancedKBTimer > 0);
+                    const age = isImmobilized ? 0 : Math.min(0.055, Math.max(0, (now - this.lastServerUpdate) / 1000));
+                    const predictX = this.serverX + (isImmobilized ? 0 : this.vx * age);
+                    const predictY = this.serverY + (isImmobilized ? 0 : this.vy * age);
+
+                    const dxTotal = predictX - this.x;
+                    const dyTotal = predictY - this.y;
+                    const dist = Math.hypot(dxTotal, dyTotal);
+                    if (dist > 300) {
+                        this.x = predictX;
+                        this.y = predictY;
+                    } else if (dist > 0.1) {
+                        const lerpFactor = Math.min(1, 28 * dt);
+                        this.x += dxTotal * lerpFactor;
+                        this.y += dyTotal * lerpFactor;
+                    }
                 }
 
                 this._lastOwnX = this.x;
@@ -51240,6 +51670,8 @@
         function setupOnlineListeners() {
           onlineSocket.off('gameStateUpdate');
           onlineSocket.off('playerHealthUpdated');
+          onlineSocket.off('playerHealed');
+          onlineSocket.off('playerRespawned');
           onlineSocket.off('playerVictory');
           onlineSocket.off('gameOver');
           onlineSocket.off('abilitySound');
@@ -51340,6 +51772,12 @@
               if (typeof data.angle === 'number' && Number.isFinite(data.angle)) {
                 prox.targetAngle = data.angle;
               }
+              if (data.heroType && prox.heroType !== data.heroType) {
+                prox.heroType = data.heroType;
+                prox.radius = getHeroRadius(prox.heroType) || prox.radius;
+                prox.ensureHeroVisualDefaults();
+              }
+              if (data.currentSkin) prox.currentSkin = data.currentSkin;
               if (data.color) prox.color = data.color;
               prox.prevServerTs = prox.lastServerUpdate || nowMs;
               prox.lastServerUpdate = nowMs;
@@ -51401,6 +51839,12 @@
               if (!prox) return;
               const ad = data.actionData;
               if (typeof ad.angle === 'number' && Number.isFinite(ad.angle)) prox.targetAngle = ad.angle;
+              if (ad.heroType && prox.heroType !== ad.heroType) {
+                prox.heroType = ad.heroType;
+                prox.radius = getHeroRadius(prox.heroType) || prox.radius;
+                prox.ensureHeroVisualDefaults();
+              }
+              if (ad.currentSkin) prox.currentSkin = ad.currentSkin;
               if (ad.color) prox.color = ad.color;
               if (ad.drawState && typeof ad.drawState === 'object') {
                 applyRemoteDrawStateToProxy(prox, ad.drawState, true);
@@ -51702,6 +52146,40 @@
             }
           });
 
+          onlineSocket.on('playerHealed', function(data) {
+            try {
+              if (!data) return;
+              const sid = data.socketId || data.playerId;
+              const myId = (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId;
+              if (!sid || sid === myId) return;
+              const proxy = entities.find(e => e instanceof OnlinePlayerProxy && e.socketId === sid);
+              if (proxy && typeof data.hp === 'number' && Number.isFinite(data.hp)) {
+                if (typeof data.maxHp === 'number' && Number.isFinite(data.maxHp) && data.maxHp > 0) {
+                  proxy.maxHp = data.maxHp;
+                }
+                proxy.setAuthoritativeHp(data.hp);
+              }
+            } catch (_) {}
+          });
+
+          onlineSocket.on('playerRespawned', function(data) {
+            try {
+              if (!data) return;
+              const sid = data.socketId || data.playerId;
+              const myId = (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId;
+              if (!sid || sid === myId) return;
+              const proxy = entities.find(e => e instanceof OnlinePlayerProxy && e.socketId === sid);
+              if (proxy) {
+                proxy.dead = false;
+                proxy._lastLocalDamageAt = 0;
+                if (typeof data.maxHp === 'number' && Number.isFinite(data.maxHp) && data.maxHp > 0) proxy.maxHp = data.maxHp;
+                if (typeof data.hp === 'number' && Number.isFinite(data.hp)) proxy.setAuthoritativeHp(data.hp);
+                if (typeof data.x === 'number') { proxy.x = data.x; proxy.serverX = data.x; proxy.prevServerX = data.x; proxy._lastOwnX = data.x; }
+                if (typeof data.y === 'number') { proxy.y = data.y; proxy.serverY = data.y; proxy.prevServerY = data.y; proxy._lastOwnY = data.y; }
+              }
+            } catch (_) {}
+          });
+
           onlineSocket.on('playerVictory', function(data) {
             try {
               const winnerId = data && (data.winnerId || data.winnerSocketId);
@@ -51763,6 +52241,7 @@
             onlineSocket.emit('joinMatchmaking', {
                 playerName: 'Player',
                 heroType: selectedHeroType || 'paul',
+                currentSkin: (typeof selectedSkins !== 'undefined' && selectedSkins[selectedHeroType]) ? selectedSkins[selectedHeroType] : 'default',
                 gameMode: '5v5',
                 maxPlayers: 10
             });
@@ -52337,6 +52816,15 @@
     function selectSkin(hero, skinName) {
         selectedSkins[hero] = skinName;
         console.log(`🎨 Selected skin: ${hero} -> ${skinName}`);
+        if (typeof player !== 'undefined' && player && !player.dead && selectedHeroType === hero) {
+            player.currentSkin = skinName || 'default';
+        }
+        if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) {
+            onlineSocket.emit('playerQueueUpdate', {
+                heroType: selectedHeroType || hero,
+                currentSkin: selectedSkins[selectedHeroType || hero] || 'default'
+            });
+        }
         // update the UI
         openSkinMenu(hero);
     }
@@ -52992,9 +53480,12 @@ class MultiplayerManager {
     }
 
     this.roomId = roomId;
+    const resolvedHero = heroType || (typeof selectedHeroType !== 'undefined' ? selectedHeroType : 'paul');
+    const resolvedSkin = (typeof selectedSkins !== 'undefined' && selectedSkins[resolvedHero]) ? selectedSkins[resolvedHero] : 'default';
     this.socket.emit('joinGame', {
       roomId: roomId,
-      heroType: heroType || 'paul',
+      heroType: resolvedHero,
+      currentSkin: resolvedSkin,
       playerName: playerName || 'Player',
       gameMode: gameMode
     });
@@ -53348,9 +53839,12 @@ class FFAMultiplayer {
       this.showQueueUI();
     }
 
+    const resolvedHero = heroType || (typeof selectedHeroType !== 'undefined' ? selectedHeroType : 'paul');
+    const resolvedSkin = (typeof selectedSkins !== 'undefined' && selectedSkins[resolvedHero]) ? selectedSkins[resolvedHero] : 'default';
     this.multiplayer.socket.emit('joinMatchmaking', {
       gameMode: gameMode,
-      heroType: heroType || (typeof selectedHeroType !== 'undefined' ? selectedHeroType : 'paul'),
+      heroType: resolvedHero,
+      currentSkin: resolvedSkin,
       playerName: playerName || 'Player',
       maxPlayers: maxPlayers
     });
@@ -53528,7 +54022,7 @@ if (typeof module !== 'undefined' && module.exports) {
     <!-- ========================================================================
          HERO SYSTEM MAINTENANCE GUIDE
          ========================================================================
-          IMPORTANT: Any code modifications in this section WILL BE NOTICED
+         ⚠️  IMPORTANT: Any code modifications in this section WILL BE NOTICED
          
          TO ADD A NEW HERO:
          1. Define the hero class earlier in the file with other hero definitions

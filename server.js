@@ -17,25 +17,50 @@ const DEFAULT_WORLD_SIZE = 5000;
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from both 'public' (if present) and root directory so either folder layout works
-const publicDir = path.join(__dirname, 'public');
-if (fs.existsSync(publicDir)) {
-  app.use(express.static(publicDir));
-}
-app.use(express.static(__dirname));
-
-// Fallback route for '/' to serve index.html from public/ or root
-app.get('/', (req, res) => {
+// Always resolve the newest index.html between project root and public/ (and keep them synced) so localhost:3000 never serves a stale file
+function resolveLatestIndexHtml() {
   const pubIndex = path.join(__dirname, 'public', 'index.html');
   const rootIndex = path.join(__dirname, 'index.html');
-  if (fs.existsSync(pubIndex)) {
-    res.sendFile(pubIndex);
-  } else if (fs.existsSync(rootIndex)) {
-    res.sendFile(rootIndex);
+  const hasPub = fs.existsSync(pubIndex);
+  const hasRoot = fs.existsSync(rootIndex);
+  if (hasRoot && hasPub) {
+    try {
+      const rootStat = fs.statSync(rootIndex);
+      const pubStat = fs.statSync(pubIndex);
+      if (rootStat.mtimeMs >= pubStat.mtimeMs || rootStat.size >= pubStat.size) {
+        if (rootStat.size !== pubStat.size || Math.abs(rootStat.mtimeMs - pubStat.mtimeMs) > 1000) {
+          try { fs.copyFileSync(rootIndex, pubIndex); } catch (_) {}
+        }
+        return rootIndex;
+      } else {
+        try { fs.copyFileSync(pubIndex, rootIndex); } catch (_) {}
+        return pubIndex;
+      }
+    } catch (_) {
+      return rootIndex;
+    }
+  }
+  if (hasRoot) return rootIndex;
+  if (hasPub) return pubIndex;
+  return null;
+}
+resolveLatestIndexHtml();
+
+app.get(['/', '/index.html'], (req, res) => {
+  const chosen = resolveLatestIndexHtml();
+  if (chosen) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.sendFile(chosen);
   } else {
     res.status(404).send('index.html not found. Place index.html in the project root or public/ directory.');
   }
 });
+
+const publicDir = path.join(__dirname, 'public');
+app.use(express.static(__dirname));
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+}
 
 // Server max HP cap: 69420 for all heroes
 const SERVER_MAX_HP = 69420;
@@ -603,16 +628,10 @@ class GameRoom {
         player.lastClientReportedHp = player.maxHp;
       }
     }
-    // Track client-reported HP for genuine heal deltas only (never overwrite server HP with stale pre-damage client HP)
+    // Authoritative HP is managed by playerDamaged, playerHeal, vivalRevive, and requestRespawn.
+    // Never infer heals from periodic playerUpdate packets (which can arrive with stale pre-damage HP while playerHealthUpdated is in flight).
     if (typeof data.hp === 'number' && Number.isFinite(data.hp) && player.hp > 0) {
-      const reportedHp = Math.min(player.maxHp, Math.max(0, Math.round(data.hp)));
-      if (typeof player.lastClientReportedHp === 'number' && reportedHp > player.lastClientReportedHp) {
-        const healDelta = reportedHp - player.lastClientReportedHp;
-        if (healDelta > 0 && healDelta <= player.maxHp * 0.5) {
-          player.hp = Math.min(player.maxHp, player.hp + healDelta);
-        }
-      }
-      player.lastClientReportedHp = reportedHp;
+      player.lastClientReportedHp = Math.min(player.maxHp, Math.max(0, Math.round(data.hp)));
     }
     if (Array.isArray(data.entities)) {
       player.entities = data.entities.slice(0, 220);
@@ -927,6 +946,8 @@ io.on('connection', (socket) => {
         y: data.y,
         angle: data.angle || 0,
         color: data.color || null,
+        heroType: data.heroType || null,
+        currentSkin: data.currentSkin || null,
         entities: nonProjEntities
       });
     }
@@ -940,6 +961,32 @@ io.on('connection', (socket) => {
         ...data,
         ownerSocketId: socket.id
       });
+    }
+  });
+
+  // Allow players in matchmaking queue or pre-match countdown to update their selected heroType and currentSkin
+  socket.on('playerQueueUpdate', (data) => {
+    if (!data) return;
+    for (const [, q] of queues.entries()) {
+      const entry = q.find(p => p.socketId === socket.id);
+      if (entry) {
+        if (data.heroType) entry.heroType = data.heroType;
+        if (data.currentSkin) entry.currentSkin = data.currentSkin;
+      }
+    }
+    const { room } = findPlayerRoom(socket.id);
+    if (room && room.players.has(socket.id)) {
+      const rp = room.players.get(socket.id);
+      if (data.heroType && (!room.gameRunning || !rp.lastDamagedAt)) {
+        rp.heroType = data.heroType;
+        const baseHp = getHeroBaseHp(data.heroType);
+        rp.maxHp = baseHp;
+        if (!room.gameRunning && !rp.lastDamagedAt) {
+          rp.hp = baseHp;
+          rp.lastClientReportedHp = baseHp;
+        }
+      }
+      if (data.currentSkin) rp.currentSkin = data.currentSkin;
     }
   });
 
@@ -988,14 +1035,16 @@ io.on('connection', (socket) => {
     if (!room || !data) return;
     const player = room.players.get(socket.id);
     if (!player || player.hp <= 0) return;
-    const healAmount = Math.max(0, Number(data.amount) || 0);
+    const healAmount = Math.min(player.maxHp, Math.max(0, Math.round(Number(data.amount) || 0)));
+    if (healAmount <= 0) return;
     player.hp = Math.min(player.maxHp, player.hp + healAmount);
     player.lastClientReportedHp = player.hp;
     io.to(roomId).emit('playerHealed', {
       playerId: socket.id,
       socketId: socket.id,
       hp: player.hp,
-      maxHp: player.maxHp
+      maxHp: player.maxHp,
+      shield: player.shield || 0
     });
   });
 
@@ -1172,12 +1221,12 @@ io.on('connection', (socket) => {
     const eff = data.effect;
     const now = Date.now();
     if (eff.type === 'push' && eff.value) {
-      if (typeof eff.value.x === 'number' && typeof eff.value.y === 'number' && Math.hypot(eff.value.x - victim.x, eff.value.y - victim.y) < 900) {
-        victim.x = Math.max(40, Math.min(room.worldSize - 40, eff.value.x));
-        victim.y = Math.max(40, Math.min(room.worldSize - 40, eff.value.y));
-      } else if (typeof eff.value.dx === 'number' && typeof eff.value.dy === 'number') {
+      if (typeof eff.value.dx === 'number' && typeof eff.value.dy === 'number' && (Math.abs(eff.value.dx) > 0 || Math.abs(eff.value.dy) > 0)) {
         victim.x = Math.max(40, Math.min(room.worldSize - 40, victim.x + eff.value.dx));
         victim.y = Math.max(40, Math.min(room.worldSize - 40, victim.y + eff.value.dy));
+      } else if (typeof eff.value.x === 'number' && typeof eff.value.y === 'number' && Math.hypot(eff.value.x - victim.x, eff.value.y - victim.y) < 900) {
+        victim.x = Math.max(40, Math.min(room.worldSize - 40, eff.value.x));
+        victim.y = Math.max(40, Math.min(room.worldSize - 40, eff.value.y));
       }
       victim.lastPushedAt = now;
     } else if (eff.type === 'pull' && eff.value) {
