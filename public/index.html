@@ -17790,9 +17790,9 @@
                     return;
                 }
                 this.damageCD -= dt;
-                // Deal damage every 0.1s to nearby enemies (exclude owner)
+                // Deal damage every 0.05s (x2 tick speed) to nearby enemies (exclude owner)
                 if(this.damageCD <= 0) {
-                    this.damageCD = 0.1;
+                    this.damageCD = 0.05;
                     for(let e of entities) {
                         if(e !== this && !e.dead && e instanceof Entity && e.team !== this.owner?.team && e !== this.owner) {
                             let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
@@ -17861,10 +17861,10 @@
                 this.trappedEnemyY = 0;
                 this.terrifedTimer = 0;
                 
-                // Q ability - continuous shooting
+                // Q ability - continuous shooting (x2 tick/fire speed)
                 this.qActive = false;
                 this.qTimer = 0;
-                this.qFireRate = 0.15; // Shoot every 0.15s
+                this.qFireRate = 0.075; // Shoot every 0.075s (x2 tick speed)
             }
             
             update(dt) {
@@ -17961,11 +17961,11 @@
                     }
                 }
                 
-                // Deal consistent lava puddle damage (only 1 puddle ticks per enemy every 0.1s, matching 75px visual puddle radius)
+                // Deal consistent lava puddle damage (x2 tick speed: ticks every 0.05s, matching 75px visual puddle radius)
                 if (this.pedals.length > 0) {
                     this.pedalDamageTimer = (this.pedalDamageTimer || 0) - dt;
                     if (this.pedalDamageTimer <= 0) {
-                        this.pedalDamageTimer = 0.1;
+                        this.pedalDamageTimer = 0.05;
                         for (let e of entities) {
                             if (!e.dead && e instanceof Entity && e.isTargetable !== false && e.team !== this.team && e !== this) {
                                 const hitRadius = 75 + (e.radius || 20);
@@ -33711,6 +33711,45 @@
             }
         }
 
+        window.showHeroLockedScreen = function(heroName) {
+            let modal = document.getElementById('heroLockedScreenModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'heroLockedScreenModal';
+                modal.style.cssText = 'position:fixed;inset:0;background:rgba(5,5,15,0.88);backdrop-filter:blur(8px);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;text-align:center;color:#fff;font-family:Arial,sans-serif;animation:fadeIn 0.18s ease-out;';
+                modal.innerHTML = `
+                    <div style="background:linear-gradient(135deg, #2a0808 0%, #0f172a 100%);border:4px solid #ef4444;border-radius:18px;padding:42px 56px;box-shadow:0 0 60px rgba(239,68,68,0.65), inset 0 0 28px rgba(239,68,68,0.25);max-width:520px;width:90%;">
+                        <div style="font-size:64px;margin-bottom:12px;filter:drop-shadow(0 0 16px #ef4444);">🔒</div>
+                        <h1 style="font-size:46px;font-weight:900;color:#ef4444;margin:0 0 14px 0;letter-spacing:3px;text-shadow:0 0 22px rgba(239,68,68,0.9);">HERO LOCKED!!!</h1>
+                        <p id="heroLockedScreenMsg" style="font-size:18px;color:#fca5a5;margin:0 0 28px 0;line-height:1.5;">DAYUM is excluded from Online Modes! Please select another hero to play online.</p>
+                        <button id="heroLockedCloseBtn" style="background:linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);color:#fff;border:2px solid #fca5a5;padding:12px 34px;font-size:18px;font-weight:800;border-radius:10px;cursor:pointer;letter-spacing:1.5px;box-shadow:0 0 20px rgba(239,68,68,0.5);">OK</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                const closeBtn = modal.querySelector('#heroLockedCloseBtn');
+                if (closeBtn) {
+                    closeBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        modal.style.display = 'none';
+                    };
+                }
+                modal.onclick = function() {
+                    modal.style.display = 'none';
+                };
+            }
+            const msgEl = modal.querySelector('#heroLockedScreenMsg');
+            if (msgEl) {
+                msgEl.textContent = `${String(heroName || 'DAYUM').toUpperCase()} is excluded from Online Modes! Please select another hero to play online.`;
+            }
+            modal.style.display = 'flex';
+        };
+
+        window.isOnlineHeroLocked = function(heroKey, modeKey) {
+            const hKey = String(heroKey !== undefined ? heroKey : (typeof selectedHeroType !== 'undefined' ? selectedHeroType : '')).toLowerCase().trim();
+            const mKey = String(modeKey !== undefined ? modeKey : (typeof gameMode !== 'undefined' ? gameMode : '')).toLowerCase().trim();
+            return hKey === 'dayum' && (mKey.includes('online') || mKey === 'ffa_online' || mKey === 'duel_online' || mKey === '5v5_online');
+        };
+
         window.selectHero = function(h) {
             console.log('➡️ selectHero() called with:', h);
             
@@ -33718,6 +33757,12 @@
             if (window.heroEnabled[h] === false) {
                 console.log('   Hero', h, 'is disabled for development');
                 return; // Don't select disabled heroes
+            }
+
+            // Exclude Dayum from online modes and show HERO LOCKED!!! screen
+            if (window.isOnlineHeroLocked(h, gameMode)) {
+                window.showHeroLockedScreen('DAYUM');
+                return;
             }
             
             selectedHeroType=h;
@@ -49129,6 +49174,10 @@
         }
 
         function startOnlineFFA() {
+          if (String(selectedHeroType || '').toLowerCase() === 'dayum') {
+            window.showHeroLockedScreen('DAYUM');
+            return;
+          }
           console.log('🌐 Starting Online FFA...');
           currentMatchmakingMode = 'ffa';
           currentMatchmakingMaxPlayers = 50;
@@ -49153,6 +49202,10 @@
         }
 
         function startOnlineDuel() {
+          if (String(selectedHeroType || '').toLowerCase() === 'dayum') {
+            window.showHeroLockedScreen('DAYUM');
+            return;
+          }
           console.log('🌐 Starting Online 1v1 Duel...');
           currentMatchmakingMode = 'duel';
           currentMatchmakingMaxPlayers = 2;
@@ -49171,6 +49224,11 @@
         }
 
         function joinQueue() {
+          if (String(selectedHeroType || '').toLowerCase() === 'dayum') {
+            isInQueue = false;
+            window.showHeroLockedScreen('DAYUM');
+            return;
+          }
           console.log('📤 Emitting joinMatchmaking for mode', currentMatchmakingMode);
           console.log('   mySocketId:', mySocketId);
           isInQueue = true;
@@ -52296,6 +52354,10 @@
         }
 
         function startOnline5v5() {
+            if (String(selectedHeroType || '').toLowerCase() === 'dayum') {
+                window.showHeroLockedScreen('DAYUM');
+                return;
+            }
             console.log('🌐 Starting Online 5v5...');
             if (!onlineSocket) initializeOnline5v5();
 
@@ -52310,6 +52372,11 @@
         }
 
         function join5v5Queue() {
+            if (String(selectedHeroType || '').toLowerCase() === 'dayum') {
+                isInQueue = false;
+                window.showHeroLockedScreen('DAYUM');
+                return;
+            }
             isInQueue = true;
             showQueueUI();
             // Ask server for 5v5 match (maxPlayers:10)
@@ -52643,6 +52710,9 @@
                     document.querySelectorAll('.mode-card').forEach(card => {
                         card.classList.toggle('active-mode', card.getAttribute('data-mode') === mode);
                     });
+                    if (typeof mode === 'string' && mode.includes('online') && String(selectedHeroType || '').toLowerCase() === 'dayum') {
+                        if (typeof window.showHeroLockedScreen === 'function') window.showHeroLockedScreen('DAYUM');
+                    }
                     if (mode === 'ffa_online') {
                         initializeOnlineFFA();
                         gameMode = 'ffa_online';
@@ -52670,6 +52740,10 @@
         // Handle startGame for online FFA/duel
         const originalStartGame = window.startGame;
         window.startGame = function() {
+                    if (window.isOnlineHeroLocked && window.isOnlineHeroLocked(selectedHeroType, gameMode)) {
+                        window.showHeroLockedScreen('DAYUM');
+                        return;
+                    }
                     if (typeof window.reportLocalModeActivity === 'function') {
                         window.reportLocalModeActivity(gameMode, gameMode && gameMode.includes('online') ? 'queue' : 'playing');
                     }
