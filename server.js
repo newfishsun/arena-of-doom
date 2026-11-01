@@ -450,8 +450,9 @@ class GameRoom {
         p.nextDirTime = now + 1200 + Math.random() * 1800;
       }
 
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
+      const botPushDamp = (p.lastPushedAt && (now - p.lastPushedAt) < 220) ? 0.2 : 1.0;
+      p.x += p.vx * botPushDamp * dt;
+      p.y += p.vy * botPushDamp * dt;
 
       // Stay within world bounds
       const pad = 60;
@@ -606,9 +607,16 @@ class GameRoom {
   updatePlayerPosition(socketId, data) {
     if (!this.players.has(socketId) || !data) return;
     const player = this.players.get(socketId);
-    if (typeof data.x === 'number' && Number.isFinite(data.x)) player.x = data.x;
-    if (typeof data.y === 'number' && Number.isFinite(data.y)) player.y = data.y;
-    player.lastUpdate = Date.now();
+    const now = Date.now();
+    const recentlyPushed = player.lastPushedAt && (now - player.lastPushedAt) < 110;
+    if (!recentlyPushed) {
+      if (typeof data.x === 'number' && Number.isFinite(data.x)) player.x = data.x;
+      if (typeof data.y === 'number' && Number.isFinite(data.y)) player.y = data.y;
+    } else if (typeof data.x === 'number' && typeof data.y === 'number' && Math.hypot(data.x - player.x, data.y - player.y) < 140) {
+      player.x = data.x;
+      player.y = data.y;
+    }
+    player.lastUpdate = now;
 
     if (typeof data.heroType === 'string' && data.heroType) {
       player.heroType = data.heroType;
@@ -937,13 +945,14 @@ io.on('connection', (socket) => {
     const { roomId, room } = findPlayerRoom(socket.id);
     if (room) {
       room.updatePlayerPosition(socket.id, data);
+      const pAfter = room.players.get(socket.id);
       const nonProjEntities = Array.isArray(data.entities)
         ? data.entities.filter(e => e && e.type !== 'projectile')
         : undefined;
       socket.to(roomId).emit('playerMoved', {
         playerId: socket.id,
-        x: data.x,
-        y: data.y,
+        x: pAfter ? pAfter.x : data.x,
+        y: pAfter ? pAfter.y : data.y,
         angle: data.angle || 0,
         color: data.color || null,
         heroType: data.heroType || null,
