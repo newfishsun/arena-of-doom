@@ -2408,7 +2408,7 @@
                     </div>
                 </div>
                 <div class="hero-card" id="card-bruno" onclick="selectHero('bruno')">
-                    <div class="hero-icon" style="background:linear-gradient(135deg, #d9d1c1 0%, #0f172a 100%); color:#2b2b2b;">BA</div><h3>BRUNO-ALEXANDER</h3><p style="color:#aaa;">Unleasher/Attacker </p>
+                    <div class="hero-icon" style="background:linear-gradient(135deg, #d9d1c1 0%, #0f172a 100%); color:#2b2b2b;">BA</div><h3>BRUNO-ALEXANDER</h3><p style="color:#aaa;">Unleasher/Fighter </p>
                     <div class="hero-stats" id="bruno-base-stats">
                         <div class="ability-row"><span>Survival</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:60%; background:#4caf50;"></div></div></div>
                         <div class="ability-row"><span>Damage</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:70%; background:#e74c3c;"></div></div></div>
@@ -4221,6 +4221,16 @@
                 });
                 return;
             }
+            if (cname === 'MeccaPolygonAttackEffect') {
+                queueOnlineFxEntry({
+                    k: 'MeccaPolygonAttackEffect', t: targetArray,
+                    kind: item.kind,
+                    x: Math.round(item.x || 0), y: Math.round(item.y || 0),
+                    angle: Number(item.angle) || 0,
+                    opts: item.opts || {}
+                });
+                return;
+            }
             if (cname === 'WaveShockwave') {
                 queueOnlineFxEntry({
                     k: 'WaveShockwave', t: targetArray,
@@ -4595,6 +4605,11 @@
                             maxRadius: fx.maxRadius || 50, color: fx.color || '#ffffff'
                         });
                         return;
+                    case 'MeccaPolygonAttackEffect':
+                        if (typeof MeccaPolygonAttackEffect !== 'undefined') {
+                            inst = new MeccaPolygonAttackEffect(fx.kind || 'cone_blast', fxX, fxY, fx.angle || 0, fx.opts || {});
+                        }
+                        break;
                     case 'WaveShockwave':
                         inst = new WaveShockwave(fxX, fxY, fx.maxRadius || 120, fx.life || 0.6, fx.color1 || '#FF4444', fx.color2 || '#FF8800');
                         break;
@@ -7963,6 +7978,14 @@
                     this.freezeTimer = Math.max(this.freezeTimer || 0, Number(value) || 0);
                 } else if (type === 'reveal') {
                     this.revealTimer = Math.max(this.revealTimer || 0, Number(value) || 0);
+                } else if (type === 'fadingSoul' || type === 'fadingSoulTimer') {
+                    const dur = Math.max(0.5, Number(value) || 5.0);
+                    if (!(this.fadingSoulTimer > 0) || !this._fadingSoulOrigMaxHp) {
+                        this._fadingSoulOrigMaxHp = this.maxHp;
+                        this.maxHp = Math.max(100, Math.round(this._fadingSoulOrigMaxHp * 0.90));
+                        if (this.hp > this.maxHp) this.hp = this.maxHp;
+                    }
+                    this.fadingSoulTimer = Math.max(this.fadingSoulTimer || 0, dur);
                 } else if (type === 'knockback') {
                     // value expected {x: vx, y: vy}
                     this._lastKnockbackOrHitMs = Date.now();
@@ -7974,7 +7997,28 @@
                         this._localKbVy = (this._localKbVy || 0) + (Number(value && value.y) || 0);
                         this.kbx = 0;
                         this.kby = 0;
+                        this.vx = 0;
+                        this.vy = 0;
                         this._lastLocalPushAt = Date.now();
+                    } else if (this === player && gameMode && gameMode.includes('online') && typeof onlineSocket !== 'undefined' && onlineSocket) {
+                        const emitKbAck = () => {
+                            if (!player || player.dead) return;
+                            try {
+                                onlineSocket.emit('playerUpdate', {
+                                    x: Math.round(player.x),
+                                    y: Math.round(player.y),
+                                    angle: player.angle || 0,
+                                    hp: player.hp,
+                                    maxHp: player.maxHp,
+                                    shield: player.shield || 0,
+                                    heroType: selectedHeroType,
+                                    currentSkin: player.currentSkin || 'default',
+                                    pushAck: true
+                                });
+                            } catch (_) {}
+                        };
+                        setTimeout(emitKbAck, 60);
+                        setTimeout(emitKbAck, 140);
                     }
                 } else if (type === 'pull') {
                     // Pull is an immediate position change (clamped against map walls!)
@@ -7994,7 +8038,23 @@
                         this.prevServerY = this.y;
                         this._lastOwnX = this.x;
                         this._lastOwnY = this.y;
+                        this.vx = 0;
+                        this.vy = 0;
                         this._lastLocalPushAt = Date.now();
+                    } else if (this === player && gameMode && gameMode.includes('online') && typeof onlineSocket !== 'undefined' && onlineSocket) {
+                        try {
+                            onlineSocket.emit('playerUpdate', {
+                                x: Math.round(this.x),
+                                y: Math.round(this.y),
+                                angle: this.angle || 0,
+                                hp: this.hp,
+                                maxHp: this.maxHp,
+                                shield: this.shield || 0,
+                                heroType: selectedHeroType,
+                                currentSkin: this.currentSkin || 'default',
+                                pushAck: true
+                            });
+                        } catch (_) {}
                     }
                 } else if (type === 'push') {
                     const prePushX = this.x;
@@ -8018,7 +8078,23 @@
                         this.prevServerY = this.y;
                         this._lastOwnX = this.x;
                         this._lastOwnY = this.y;
+                        this.vx = 0;
+                        this.vy = 0;
                         this._lastLocalPushAt = Date.now();
+                    } else if (this === player && gameMode && gameMode.includes('online') && typeof onlineSocket !== 'undefined' && onlineSocket) {
+                        try {
+                            onlineSocket.emit('playerUpdate', {
+                                x: Math.round(this.x),
+                                y: Math.round(this.y),
+                                angle: this.angle || 0,
+                                hp: this.hp,
+                                maxHp: this.maxHp,
+                                shield: this.shield || 0,
+                                heroType: selectedHeroType,
+                                currentSkin: this.currentSkin || 'default',
+                                pushAck: true
+                            });
+                        } catch (_) {}
                     }
                 } else if (type === 'blind') {
                     this.blindTimer = Math.max(this.blindTimer || 0, Number(value) || 0);
@@ -8352,6 +8428,10 @@
                 let mountPenetration = (src && src.mountedByJeffrey && !src.mountedByJeffrey.dead) ? 0.30 : 0;
                 let totalPenetration = penetration + bonusPenetration + mountPenetration;
                 if (src && src.guidingLightBuffTimer > 0) totalPenetration += src.guidingLightPenetration || 0;
+                // Mecca Mech Armor Shield blocks all penetration while active!
+                if (this.hasMechArmor && this.shield > 0) {
+                    totalPenetration = 0;
+                }
                 if (this.defenseShredTimer > 0) d *= 1 + (this.defenseShred || 0.2);
                 if (this.resistanceBoostTimer > 0) {
                     d *= (1 - this.resistanceBoost);
@@ -8386,11 +8466,27 @@
                     creditAttacker.totalDamage = (creditAttacker.totalDamage || 0) + finalHitDamageInt;
                 }
 
+                // Charge Mecca G ability when Mecca deals damage or takes damage (paced so Ascension is earned over sustained combat)
+                if (creditAttacker && typeof Mecca !== 'undefined' && creditAttacker instanceof Mecca && creditAttacker !== this && !creditAttacker.ascended) {
+                    creditAttacker.addGCharge(Math.min(8, finalHitDamageInt / 195));
+                }
+                if (typeof Mecca !== 'undefined' && this instanceof Mecca && !this.ascended && finalHitDamageInt > 0) {
+                    this.addGCharge(Math.min(5, finalHitDamageInt / 260));
+                }
+
                 let shieldAbsorbed = 0;
+                const hadMechArmorBeforeHit = !!(this.hasMechArmor && this.shield > 0);
                 if(this.shield>0){ 
                     shieldAbsorbed = Math.min(this.shield, d);
                     this.shield -= shieldAbsorbed;
                     d = Math.max(0, d - shieldAbsorbed);
+                    if (hadMechArmorBeforeHit && this.shield <= 0) {
+                        this.shield = 0;
+                        this.hasMechArmor = false;
+                        if (typeof this.onMechArmorBroken === 'function') {
+                            this.onMechArmorBroken();
+                        }
+                    }
                 }
                 // Record shield damage as damage taken too so it still counts for defensive metrics
                 const damageTakenTotal = Math.ceil(Math.max(Math.max(shieldAbsorbed, 0) + Math.max(d, 0), 0));
@@ -8428,6 +8524,12 @@
                 }
                 if (src && src.witherBuff && src.witherBuffTimer > 0) {
                     let witherTrue = d * 0.10;
+                    if (this.hasMechArmor && this.shield > 0) {
+                        const absorbW = Math.min(this.shield, witherTrue);
+                        this.shield -= absorbW;
+                        witherTrue -= absorbW;
+                        if (this.shield <= 0) { this.shield = 0; this.hasMechArmor = false; if (typeof this.onMechArmorBroken === 'function') this.onMechArmorBroken(); }
+                    }
                     const witherInt = Math.ceil(Math.max(witherTrue, 0));
                     this.hp -= witherTrue;
                     this.totalDamageTaken = (this.totalDamageTaken || 0) + witherInt;
@@ -8442,9 +8544,15 @@
                         creditAttacker.totalDamage = (creditAttacker.totalDamage || 0) + witherInt;
                     }
                 }
-                // Injured: take extra 10% true damage (bypasses shield)
+                // Injured: take extra 10% true damage (bypasses normal shield, but Mecca Mech Armor blocks true damage!)
                 if(this.injuredTimer>0) {
                     let extraTrue = amt * 0.10;
+                    if (this.hasMechArmor && this.shield > 0) {
+                        const absorbI = Math.min(this.shield, extraTrue);
+                        this.shield -= absorbI;
+                        extraTrue -= absorbI;
+                        if (this.shield <= 0) { this.shield = 0; this.hasMechArmor = false; if (typeof this.onMechArmorBroken === 'function') this.onMechArmorBroken(); }
+                    }
                     const extraInt = Math.ceil(Math.max(extraTrue, 0));
                     this.hp -= extraTrue;
                     this.totalDamageTaken = (this.totalDamageTaken || 0) + extraInt;
@@ -9000,6 +9108,15 @@
                                 this.lastApolloFireTick = 0;
                             }
                         }
+                }
+                // Fading Soul (Mecca Soul Flame debuff: -10% maxHp for 5s)
+                if (this.fadingSoulTimer && this.fadingSoulTimer > 0) {
+                    this.fadingSoulTimer = Math.max(0, this.fadingSoulTimer - dt);
+                    if (this.fadingSoulTimer <= 0 && this._fadingSoulOrigMaxHp) {
+                        const restoredMax = this._fadingSoulOrigMaxHp;
+                        delete this._fadingSoulOrigMaxHp;
+                        this.maxHp = restoredMax;
+                    }
                 }
                 // Moon mark and floating timer handling
                 if (this.moonMark && this.moonMark > 0) this.moonMark -= dt;
@@ -22461,17 +22578,14 @@
                     this.racingLineTimer -= dt;
                     this.racingLineDamageTick -= dt;
                     if (this.racingLineTimer <= 0) {
-                        // Reset all entity speeds when line expires
-                        for (let e of entities) {
-                            if (!e.dead && e instanceof Entity && e.speed !== e.baseSpd) {
-                                e.speed = e.baseSpd;
-                            }
+                        if (this.speed !== this.baseSpd && !this.tractorActive) {
+                            this.speed = this.baseSpd;
                         }
                         this.racingLine = null;
                         this.racingLinePoints = [];
                         this.racingLineHitThisFrame = {};
                     } else {
-                        // Apply effects to entities on the line
+                        // Apply effects to entities on the line without overwriting other heroes' base speed
                         for (let e of entities) {
                             if (!e.dead && e instanceof Entity) {
                                 let onLine = false;
@@ -22481,23 +22595,20 @@
                                     let distToLine = this.distanceToLineSegment(e.x, e.y, p1.x, p1.y, p2.x, p2.y);
                                     if (distToLine < 200) {
                                         onLine = true;
-                                        if (e.team === this.team) {
-                                            e.speed = e.baseSpd * 3;
+                                        if (e === this || e.team === this.team) {
+                                            if (e === this && !this.tractorActive) e.speed = e.baseSpd * 1.5;
                                         } else {
-                                            // Damage every 0.2 seconds
                                             if (this.racingLineDamageTick <= 0) {
                                                 e.takeDamage(77, this);
                                                 e.hp -= 44; // True damage
                                                 if (e.hp < 0) e.hp = 0;
                                             }
-                                            e.speed = e.baseSpd * 0.5;
+                                            e.slowTimer = Math.max(e.slowTimer || 0, 0.25);
                                         }
                                         break;
                                     }
                                 }
-                                
-                                // Reset speed if not on line
-                                if (!onLine && e.speed !== e.baseSpd) {
+                                if (!onLine && e === this && !this.tractorActive && e.speed !== e.baseSpd) {
                                     e.speed = e.baseSpd;
                                 }
                             }
@@ -33397,12 +33508,14 @@
                 this.qCD = 13.0;
                 this.revealTimer = 1.0;
                 const R = 1200;
+                const slowR = this.isPlayer ? 800 : 480;
                 for (let e of entities) if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                     let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                     if (d < R) {
-                        // use applyStatus so online proxies receive the reveal/slow
                         safeApplyStatus(e, 'reveal', 10, this);
-                        safeApplyStatus(e, 'slow', 3.0, this); // Slowness III for 3s
+                        if (d < slowR && (this.isPlayer || !e.isPlayer || d < 420)) {
+                            safeApplyStatus(e, 'slow', 3.0, this);
+                        }
                     }
                 }
 
@@ -35561,6 +35674,7 @@
             else if(selectedHeroType==='trent'){if(q)q.innerText='👊';if(e)e.innerText='🫁';if(f)f.innerText='💥';if(g)g.innerText='🏃';player=new Trent(WORLD_SIZE/2,WORLD_SIZE/2,true);}
             else if(selectedHeroType==='cole'){if(q)q.innerText='💥';if(e)e.innerText='🎯';if(f)f.innerText='⚡';player=new Cole(WORLD_SIZE/2,WORLD_SIZE/2,true);}
             else if(selectedHeroType==='rico'){if(q)q.innerText='📦';if(e)e.innerText='🔴';if(f)f.innerText='🟡';player=new Rico(WORLD_SIZE/2,WORLD_SIZE/2,true);}
+            else if(selectedHeroType==='mecca'){if(q)q.innerText='🥊';if(e)e.innerText='💨';if(f)f.innerText='🦶';if(g)g.innerText='⚡';player=new Mecca(WORLD_SIZE/2,WORLD_SIZE/2,true);}
             else player=new Paul(WORLD_SIZE/2,WORLD_SIZE/2,true);
             entities.push(player);
             player.gear = selectedGear;
@@ -37985,7 +38099,7 @@
                                     let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                                     if (d < this.radius) {
                                         if (doTick) e.takeDamage(20, this.owner);
-                                        e.speed = e.baseSpd * 0.5;
+                                        e.slowTimer = Math.max(e.slowTimer || 0, 0.25);
                                     }
                                 }
                             }
@@ -38612,7 +38726,6 @@
                                     if (e instanceof Entity && e !== this.owner && !e.dead && e.team !== this.owner.team) {
                                         let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                                         if (d < this.radius) {
-                                            e.speed = e.baseSpd * 0.7; // Slow down
                                             e.slowTimer = Math.max(e.slowTimer || 0, 0.25);
                                         }
                                     }
@@ -42919,6 +43032,1491 @@
             }
         }
         
+
+        // Bespoke polygon visual effect for Mecca attacks so every ability clearly displays its exact true range & hitbox without arc spam
+        class MeccaPolygonAttackEffect {
+            constructor(kind, x, y, angle, opts = {}) {
+                this.kind = kind;
+                this.x = x;
+                this.y = y;
+                this.angle = angle || 0;
+                this.opts = opts;
+                this.maxLife = opts.duration || 0.35;
+                this.life = this.maxLife;
+                this.del = false;
+            }
+            update(dt) {
+                this.life -= dt;
+                if (this.life <= 0) this.del = true;
+            }
+            draw(ctx) {
+                if (this.del || this.life <= 0) return;
+                const p = Math.max(0, Math.min(1, this.life / this.maxLife));
+                const prog = 1 - p;
+                const sx = this.x - camera.x;
+                const sy = this.y - camera.y;
+                ctx.save();
+
+                if (this.kind === 'cone_blast') {
+                    // Exact range & cone angle polygon blast (used by Basic Attack 185px, Base Q 180/205px, Base F Kick 215px)
+                    const range = this.opts.range || 185;
+                    const halfArc = this.opts.halfArc || (Math.PI * 0.45);
+                    const isSoul = !!this.opts.isSoul;
+                    const isFinisher = !!this.opts.isFinisher;
+                    const isKick = !!this.opts.isKick;
+                    ctx.translate(sx, sy);
+                    ctx.rotate(this.angle);
+
+                    const reach = range * (0.78 + 0.22 * Math.min(1, prog * 3.2));
+                    const steps = 6;
+                    ctx.beginPath();
+                    ctx.moveTo(10, 0);
+                    for (let i = 0; i <= steps; i++) {
+                        const a = -halfArc + (halfArc * 2 * i) / steps;
+                        const r = reach * (i % 2 === 0 ? 1.0 : 0.94);
+                        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                    }
+                    ctx.closePath();
+
+                    const grad = ctx.createLinearGradient(0, 0, range, 0);
+                    if (isSoul) {
+                        grad.addColorStop(0, `rgba(255, 107, 0, ${0.62 * p})`);
+                        grad.addColorStop(0.55, `rgba(0, 245, 212, ${0.52 * p})`);
+                        grad.addColorStop(1, `rgba(128, 255, 219, ${0.18 * p})`);
+                    } else if (isKick || isFinisher) {
+                        grad.addColorStop(0, `rgba(255, 69, 0, ${0.72 * p})`);
+                        grad.addColorStop(0.6, `rgba(255, 140, 0, ${0.55 * p})`);
+                        grad.addColorStop(1, `rgba(255, 209, 102, ${0.22 * p})`);
+                    } else {
+                        grad.addColorStop(0, `rgba(255, 85, 0, ${0.58 * p})`);
+                        grad.addColorStop(0.65, `rgba(255, 158, 0, ${0.42 * p})`);
+                        grad.addColorStop(1, `rgba(255, 209, 102, ${0.14 * p})`);
+                    }
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+
+                    // Exact true-range outer perimeter line so player sees the exact max reach
+                    ctx.strokeStyle = isSoul ? `rgba(0, 245, 212, ${0.95 * p})` : `rgba(255, 195, 0, ${0.92 * p})`;
+                    ctx.lineWidth = isFinisher || isKick ? 3.5 : 2.5;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.cos(-halfArc) * 24, Math.sin(-halfArc) * 24);
+                    for (let i = 0; i <= steps; i++) {
+                        const a = -halfArc + (halfArc * 2 * i) / steps;
+                        ctx.lineTo(Math.cos(a) * range, Math.sin(a) * range);
+                    }
+                    ctx.lineTo(Math.cos(halfArc) * 24, Math.sin(halfArc) * 24);
+                    ctx.stroke();
+
+                    // Internal flame spear chevrons
+                    const spearCount = isFinisher || isKick ? 5 : 3;
+                    for (let s = 0; s < spearCount; s++) {
+                        const sa = -halfArc * 0.65 + (halfArc * 1.3 * s) / Math.max(1, spearCount - 1);
+                        ctx.save();
+                        ctx.rotate(sa);
+                        ctx.fillStyle = (isSoul && s % 2 === 1) ? `rgba(56, 249, 215, ${0.85 * p})` : `rgba(255, 183, 3, ${0.85 * p})`;
+                        ctx.beginPath();
+                        ctx.moveTo(24, -7);
+                        ctx.lineTo(reach * 0.96, 0);
+                        ctx.lineTo(24, 7);
+                        ctx.lineTo(42, 0);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.restore();
+                    }
+
+                    // If Base F Kick, also draw the 290px knockback trajectory track
+                    if (isKick && this.opts.kbDist) {
+                        const kbEnd = range + this.opts.kbDist;
+                        ctx.strokeStyle = `rgba(255, 123, 0, ${0.65 * p})`;
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([10, 6]);
+                        ctx.strokeRect(30, -34, kbEnd - 30, 68);
+                        ctx.setLineDash([]);
+                    }
+                } else if (this.kind === 'dash_corridor') {
+                    // Exact corridor for Base E Dash or Soul Flame Q Dash (320px long, 250px wide)
+                    const ex = (this.opts.endX ?? this.x) - camera.x;
+                    const ey = (this.opts.endY ?? this.y) - camera.y;
+                    const width = this.opts.width || 110;
+                    const isSoul = !!this.opts.isSoul;
+                    const dx = ex - sx, dy = ey - sy;
+                    const len = Math.hypot(dx, dy);
+                    const ang = Math.atan2(dy, dx);
+
+                    ctx.translate(sx, sy);
+                    ctx.rotate(ang);
+
+                    const grad = ctx.createLinearGradient(0, -width, len, width);
+                    if (isSoul) {
+                        grad.addColorStop(0, `rgba(255, 107, 0, ${0.42 * p})`);
+                        grad.addColorStop(0.5, `rgba(0, 245, 212, ${0.48 * p})`);
+                        grad.addColorStop(1, `rgba(255, 158, 0, ${0.42 * p})`);
+                    } else {
+                        grad.addColorStop(0, `rgba(255, 69, 0, ${0.45 * p})`);
+                        grad.addColorStop(1, `rgba(255, 183, 3, ${0.25 * p})`);
+                    }
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, -width, len, width * 2);
+
+                    ctx.strokeStyle = isSoul ? `rgba(0, 245, 212, ${0.9 * p})` : `rgba(255, 158, 0, ${0.85 * p})`;
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeRect(0, -width, len, width * 2);
+
+                    // Chevron velocity ribs along the dash corridor
+                    const chevronCount = Math.max(3, Math.floor(len / 65));
+                    for (let i = 1; i <= chevronCount; i++) {
+                        const cx = (len * i) / (chevronCount + 0.5);
+                        ctx.strokeStyle = (isSoul && i % 2 === 0) ? `rgba(255, 123, 0, ${0.85 * p})` : (isSoul ? `rgba(128, 255, 219, ${0.85 * p})` : `rgba(255, 209, 102, ${0.8 * p})`);
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(cx - 22, -width * 0.72);
+                        ctx.lineTo(cx + 12, 0);
+                        ctx.lineTo(cx - 22, width * 0.72);
+                        ctx.stroke();
+                    }
+                } else if (this.kind === 'soul_slash') {
+                    // Single rapid polygon slash across target (alternating Normal Flame and Mint Soul Fire)
+                    const slashLen = this.opts.length || 135;
+                    const isMint = !!this.opts.isMint;
+                    ctx.translate(sx, sy);
+                    ctx.rotate(this.angle);
+
+                    ctx.fillStyle = isMint ? `rgba(0, 245, 212, ${0.92 * p})` : `rgba(255, 107, 0, ${0.92 * p})`;
+                    ctx.strokeStyle = isMint ? `rgba(255, 255, 255, ${0.9 * p})` : `rgba(255, 209, 102, ${0.9 * p})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-slashLen, 0);
+                    ctx.lineTo(0, -14 * p);
+                    ctx.lineTo(slashLen, 0);
+                    ctx.lineTo(0, 14 * p);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (this.kind === 'octagon_explosion') {
+                    // Exact-radius Octagonal Explosion (used by Soul Flame Q 750-dmg explosion, Soul Flame F 225px landing impact, and Wall Slam)
+                    const maxR = this.opts.radius || 225;
+                    const isSoul = this.opts.isSoul !== false;
+                    const curR = maxR * (0.45 + 0.55 * Math.min(1, prog * 2.4));
+
+                    ctx.translate(sx, sy);
+
+                    // Outer exact-radius boundary octagon (100% maxR so player sees true AoE border)
+                    ctx.strokeStyle = isSoul ? `rgba(0, 245, 212, ${0.9 * p})` : `rgba(255, 183, 3, ${0.9 * p})`;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    for (let i = 0; i < 10; i++) {
+                        const a = (i * Math.PI * 2) / 10;
+                        const px = Math.cos(a) * maxR;
+                        const py = Math.sin(a) * maxR;
+                        if (i === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+
+                    // Expanding dual-color polygon shock-star
+                    ctx.fillStyle = isSoul ? `rgba(0, 245, 212, ${0.34 * p})` : `rgba(255, 85, 0, ${0.42 * p})`;
+                    ctx.strokeStyle = `rgba(255, 107, 0, ${0.95 * p})`;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    for (let i = 0; i < 12; i++) {
+                        const a = prog * 0.6 + (i * Math.PI * 2) / 12;
+                        const r = (i % 2 === 0) ? curR : curR * 0.62;
+                        const px = Math.cos(a) * r;
+                        const py = Math.sin(a) * r;
+                        if (i === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Inner normal-flame diamond core
+                    ctx.fillStyle = `rgba(255, 123, 0, ${0.65 * p})`;
+                    ctx.beginPath();
+                    for (let i = 0; i < 8; i++) {
+                        const a = -prog * 0.8 + (i * Math.PI * 2) / 8;
+                        const r = (i % 2 === 0) ? curR * 0.52 : curR * 0.25;
+                        const px = Math.cos(a) * r;
+                        const py = Math.sin(a) * r;
+                        if (i === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // SECRET HERO: MECCA - UNLEASHER/ATTACKER (Unlocked only by pressing M + E + C + A simultaneously)
+        class Mecca extends Entity {
+            constructor(x, y, p) {
+                super(x, y, 21, p ? '#ff6b00' : '#e85d04', 5200);
+                this.isPlayer = !!p;
+                this.countsAsFFAHero = true;
+                this.name = p ? 'Player (Mecca)' : 'Enemy Mecca';
+                this.role = 'Unleasher/Attacker';
+
+                // Base stats & cooldowns
+                this.baseSpd = 260;
+                this.speed = this.baseSpd;
+                this.basicCD = 0;
+                this.qCD = 0;
+                this.eCD = 0;
+                this.fCD = 0;
+                this.gCD = 0;
+                this.rCD = 0;
+
+                // One-time 1000 HP Mech Armor Shield on every spawn/revive (blocks true damage & penetration!)
+                this.maxShield = 1000;
+                this.shield = 1000;
+                this.hasMechArmor = true;
+
+                // G percentage charge system (0..100%) & Permanent Soul Flame Ascension
+                this.gCharge = 0;
+                this.maxGCharge = 100;
+                this.ascended = false;
+                this.form = 'base'; // 'base' or 'soul_flame'
+                this.penetration = 0;
+
+                // Base Q state (3 stationary punches, 0.3s interval, 300/300/400 dmg)
+                this.qPunchingTimer = 0;
+                this.qPunchStep = 0;
+                this.qPunchTick = 0;
+
+                // Base E state (stationary charge up to 1.0s, variable dash length, 0 damage)
+                this.eCharging = false;
+                this.eChargeTime = 0;
+                this.eMaxChargeTime = 1.0;
+                this.eDashTimer = 0;
+                this.eDashVx = 0;
+                this.eDashVy = 0;
+
+                // Soul Flame Q state (dash + 5 slashes 100 dmg each + 1 soul explosion 750 dmg + Fading Soul + main target stun)
+                this.soulQDashTimer = 0;
+                this.soulQSlashTimer = 0;
+
+                // Soul Flame E state (Soul Vanisher Zone wrapped around Mecca for 6s)
+                this.soulZoneTimer = 0;
+                this.soulZoneRadius = 240;
+                this.soulZoneHasEnemy = false;
+
+                // Soul Flame F state (Flight to mouse location up to range limit, 500 true dmg on path, 500 true + 1500 normal + slow at end)
+                this.soulFlightTimer = 0;
+                this.soulFlightDuration = 0;
+                this.soulFlightStartX = 0;
+                this.soulFlightStartY = 0;
+                this.soulFlightTargetX = 0;
+                this.soulFlightTargetY = 0;
+                this.soulFlightHitSet = new Set();
+
+                // Visual animation helpers
+                this.punchAnimTimer = 0;
+                this.punchHandSide = 1;
+                this.kickAnimTimer = 0;
+            }
+
+            addGCharge(amount) {
+                if (this.ascended) {
+                    this.gCharge = 100;
+                    return;
+                }
+                const add = Number(amount) || 0;
+                if (add <= 0) return;
+                const prev = this.gCharge || 0;
+                this.gCharge = Math.min(100, prev + add);
+                if (prev < 100 && this.gCharge >= 100 && this.isPlayer) {
+                    addKillMsg('🔥 SOUL FLAME CHARGE 100%! Press G to Ascend Permanently! 🔥');
+                }
+            }
+
+            onMechArmorBroken() {
+                this.hasMechArmor = false;
+                this.shield = 0;
+                if (!this.ascended) {
+                    this.addGCharge(10);
+                }
+                try {
+                    visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', this.x, this.y, 0, {
+                        radius: 95,
+                        duration: 0.35,
+                        isSoul: this.ascended
+                    }));
+                    effects.push(new TextPop(this.x, this.y - 36, 'MECH ARMOR BROKEN! +10% G', '#38f9d7'));
+                    for (let i = 0; i < 12; i++) {
+                        const a = (Math.PI * 2 * i) / 12;
+                        particles.push(new Particle(this.x, this.y, i % 2 === 0 ? '#ff7b00' : '#38f9d7', 4, 0.45, Math.cos(a) * 190, Math.sin(a) * 190));
+                    }
+                } catch (_) {}
+                if (this.isPlayer) {
+                    addKillMsg('🛡️ Mech Armor Shattered! +10% Soul Flame Charge!');
+                }
+            }
+
+            restoreMechArmorOnSpawnOrRevive() {
+                if (this.ascended) {
+                    this.form = 'soul_flame';
+                    this.maxHp = 6000;
+                    this.hp = 6000;
+                    this.maxShield = 1200;
+                    this.shield = 1200;
+                    this.hasMechArmor = true;
+                    this.baseSpd = 325; // +25% faster walkspeed
+                    this.speed = 325;
+                    this.penetration = 0.25; // 25% penetration
+                } else {
+                    this.form = 'base';
+                    this.maxHp = 5200;
+                    this.hp = 5200;
+                    this.maxShield = 1000;
+                    this.shield = 1000;
+                    this.hasMechArmor = true;
+                    this.baseSpd = 260;
+                    this.speed = 260;
+                    this.penetration = 0;
+                }
+                if (this._fadingSoulOrigMaxHp) {
+                    delete this._fadingSoulOrigMaxHp;
+                }
+                this.fadingSoulTimer = 0;
+            }
+
+            getEffectiveSpeed() {
+                if (this.qPunchingTimer > 0 || this.eCharging || this.soulFlightTimer > 0) return 0;
+                let s = this.ascended ? 325 : 260;
+                if (this.enhancedKBTimer > 0 || (this.movementLockdownTimer && this.movementLockdownTimer > 0) || (this.fightingTimer && this.fightingTimer > 0)) return 0;
+                if (this.evadedTimer && this.evadedTimer > 0) s *= 1.20;
+                if (this.mindControlledBy && !this.mindControlledBy.dead) s *= 1.35;
+                if (this.slowTimer > 0) s *= 0.6;
+                if (this.terminatorSlowTimer > 0) s *= 0.70;
+                if (this.speedsterTimer > 0) s *= 1.5;
+                if (this.witherBuff && this.witherBuffTimer > 0) s *= 1.25;
+                if (this.terminatorSpeedTimer > 0) s += (this.terminatorSpeedBonus || s * 0.30);
+                return s;
+            }
+
+            didKnockbackHitWall(target, preX, preY, intendedX, intendedY) {
+                const rad = (target && target.radius) || 20;
+                if (intendedX <= 22 + rad || intendedX >= WORLD_SIZE - 22 - rad || intendedY <= 22 + rad || intendedY >= WORLD_SIZE - 22 - rad) {
+                    return true;
+                }
+                if (Math.hypot((target.x || 0) - intendedX, (target.y || 0) - intendedY) > 6) {
+                    return true;
+                }
+                if (Array.isArray(mapWalls)) {
+                    for (let i = 0; i < mapWalls.length; i++) {
+                        const w = mapWalls[i];
+                        if (!w) continue;
+                        const hw = (w.width || 0) * 0.5 + rad + 6;
+                        const hh = (w.height || 0) * 0.5 + rad + 6;
+                        if (Math.abs(target.x - w.x) <= hw && Math.abs(target.y - w.y) <= hh) return true;
+                        if (Math.abs(intendedX - w.x) <= hw && Math.abs(intendedY - w.y) <= hh) return true;
+                    }
+                }
+                if (typeof selectedMap !== 'undefined' && selectedMap === 'farmland') {
+                    const fx = WORLD_SIZE / 2, fy = WORLD_SIZE / 2;
+                    if (Math.abs(intendedX - fx) <= 320 + rad && Math.abs(intendedY - fy) <= 230 + rad) return true;
+                }
+                return false;
+            }
+
+            update(dt) {
+                if (this.dead) return;
+                this.updateCommon(dt);
+
+                if (this.basicCD > 0) this.basicCD = Math.max(0, this.basicCD - dt);
+                if (this.qCD > 0) this.qCD = Math.max(0, this.qCD - dt);
+                if (this.eCD > 0) this.eCD = Math.max(0, this.eCD - dt);
+                if (this.fCD > 0) this.fCD = Math.max(0, this.fCD - dt);
+                if (this.rCD > 0) this.rCD = Math.max(0, this.rCD - dt);
+                if (this.punchAnimTimer > 0) this.punchAnimTimer = Math.max(0, this.punchAnimTimer - dt);
+                if (this.kickAnimTimer > 0) this.kickAnimTimer = Math.max(0, this.kickAnimTimer - dt);
+                if (this.soulQDashTimer > 0) this.soulQDashTimer = Math.max(0, this.soulQDashTimer - dt);
+                if (this.soulQSlashTimer > 0) this.soulQSlashTimer = Math.max(0, this.soulQSlashTimer - dt);
+
+                if (gameMode === 'training' && this.isPlayer && window.trainingPanelState && window.trainingPanelState.infiniteCooldown && !this.ascended) {
+                    this.gCharge = 100;
+                }
+
+                // Keep permanent Soul Flame passive stats active once ascended
+                if (this.ascended) {
+                    this.form = 'soul_flame';
+                    this.baseSpd = 325;
+                    this.penetration = 0.25;
+                    const expectedBaseMax = 6000;
+                    if (!(this.fadingSoulTimer > 0) && this.maxHp < expectedBaseMax) {
+                        this.maxHp = expectedBaseMax;
+                    }
+                }
+
+                // Base Q: 3 stationary punches at 0.3s intervals (300, 300, 400 damage)
+                if (this.qPunchingTimer > 0) {
+                    this.qPunchingTimer = Math.max(0, this.qPunchingTimer - dt);
+                    this.qPunchTick -= dt;
+                    if (this.isPlayer) {
+                        this.angle = getMouseAimAngle(this.x, this.y);
+                    }
+                    while (this.qPunchStep < 3 && this.qPunchTick <= 0) {
+                        this.qPunchStep++;
+                        this.qPunchTick += 0.30;
+                        this.executeBaseQPunch(this.qPunchStep);
+                    }
+                }
+
+                // Base E: Dash movement after stationary charge release
+                if (this.eDashTimer > 0) {
+                    const stepDt = Math.min(dt, this.eDashTimer);
+                    const preX = this.x, preY = this.y;
+                    this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x + this.eDashVx * stepDt));
+                    this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y + this.eDashVy * stepDt));
+                    if (typeof clampEntityKnockbackWalls === 'function') {
+                        clampEntityKnockbackWalls(this, preX, preY);
+                    }
+                    if (Math.random() < 0.75) {
+                        particles.push(new Particle(this.x - Math.cos(this.angle) * 18, this.y - Math.sin(this.angle) * 18, Math.random() < 0.5 ? '#ff5500' : '#ffae00', 4, 0.32));
+                    }
+                    this.eDashTimer = Math.max(0, this.eDashTimer - dt);
+                }
+
+                // Soul Flame E: Soul Vanisher Zone wrapped around Mecca for 6s
+                // Applies Fading Soul (-10% max HP for 5s) to enemies inside and reduces Mecca's Q and F cooldowns by 1s per sec while any enemy is inside
+                if (this.soulZoneTimer > 0) {
+                    this.soulZoneTimer = Math.max(0, this.soulZoneTimer - dt);
+                    let enemyInside = false;
+                    for (let i = 0; i < entities.length; i++) {
+                        const e = entities[i];
+                        if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                        const d = Math.hypot(e.x - this.x, e.y - this.y);
+                        if (d <= this.soulZoneRadius) {
+                            if (e.countsAsFFAHero !== false || (typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) || e.isTrainingDummy) {
+                                enemyInside = true;
+                            }
+                            safeApplyStatus(e, 'fadingSoul', 5.0, this);
+                        }
+                    }
+                    this.soulZoneHasEnemy = enemyInside;
+                    if (enemyInside) {
+                        this.qCD = Math.max(0, this.qCD - dt * 1.0);
+                        this.fCD = Math.max(0, this.fCD - dt * 1.0);
+                    }
+                } else {
+                    this.soulZoneHasEnemy = false;
+                }
+
+                // Soul Flame F: Flight to mouse location with range limit
+                // Deals 500 true damage to enemies in the flight path; on landing deals 500 true damage + 1500 damage and slows enemies
+                if (this.soulFlightTimer > 0) {
+                    const prevTimer = this.soulFlightTimer;
+                    this.soulFlightTimer = Math.max(0, this.soulFlightTimer - dt);
+                    const totalDur = Math.max(0.05, this.soulFlightDuration || 0.38);
+                    const prog = Math.min(1, 1 - (this.soulFlightTimer / totalDur));
+                    const preX = this.x, preY = this.y;
+                    this.x = this.soulFlightStartX + (this.soulFlightTargetX - this.soulFlightStartX) * prog;
+                    this.y = this.soulFlightStartY + (this.soulFlightTargetY - this.soulFlightStartY) * prog;
+                    this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x));
+                    this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y));
+                    if (typeof clampEntityKnockbackWalls === 'function') {
+                        clampEntityKnockbackWalls(this, preX, preY);
+                    }
+
+                    // Dual flame + mint fire trail along flight path
+                    if (Math.random() < 0.85) {
+                        const sideOff = (Math.random() - 0.5) * 90;
+                        const perpA = this.angle + Math.PI * 0.5;
+                        particles.push(new Particle(
+                            this.x + Math.cos(perpA) * sideOff,
+                            this.y + Math.sin(perpA) * sideOff,
+                            Math.random() < 0.5 ? '#00f5d4' : '#ff6b00',
+                            4.5,
+                            0.4
+                        ));
+                    }
+
+                    // Deal 500 true damage to enemies along the flight path (95px path radius)
+                    for (let i = 0; i < entities.length; i++) {
+                        const e = entities[i];
+                        if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                        if (this.soulFlightHitSet && this.soulFlightHitSet.has(e)) continue;
+                        if (Math.hypot(e.x - this.x, e.y - this.y) <= 95 + (e.radius || 20)) {
+                            if (this.soulFlightHitSet) this.soulFlightHitSet.add(e);
+                            e.takeDamage(500, this, { isTrue: true, ignoreKnockback: true });
+                            try {
+                                effects.push(new TextPop(e.x, e.y - 26, '-500 TRUE', '#38f9d7'));
+                            } catch (_) {}
+                        }
+                    }
+
+                    // When Mecca stops at the end of flight: deal 500 true damage + 1500 normal damage and slow enemies
+                    if (prevTimer > 0 && this.soulFlightTimer <= 0) {
+                        this.finishSoulFlameFlightImpact();
+                    }
+                }
+
+                if (this.stunTimer > 0 || this.freezeTimer > 0) {
+                    if (this.eCharging) {
+                        this.eCharging = false;
+                        this.eChargeTime = 0;
+                    }
+                    if (this.isPlayer) updateHUD(this);
+                    return;
+                }
+
+                const spd = this.getEffectiveSpeed();
+                if (this.isPlayer) {
+                    this.input(dt, spd);
+                    updateHUD(this);
+                } else {
+                    this.ai(dt, spd);
+                }
+            }
+
+            input(dt, spd) {
+                this.angle = getMouseAimAngle(this.x, this.y);
+
+                // Handle stationary E charge in Base Form
+                if (!this.ascended && this.eCharging) {
+                    if (keys.e) {
+                        this.eChargeTime = Math.min(this.eMaxChargeTime, (this.eChargeTime || 0) + dt);
+                        return;
+                    } else {
+                        this.releaseBaseEDash();
+                    }
+                }
+
+                // Movement (disabled during Q punches, E stationary charge, or Soul Flame F flight)
+                if (this.qPunchingTimer <= 0 && !this.eCharging && this.soulFlightTimer <= 0) {
+                    let dx = 0, dy = 0;
+                    if (keys.w) dy--;
+                    if (keys.s) dy++;
+                    if (keys.a) dx--;
+                    if (keys.d) dx++;
+                    if (dx || dy) {
+                        const m = new Vector2(dx, dy).norm().mult(spd * dt);
+                        this.x += m.x;
+                        this.y += m.y;
+                    }
+                }
+
+                if (this.soulFlightTimer > 0) return;
+
+                if (mouse.down && this.basicCD <= 0 && this.qPunchingTimer <= 0 && !this.eCharging) {
+                    this.basicAtk();
+                }
+                if (keys.q && this.qCD <= 0 && this.qPunchingTimer <= 0 && !this.eCharging) {
+                    if (this.ascended) this.doSoulFlameQ();
+                    else this.startBaseQ();
+                }
+                if (keys.e && this.eCD <= 0 && this.qPunchingTimer <= 0 && !this.eCharging) {
+                    if (this.ascended) this.doSoulFlameE();
+                    else this.startBaseECharge();
+                }
+                if (keys.f && this.fCD <= 0 && this.qPunchingTimer <= 0 && !this.eCharging) {
+                    if (this.ascended) this.doSoulFlameF();
+                    else this.doBaseF();
+                }
+                if (keys.g && !this.ascended && this.gCharge >= 100) {
+                    this.ascendToSoulFlame();
+                }
+                if (keys.r && this.rCD <= 0) {
+                    this.useGear();
+                }
+            }
+
+            basicAtk() {
+                this.revealTimer = 0.5;
+                this.basicCD = 2.0; // 2s cooldown
+                this.punchAnimTimer = 0.28;
+                this.punchHandSide *= -1;
+                const range = 185;
+                const halfArc = Math.PI * 0.45;
+                const dmg = 250; // 250 damage
+
+                // Spawn full-hitbox 185px polygon blast so player sees exact true range & cone
+                visualEffects.push(new MeccaPolygonAttackEffect('cone_blast', this.x, this.y, this.angle, {
+                    range: range,
+                    halfArc: halfArc,
+                    duration: 0.28,
+                    isSoul: this.ascended
+                }));
+                for (let i = 0; i < 8; i++) {
+                    const sa = this.angle + (Math.random() - 0.5) * halfArc * 1.6;
+                    const dist = 60 + Math.random() * (range - 60);
+                    const col = (this.ascended && i % 2 === 0) ? '#00f5d4' : (i % 2 === 0 ? '#ff5500' : '#ffae00');
+                    particles.push(new Particle(this.x + Math.cos(sa) * dist, this.y + Math.sin(sa) * dist, col, 4, 0.32));
+                }
+
+                for (let i = 0; i < entities.length; i++) {
+                    const e = entities[i];
+                    if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                    const dx = e.x - this.x, dy = e.y - this.y;
+                    const d = Math.hypot(dx, dy);
+                    if (d <= range + (e.radius || 20)) {
+                        const ang = Math.atan2(dy, dx);
+                        let diff = Math.abs(Math.atan2(Math.sin(this.angle - ang), Math.cos(this.angle - ang)));
+                        if (diff <= halfArc || d <= 65) {
+                            e.takeDamage(dmg, this);
+                        }
+                    }
+                }
+            }
+
+            // Base Form Q: 3 stationary punches, 0.3s interval, 300 / 300 / 400 damage, 5s CD
+            startBaseQ() {
+                this.qCD = 5.0;
+                this.revealTimer = 0.8;
+                this.qPunchingTimer = 0.72;
+                this.qPunchStep = 0;
+                this.qPunchTick = 0;
+                if (this.isPlayer) addKillMsg('🔥 Blazing Tri-Fist!');
+            }
+
+            executeBaseQPunch(stepNum) {
+                const isFinal = stepNum >= 3;
+                const dmg = isFinal ? 400 : 300;
+                const range = isFinal ? 205 : 180;
+                const halfArc = Math.PI * 0.48;
+                this.punchAnimTimer = 0.25;
+                this.punchHandSide = (stepNum % 2 === 1) ? 1 : -1;
+
+                // Spawn exact-range 180px / 205px polygon punch shock-cone
+                visualEffects.push(new MeccaPolygonAttackEffect('cone_blast', this.x, this.y, this.angle, {
+                    range: range,
+                    halfArc: halfArc,
+                    duration: isFinal ? 0.36 : 0.26,
+                    isFinisher: isFinal,
+                    isSoul: false
+                }));
+                for (let i = 0; i < (isFinal ? 14 : 9); i++) {
+                    const sa = this.angle + (Math.random() - 0.5) * halfArc * 1.7;
+                    const dist = 50 + Math.random() * (range - 50);
+                    particles.push(new Particle(
+                        this.x + Math.cos(sa) * dist,
+                        this.y + Math.sin(sa) * dist,
+                        i % 2 === 0 ? '#ff4500' : '#ffae00',
+                        isFinal ? 5 : 4,
+                        0.36
+                    ));
+                }
+
+                for (let i = 0; i < entities.length; i++) {
+                    const e = entities[i];
+                    if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                    const dx = e.x - this.x, dy = e.y - this.y;
+                    const d = Math.hypot(dx, dy);
+                    if (d <= range + (e.radius || 20)) {
+                        const ang = Math.atan2(dy, dx);
+                        const diff = Math.abs(Math.atan2(Math.sin(this.angle - ang), Math.cos(this.angle - ang)));
+                        if (diff <= halfArc || d <= 70) {
+                            e.takeDamage(dmg, this);
+                            if (isFinal) {
+                                safeApplyStatus(e, 'knockback', { x: Math.cos(this.angle) * 320, y: Math.sin(this.angle) * 320 }, this);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Base Form E: Stationary charge up to 1.0s, variable dash length, 0 damage, 6s CD
+            startBaseECharge() {
+                this.eCharging = true;
+                this.eChargeTime = 0;
+            }
+
+            releaseBaseEDash() {
+                this.eCharging = false;
+                this.eCD = 6.0;
+                const ratio = Math.max(0.15, Math.min(1.0, (this.eChargeTime || 0) / this.eMaxChargeTime));
+                this.eChargeTime = 0;
+                const dashDist = 140 + ratio * 380; // 140px to 520px at 1.0s charge
+                const dashDur = 0.22;
+                this.eDashTimer = dashDur;
+                this.eDashVx = Math.cos(this.angle) * (dashDist / dashDur);
+                this.eDashVy = Math.sin(this.angle) * (dashDist / dashDur);
+
+                // Visual corridor showing the exact dash trajectory
+                visualEffects.push(new MeccaPolygonAttackEffect('dash_corridor', this.x, this.y, this.angle, {
+                    endX: this.x + Math.cos(this.angle) * dashDist,
+                    endY: this.y + Math.sin(this.angle) * dashDist,
+                    width: 36,
+                    duration: 0.34,
+                    isSoul: false
+                }));
+                if (this.isPlayer) addKillMsg(`🔥 Thruster Surge (${Math.round(ratio * 100)}%)!`);
+            }
+
+            // Base Form F: Kick forward, knock back enemies and deal 1200 damage; if knocked into a wall, stun for 1s and deal +200 extra damage (15s CD)
+            doBaseF() {
+                this.fCD = 15.0;
+                this.revealTimer = 1.0;
+                this.kickAnimTimer = 0.42;
+
+                // Short forward kick step
+                const preSelfX = this.x, preSelfY = this.y;
+                this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x + Math.cos(this.angle) * 70));
+                this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y + Math.sin(this.angle) * 70));
+                if (typeof clampEntityKnockbackWalls === 'function') {
+                    clampEntityKnockbackWalls(this, preSelfX, preSelfY);
+                }
+
+                const kickRange = 215;
+                const halfArc = Math.PI * 0.48;
+                const kbDist = 290;
+
+                // Spawn exact 215px kick cleave + 290px knockback trajectory visual
+                visualEffects.push(new MeccaPolygonAttackEffect('cone_blast', this.x, this.y, this.angle, {
+                    range: kickRange,
+                    halfArc: halfArc,
+                    kbDist: kbDist,
+                    duration: 0.42,
+                    isKick: true,
+                    isSoul: false
+                }));
+                for (let i = 0; i < 16; i++) {
+                    const sa = this.angle + (Math.random() - 0.5) * halfArc * 1.6;
+                    const dist = 60 + Math.random() * (kickRange - 50);
+                    particles.push(new Particle(this.x + Math.cos(sa) * dist, this.y + Math.sin(sa) * dist, i % 2 === 0 ? '#ff4500' : '#ffd166', 5, 0.45));
+                }
+
+                for (let i = 0; i < entities.length; i++) {
+                    const e = entities[i];
+                    if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                    const dx = e.x - this.x, dy = e.y - this.y;
+                    const d = Math.hypot(dx, dy);
+                    if (d <= kickRange + (e.radius || 20)) {
+                        const ang = Math.atan2(dy, dx);
+                        const diff = Math.abs(Math.atan2(Math.sin(this.angle - ang), Math.cos(this.angle - ang)));
+                        if (diff <= halfArc || d <= 75) {
+                            e.takeDamage(1200, this, { ignoreKnockback: true });
+
+                            const pushAng = this.angle;
+                            const preX = e.x, preY = e.y;
+                            const intendedX = preX + Math.cos(pushAng) * kbDist;
+                            const intendedY = preY + Math.sin(pushAng) * kbDist;
+
+                            safeApplyStatus(e, 'push', {
+                                dx: Math.cos(pushAng) * kbDist,
+                                dy: Math.sin(pushAng) * kbDist,
+                                x: Math.round(intendedX),
+                                y: Math.round(intendedY)
+                            }, this);
+                            safeApplyStatus(e, 'knockback', {
+                                x: Math.cos(pushAng) * 650,
+                                y: Math.sin(pushAng) * 650
+                            }, this);
+
+                            if (this.didKnockbackHitWall(e, preX, preY, intendedX, intendedY)) {
+                                safeApplyStatus(e, 'stun', 1.0, this);
+                                e.takeDamage(200, this, { ignoreKnockback: true });
+                                visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', e.x, e.y, 0, {
+                                    radius: 110,
+                                    duration: 0.42,
+                                    isSoul: false
+                                }));
+                                try {
+                                    effects.push(new TextPop(e.x, e.y - 38, 'WALL SLAM! +200 & STUN!', '#ffae00'));
+                                } catch (_) {}
+                            }
+                        }
+                    }
+                }
+                if (this.isPlayer) addKillMsg('🔥 Inferno Kick!');
+            }
+
+            // G Ability: Permanent Ascension to Soul Flame Form at 100% charge
+            ascendToSoulFlame() {
+                if (this.ascended || this.gCharge < 100) return;
+                this.ascended = true;
+                this.form = 'soul_flame';
+                this.gCharge = 100;
+
+                // Permanent stat ascension: 6000 max HP, instant 1200 Mech Armor restore & cap, +25% walk speed, 25% penetration
+                if (this._fadingSoulOrigMaxHp) {
+                    this._fadingSoulOrigMaxHp = 6000;
+                    this.maxHp = Math.round(6000 * 0.90);
+                } else {
+                    this.maxHp = 6000;
+                }
+                this.hp = Math.min(this.maxHp, this.hp + 1200);
+                this.maxShield = 1200;
+                this.shield = 1200;
+                this.hasMechArmor = true;
+                this.baseSpd = 325;
+                this.speed = 325;
+                this.penetration = 0.25;
+                this.color = this.isPlayer ? '#00f5d4' : '#10b981';
+
+                // Refresh Q/E/F cooldowns on ascension
+                this.qCD = 0;
+                this.eCD = 0;
+                this.fCD = 0;
+                this.eCharging = false;
+                this.qPunchingTimer = 0;
+
+                visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', this.x, this.y, 0, {
+                    radius: 260,
+                    duration: 0.65,
+                    isSoul: true
+                }));
+                for (let i = 0; i < 24; i++) {
+                    const a = (Math.PI * 2 * i) / 24;
+                    particles.push(new Particle(this.x, this.y, i % 2 === 0 ? '#00f5d4' : '#ff6b00', 5.5, 0.65, Math.cos(a) * 260, Math.sin(a) * 260));
+                }
+
+                if (this.isPlayer && gameMode && gameMode.includes('online') && typeof onlineSocket !== 'undefined' && onlineSocket) {
+                    try {
+                        onlineSocket.emit('playerHeal', { amount: 1200 });
+                        onlineSocket.emit('playerUpdate', {
+                            x: Math.round(this.x),
+                            y: Math.round(this.y),
+                            angle: this.angle || 0,
+                            hp: this.hp,
+                            maxHp: this.maxHp,
+                            shield: this.shield,
+                            maxShield: this.maxShield,
+                            heroType: 'mecca',
+                            currentSkin: this.currentSkin || 'default'
+                        });
+                    } catch (_) {}
+                }
+
+                try {
+                    effects.push(new TextPop(this.x, this.y - 42, 'SOUL FLAME ASCENSION!', '#38f9d7'));
+                } catch (_) {}
+                if (this.isPlayer) {
+                    addKillMsg('🔥 SOUL FLAME ASCENSION! 6000 HP, 1200 Mech Armor, +25% Speed & Penetration! 🔥');
+                }
+            }
+
+            // Soul Flame Q: Dash forward, dealing 5 slashes (100 dmg each) + 1 Soul Explosion (750 dmg),
+            // stunning the main target, and applying Fading Soul (-10% max HP for 5s) with a 5s cooldown
+            doSoulFlameQ() {
+                this.qCD = 5.0;
+                this.revealTimer = 0.8;
+                this.soulQDashTimer = 0.28;
+                this.soulQSlashTimer = 0.48;
+
+                const startX = this.x, startY = this.y;
+                const dashLen = 320;
+                const corridorRadius = 125;
+                const dirX = Math.cos(this.angle), dirY = Math.sin(this.angle);
+                this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x + dirX * dashLen));
+                this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y + dirY * dashLen));
+                if (typeof clampEntityKnockbackWalls === 'function') {
+                    clampEntityKnockbackWalls(this, startX, startY);
+                }
+
+                // Draw exact 320px x 250px dash & slash corridor in Normal Flame + Mint Soul Fire
+                visualEffects.push(new MeccaPolygonAttackEffect('dash_corridor', startX, startY, this.angle, {
+                    endX: this.x,
+                    endY: this.y,
+                    width: corridorRadius,
+                    duration: 0.48,
+                    isSoul: true
+                }));
+
+                // Gather enemies hit along the dash corridor or landing area
+                const hitEnemies = [];
+                let mainTarget = null;
+                let bestDist = Infinity;
+
+                for (let i = 0; i < entities.length; i++) {
+                    const e = entities[i];
+                    if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                    const segDx = this.x - startX, segDy = this.y - startY;
+                    const segLenSq = segDx * segDx + segDy * segDy;
+                    let t = segLenSq > 1 ? (((e.x - startX) * segDx + (e.y - startY) * segDy) / segLenSq) : 1;
+                    t = Math.max(0, Math.min(1, t));
+                    const projX = startX + segDx * t;
+                    const projY = startY + segDy * t;
+                    const distToPath = Math.hypot(e.x - projX, e.y - projY);
+                    if (distToPath <= corridorRadius + (e.radius || 20)) {
+                        hitEnemies.push(e);
+                        const dEnd = Math.hypot(e.x - this.x, e.y - this.y);
+                        if (dEnd < bestDist) {
+                            bestDist = dEnd;
+                            mainTarget = e;
+                        }
+                    }
+                }
+
+                // Stun the main target during the 5 slashes (other targets only take damage)
+                if (mainTarget) {
+                    safeApplyStatus(mainTarget, 'stun', 0.85, this);
+                }
+
+                // Apply Fading Soul (-10% max HP for 5s) and 5 slashes (100 dmg each) + 1 Soul Explosion (750 dmg)
+                for (let idx = 0; idx < hitEnemies.length; idx++) {
+                    const target = hitEnemies[idx];
+                    safeApplyStatus(target, 'fadingSoul', 5.0, this);
+                }
+
+                const slashCenterDefaultX = mainTarget ? mainTarget.x : this.x;
+                const slashCenterDefaultY = mainTarget ? mainTarget.y : this.y;
+
+                for (let s = 0; s < 5; s++) {
+                    setTimeout(() => {
+                        if (this.dead) return;
+                        const slashAng = this.angle + (s - 2) * 0.55 + (s % 2 === 0 ? 0.35 : -0.35);
+                        visualEffects.push(new MeccaPolygonAttackEffect('soul_slash', mainTarget ? mainTarget.x : slashCenterDefaultX, mainTarget ? mainTarget.y : slashCenterDefaultY, slashAng, {
+                            length: 135,
+                            isMint: s % 2 === 0,
+                            duration: 0.24
+                        }));
+                        for (let idx = 0; idx < hitEnemies.length; idx++) {
+                            const target = hitEnemies[idx];
+                            if (target && !target.dead) {
+                                target.takeDamage(100, this, { ignoreKnockback: true });
+                                if (target === mainTarget && s === 2) {
+                                    safeApplyStatus(target, 'stun', 0.65, this);
+                                }
+                            }
+                        }
+                    }, s * 70);
+                }
+
+                setTimeout(() => {
+                    if (this.dead) return;
+                    const expX = mainTarget && !mainTarget.dead ? mainTarget.x : this.x;
+                    const expY = mainTarget && !mainTarget.dead ? mainTarget.y : this.y;
+                    visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', expX, expY, 0, {
+                        radius: 165,
+                        duration: 0.45,
+                        isSoul: true
+                    }));
+                    for (let idx = 0; idx < hitEnemies.length; idx++) {
+                        const target = hitEnemies[idx];
+                        if (target && !target.dead) {
+                            target.takeDamage(750, this);
+                            safeApplyStatus(target, 'fadingSoul', 5.0, this);
+                        }
+                    }
+                }, 380);
+
+                if (this.isPlayer) addKillMsg('🔥👻 Soul Flame Rend (5 Slashes + Soul Explosion)!');
+            }
+
+            // Soul Flame E: Soul Vanisher Zone wrapped around Mecca (6s duration, 12s CD)
+            doSoulFlameE() {
+                this.eCD = 12.0;
+                this.soulZoneTimer = 6.0;
+                visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', this.x, this.y, 0, {
+                    radius: this.soulZoneRadius || 240,
+                    duration: 0.35,
+                    isSoul: true
+                }));
+                if (this.isPlayer) addKillMsg('👻 Soul Vanisher Zone Activated (6s)!');
+            }
+
+            // Soul Flame F: Flight to mouse location (range limit 550), 500 true dmg in flight path, 500 true + 1500 dmg + slow at end (15s CD)
+            doSoulFlameF() {
+                this.fCD = 15.0;
+                this.revealTimer = 1.0;
+                const maxFlightRange = 550;
+                let tx = this.x + Math.cos(this.angle) * 420;
+                let ty = this.y + Math.sin(this.angle) * 420;
+                if (this.isPlayer && typeof mouse !== 'undefined' && typeof mouse.wx === 'number' && typeof mouse.wy === 'number') {
+                    const dx = mouse.wx - this.x;
+                    const dy = mouse.wy - this.y;
+                    const dist = Math.hypot(dx, dy);
+                    const clampedDist = Math.min(maxFlightRange, Math.max(80, dist));
+                    const ang = Math.atan2(dy, dx);
+                    this.angle = ang;
+                    tx = this.x + Math.cos(ang) * clampedDist;
+                    ty = this.y + Math.sin(ang) * clampedDist;
+                }
+                tx = Math.max(30, Math.min(WORLD_SIZE - 30, tx));
+                ty = Math.max(30, Math.min(WORLD_SIZE - 30, ty));
+
+                this.soulFlightStartX = this.x;
+                this.soulFlightStartY = this.y;
+                this.soulFlightTargetX = tx;
+                this.soulFlightTargetY = ty;
+                this.soulFlightDuration = 0.38;
+                this.soulFlightTimer = 0.38;
+                this.soulFlightHitSet = new Set();
+
+                // Show the exact 95px-radius (190px wide) true-damage flight corridor
+                visualEffects.push(new MeccaPolygonAttackEffect('dash_corridor', this.x, this.y, this.angle, {
+                    endX: tx,
+                    endY: ty,
+                    width: 95,
+                    duration: 0.45,
+                    isSoul: true
+                }));
+
+                if (this.isPlayer) addKillMsg('🔥👻 Soul Flame Flight!');
+            }
+
+            finishSoulFlameFlightImpact() {
+                const impactRadius = 225;
+                visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', this.x, this.y, 0, {
+                    radius: impactRadius,
+                    duration: 0.55,
+                    isSoul: true
+                }));
+                for (let k = 0; k < 20; k++) {
+                    const a = (Math.PI * 2 * k) / 20;
+                    particles.push(new Particle(this.x, this.y, k % 2 === 0 ? '#00f5d4' : '#ff6b00', 5, 0.55, Math.cos(a) * 240, Math.sin(a) * 240));
+                }
+                for (let i = 0; i < entities.length; i++) {
+                    const e = entities[i];
+                    if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                    if (Math.hypot(e.x - this.x, e.y - this.y) <= impactRadius + (e.radius || 20)) {
+                        e.takeDamage(500, this, { isTrue: true, ignoreKnockback: true });
+                        e.takeDamage(1500, this);
+                        safeApplyStatus(e, 'slow', 2.5, this);
+                        safeApplyStatus(e, 'fadingSoul', 5.0, this);
+                    }
+                }
+                if (this.isPlayer) {
+                    try { screenShake(8); } catch (_) {}
+                }
+            }
+
+            ai(dt, spd) {
+                if (this.handleSafeZone(dt)) return;
+                if (!this.ascended && this.gCharge >= 100) {
+                    this.ascendToSoulFlame();
+                }
+                const t = this.findTarget();
+                if (!t) {
+                    this.wander(dt, spd);
+                    return;
+                }
+                const dx = t.x - this.x, dy = t.y - this.y;
+                const d = Math.hypot(dx, dy);
+                this.angle = Math.atan2(dy, dx);
+
+                if (this.eCharging) {
+                    this.eChargeTime += dt;
+                    if (this.eChargeTime >= 0.55 || d <= 180) {
+                        this.releaseBaseEDash();
+                    }
+                    return;
+                }
+
+                if (d > 165) {
+                    this.x += Math.cos(this.angle) * spd * dt;
+                    this.y += Math.sin(this.angle) * spd * dt;
+                }
+                if (d <= 185 && this.basicCD <= 0) {
+                    this.basicAtk();
+                }
+                if (this.qCD <= 0 && d <= (this.ascended ? 310 : 175)) {
+                    if (this.ascended) this.doSoulFlameQ();
+                    else this.startBaseQ();
+                }
+                if (this.eCD <= 0 && (this.ascended ? d <= 230 : (d > 220 && d < 520))) {
+                    if (this.ascended) this.doSoulFlameE();
+                    else this.startBaseECharge();
+                }
+                if (this.fCD <= 0 && d <= (this.ascended ? 500 : 200)) {
+                    if (this.ascended) {
+                        this.soulFlightStartX = this.x;
+                        this.soulFlightStartY = this.y;
+                        this.soulFlightTargetX = t.x;
+                        this.soulFlightTargetY = t.y;
+                        this.soulFlightDuration = 0.38;
+                        this.soulFlightTimer = 0.38;
+                        this.soulFlightHitSet = new Set();
+                        this.fCD = 15.0;
+                    } else {
+                        this.doBaseF();
+                    }
+                }
+            }
+
+            findTarget() {
+                let c = null, md = 9999;
+                for (let e of entities) {
+                    if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && e.isVisibleTo(this)) {
+                        const d = Math.hypot(e.x - this.x, e.y - this.y);
+                        if (d < md) { md = d; c = e; }
+                    }
+                }
+                return c;
+            }
+
+            wander(dt, spd) {
+                if (Math.random() < 0.04) this.angle += (Math.random() - 0.5) * 0.9;
+                this.x += Math.cos(this.angle) * spd * 0.55 * dt;
+                this.y += Math.sin(this.angle) * spd * 0.55 * dt;
+            }
+
+            draw(ctx) {
+                if (this.dead) return;
+                const sx = this.x - camera.x;
+                const sy = this.y - camera.y;
+                const isSoul = !!this.ascended || this.form === 'soul_flame';
+                const tNow = performance.now() * 0.005;
+
+                // =========================================================================
+                // 1. TACTICAL TRUE-RANGE INDICATORS (so player always sees exact attack ranges!)
+                // =========================================================================
+                if (this.isPlayer) {
+                    ctx.save();
+                    ctx.translate(sx, sy);
+                    ctx.rotate(this.angle);
+
+                    // Primary melee / cone range perimeter (185px Basic, 205px Base Q3, 215px Base F)
+                    const primaryRange = this.qPunchingTimer > 0 ? (this.qPunchStep >= 2 ? 205 : 180) : 185;
+                    const halfCone = Math.PI * 0.45;
+                    ctx.strokeStyle = isSoul ? 'rgba(0, 245, 212, 0.36)' : 'rgba(255, 140, 0, 0.36)';
+                    ctx.fillStyle = isSoul ? 'rgba(0, 245, 212, 0.05)' : 'rgba(255, 107, 0, 0.05)';
+                    ctx.lineWidth = 1.8;
+                    ctx.beginPath();
+                    ctx.moveTo(18, 0);
+                    const coneSteps = 6;
+                    for (let i = 0; i <= coneSteps; i++) {
+                        const a = -halfCone + (halfCone * 2 * i) / coneSteps;
+                        ctx.lineTo(Math.cos(a) * primaryRange, Math.sin(a) * primaryRange);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Outer tick marks at F Kick range (215px) in Base Form, or Soul Q Dash range (320px) in Soul Flame Form
+                    const secondaryRange = isSoul ? 320 : 215;
+                    ctx.strokeStyle = isSoul ? 'rgba(255, 123, 0, 0.38)' : 'rgba(255, 209, 102, 0.32)';
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([6, 6]);
+                    ctx.beginPath();
+                    ctx.moveTo(secondaryRange, -48);
+                    ctx.lineTo(secondaryRange, 48);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.restore();
+                }
+
+                // =========================================================================
+                // 2. SOUL VANISHER ZONE (Soul Flame E - Exact 240px Radius 12-Sided Domain + Drain Tethers)
+                // =========================================================================
+                if (this.soulZoneTimer > 0) {
+                    ctx.save();
+                    const zr = this.soulZoneRadius || 240;
+                    ctx.translate(sx, sy);
+
+                    // Dual Flame + Mint Fire 12-sided polygon domain
+                    const zoneGrad = ctx.createLinearGradient(-zr, -zr, zr, zr);
+                    zoneGrad.addColorStop(0, 'rgba(255, 107, 0, 0.14)');
+                    zoneGrad.addColorStop(0.5, 'rgba(0, 245, 212, 0.16)');
+                    zoneGrad.addColorStop(1, 'rgba(255, 158, 0, 0.14)');
+                    ctx.fillStyle = zoneGrad;
+                    ctx.strokeStyle = this.soulZoneHasEnemy ? '#ff7b00' : '#00f5d4';
+                    ctx.lineWidth = 3.5;
+                    ctx.beginPath();
+                    for (let i = 0; i < 12; i++) {
+                        const a = tNow * 0.25 + (i * Math.PI * 2) / 12;
+                        const px = Math.cos(a) * zr;
+                        const py = Math.sin(a) * zr;
+                        if (i === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Counter-rotating inner normal-flame polygon ring
+                    ctx.strokeStyle = 'rgba(255, 123, 0, 0.72)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    for (let i = 0; i < 8; i++) {
+                        const a = -tNow * 0.4 + (i * Math.PI * 2) / 8;
+                        const px = Math.cos(a) * (zr * 0.68);
+                        const py = Math.sin(a) * (zr * 0.68);
+                        if (i === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+
+                    // Draw live soul-drain beams to every enemy currently inside the 240px Soul Vanisher Zone
+                    for (let i = 0; i < entities.length; i++) {
+                        const e = entities[i];
+                        if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                        const dx = e.x - this.x, dy = e.y - this.y;
+                        if (Math.hypot(dx, dy) <= zr) {
+                            ctx.strokeStyle = '#00f5d4';
+                            ctx.lineWidth = 2.5;
+                            ctx.beginPath();
+                            ctx.moveTo(0, 0);
+                            ctx.lineTo(dx, dy);
+                            ctx.stroke();
+                        }
+                    }
+
+                    ctx.font = 'bold 11px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = this.soulZoneHasEnemy ? '#ffd166' : '#80ffdb';
+                    ctx.fillText(
+                        this.soulZoneHasEnemy
+                            ? `👻 SOUL VANISHER (${this.soulZoneTimer.toFixed(1)}s) • Q & F CD -1s/s!`
+                            : `👻 SOUL VANISHER ZONE (${this.soulZoneTimer.toFixed(1)}s)`,
+                        0,
+                        -zr + 18
+                    );
+                    ctx.restore();
+                }
+
+                // =========================================================================
+                // 3. BASE E STATIONARY CHARGE RUNWAY (Shows 140px..520px True Dash Range & Max Cap)
+                // =========================================================================
+                if (this.eCharging) {
+                    const ratio = Math.min(1, (this.eChargeTime || 0) / 1.0);
+                    const curDashDist = 140 + ratio * 380;
+                    const maxDashDist = 520;
+                    ctx.save();
+                    ctx.translate(sx, sy);
+                    ctx.rotate(this.angle);
+
+                    // Full 520px max-range ghost runway
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
+                    ctx.strokeStyle = 'rgba(255, 158, 0, 0.45)';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([8, 6]);
+                    ctx.fillRect(20, -24, maxDashDist - 20, 48);
+                    ctx.strokeRect(20, -24, maxDashDist - 20, 48);
+                    ctx.setLineDash([]);
+
+                    // Active charged dash fill
+                    const eGrad = ctx.createLinearGradient(20, 0, curDashDist, 0);
+                    eGrad.addColorStop(0, 'rgba(255, 69, 0, 0.55)');
+                    eGrad.addColorStop(1, 'rgba(255, 209, 102, 0.72)');
+                    ctx.fillStyle = eGrad;
+                    ctx.strokeStyle = '#ffd166';
+                    ctx.lineWidth = 2.5;
+                    ctx.fillRect(20, -22, curDashDist - 20, 44);
+                    ctx.strokeRect(20, -22, curDashDist - 20, 44);
+
+                    // Endpoint chevron head at exact landing distance
+                    ctx.fillStyle = '#ffae00';
+                    ctx.beginPath();
+                    ctx.moveTo(curDashDist + 16, 0);
+                    ctx.lineTo(curDashDist - 6, -26);
+                    ctx.lineTo(curDashDist - 6, 26);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.restore();
+                }
+
+                // =========================================================================
+                // 4. SOUL FLAME F FLIGHT LANDING RETICLE (Exact 225px Final Impact Zone)
+                // =========================================================================
+                if (this.soulFlightTimer > 0) {
+                    const tx = this.soulFlightTargetX - camera.x;
+                    const ty = this.soulFlightTargetY - camera.y;
+                    const impR = 225;
+                    ctx.save();
+                    ctx.translate(tx, ty);
+                    ctx.fillStyle = 'rgba(0, 245, 212, 0.14)';
+                    ctx.strokeStyle = '#00f5d4';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    for (let i = 0; i < 10; i++) {
+                        const a = (i * Math.PI * 2) / 10;
+                        const px = Math.cos(a) * impR;
+                        const py = Math.sin(a) * impR;
+                        if (i === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                super.draw(ctx);
+
+                // =========================================================================
+                // 5. ARTICULATED MECH CHASSIS, THRUSTER WINGS & VOLCANO/SOUL GAUNTLETS
+                // =========================================================================
+                ctx.save();
+                ctx.translate(sx, sy);
+                ctx.rotate(this.angle);
+
+                // A. Rear Jet Thrusters & Ascended Dual-Color Wings (Normal Flame + Mint Fire)
+                if (isSoul || this.soulFlightTimer > 0) {
+                    const wingPulse = 1 + Math.sin(tNow * 2.4) * 0.08;
+                    for (let side of [-1, 1]) {
+                        ctx.save();
+                        ctx.scale(1, side * wingPulse);
+
+                        // Primary Outer Wing Blade (Normal Flame #ff4500 -> #ffae00)
+                        ctx.fillStyle = '#ff5500';
+                        ctx.strokeStyle = '#ffd166';
+                        ctx.lineWidth = 1.6;
+                        ctx.beginPath();
+                        ctx.moveTo(-6, 12);
+                        ctx.lineTo(-36, 46);
+                        ctx.lineTo(-14, 38);
+                        ctx.lineTo(-2, 20);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // Secondary Inner Wing Blade (Mint Soul Fire #00f5d4 -> #80ffdb)
+                        ctx.fillStyle = '#00f5d4';
+                        ctx.strokeStyle = '#a8ffec';
+                        ctx.lineWidth = 1.6;
+                        ctx.beginPath();
+                        ctx.moveTo(-2, 10);
+                        ctx.lineTo(-26, 54);
+                        ctx.lineTo(4, 34);
+                        ctx.lineTo(8, 16);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+
+                        ctx.restore();
+                    }
+                } else {
+                    // Base Form Twin Thermal Exhaust Plumes (Normal Flame Colors)
+                    const plumeLen = (this.eDashTimer > 0 ? 38 : 26) + Math.sin(tNow * 4) * 4;
+                    for (let side of [-1, 1]) {
+                        ctx.fillStyle = '#ff4500';
+                        ctx.beginPath();
+                        ctx.moveTo(-14, side * 7);
+                        ctx.lineTo(-14 - plumeLen, side * 14);
+                        ctx.lineTo(-14 - plumeLen * 0.65, side * 4);
+                        ctx.closePath();
+                        ctx.fill();
+
+                        ctx.fillStyle = '#ffd166';
+                        ctx.beginPath();
+                        ctx.moveTo(-14, side * 7);
+                        ctx.lineTo(-14 - plumeLen * 0.55, side * 10);
+                        ctx.lineTo(-14 - plumeLen * 0.35, side * 5);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                }
+
+                // B. Heavy Mech Shoulder Pauldrons (Beveled Polygon Armor Plates)
+                for (let side of [-1, 1]) {
+                    ctx.save();
+                    ctx.scale(1, side);
+                    ctx.fillStyle = isSoul ? '#0f172a' : '#1e2235';
+                    ctx.strokeStyle = isSoul ? '#00f5d4' : '#ff7b00';
+                    ctx.lineWidth = 2.2;
+                    ctx.beginPath();
+                    ctx.moveTo(-12, 14);
+                    ctx.lineTo(12, 14);
+                    ctx.lineTo(16, 26);
+                    ctx.lineTo(-8, 28);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Shoulder Vent Trim
+                    ctx.fillStyle = isSoul ? '#ff7b00' : '#ffae00';
+                    ctx.fillRect(-4, 18, 12, 4);
+                    ctx.restore();
+                }
+
+                // C. Articulated Siege Gauntlets & Forearm Blades
+                const reachL = (this.punchAnimTimer > 0 && this.punchHandSide < 0) ? 22 : 0;
+                const reachR = (this.punchAnimTimer > 0 && this.punchHandSide > 0) ? 22 : 0;
+                for (let side of [-1, 1]) {
+                    const reach = side < 0 ? reachL : reachR;
+                    ctx.save();
+                    ctx.translate(reach, side * 19);
+                    // Gauntlet Housing
+                    ctx.fillStyle = '#1e293b';
+                    ctx.strokeStyle = isSoul ? (side < 0 ? '#ff7b00' : '#00f5d4') : '#ff5500';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(4, -5);
+                    ctx.lineTo(22, -6);
+                    ctx.lineTo(26, 0);
+                    ctx.lineTo(22, 6);
+                    ctx.lineTo(4, 5);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Knuckle Flame Emitter / Soul Blade
+                    ctx.fillStyle = isSoul ? (side < 0 ? '#00f5d4' : '#ff9e00') : '#ffae00';
+                    ctx.beginPath();
+                    ctx.moveTo(22, -4);
+                    ctx.lineTo(isSoul ? 34 : 29, 0);
+                    ctx.lineTo(22, 4);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                // D. Central Armored Torso & Furnace Core + Head Visor Crest
+                ctx.fillStyle = isSoul ? '#0f172a' : '#222638';
+                ctx.strokeStyle = isSoul ? '#38f9d7' : '#ff9e00';
+                ctx.lineWidth = 2.2;
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const a = (i * Math.PI) / 3;
+                    const rx = Math.cos(a) * 16;
+                    const ry = Math.sin(a) * 16;
+                    if (i === 0) ctx.moveTo(rx, ry);
+                    else ctx.lineTo(rx, ry);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Molten / Soul Furnace Core Diamond
+                ctx.fillStyle = isSoul ? '#00f5d4' : '#ff5500';
+                ctx.beginPath();
+                ctx.moveTo(11, 0);
+                ctx.lineTo(0, -9);
+                ctx.lineTo(-9, 0);
+                ctx.lineTo(0, 9);
+                ctx.closePath();
+                ctx.fill();
+
+                // Forward V-Visor & Horned Mech Crest
+                ctx.fillStyle = isSoul ? '#ffae00' : '#ffd166';
+                ctx.beginPath();
+                ctx.moveTo(15, 0);
+                ctx.lineTo(5, -10);
+                ctx.lineTo(9, 0);
+                ctx.lineTo(5, 10);
+                ctx.closePath();
+                ctx.fill();
+
+                // E. Mech Armor Hex-Shield Frame (when 1000 / 1200 Mech Armor is active)
+                if (this.shield > 0 && this.hasMechArmor) {
+                    const sr = this.radius + 8;
+                    ctx.strokeStyle = isSoul ? '#00f5d4' : '#ffae00';
+                    ctx.lineWidth = 2.8;
+                    ctx.beginPath();
+                    for (let i = 0; i < 8; i++) {
+                        const a = tNow * 0.2 + (i * Math.PI * 2) / 8;
+                        const hx = Math.cos(a) * sr;
+                        const hy = Math.sin(a) * sr;
+                        if (i === 0) ctx.moveTo(hx, hy);
+                        else ctx.lineTo(hx, hy);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+
+                // Overhead Form, Mech Armor & G Charge Indicator
+                ctx.save();
+                ctx.font = 'bold 11px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = isSoul ? '#38f9d7' : '#ffae00';
+                const labelText = isSoul
+                    ? `🔥 SOUL FLAME${this.shield > 0 ? ' [ARMOR ' + Math.ceil(this.shield) + ']' : ''}`
+                    : `⚙️ MECCA (${Math.floor(this.gCharge || 0)}%)${this.shield > 0 ? ' [ARMOR ' + Math.ceil(this.shield) + ']' : ''}`;
+                ctx.fillText(labelText, sx, sy - this.radius - 28);
+                ctx.restore();
+            }
+        }
+
         // Return true for in‑game heroes (including the alive player in FFA) that count toward FFA alive counter.
         function isCountedAsHero(e) {
             if (!(e instanceof Entity) || e.dead) return false;
@@ -43303,6 +44901,11 @@
                 if(q) q.innerText = '📦';
                 if(e) e.innerText = '🔴';
                 if(f) f.innerText = '🟡';
+            } else if (typeof Mecca !== 'undefined' && p instanceof Mecca) {
+                if(q) q.innerText = p.ascended ? '⚔️' : '🥊';
+                if(e) e.innerText = p.ascended ? '👻' : '💨';
+                if(f) f.innerText = p.ascended ? '☄️' : '🦶';
+                if(g) g.innerText = p.ascended ? '🔥' : '⚡';
             }
         }
 
@@ -43352,7 +44955,17 @@
                     eb.style.width = '0%';
                 }
             }
-            if(hpt)hpt.innerText=`${Math.ceil(p.hp)} / ${p.maxHp}`;
+            if(hpt){
+                let hpLabel = `${Math.ceil(p.hp)} / ${p.maxHp}`;
+                if (typeof Mecca !== 'undefined' && p instanceof Mecca && p.shield > 0 && p.hasMechArmor) {
+                    hpLabel += `  [🛡️ MECH ARMOR: ${Math.ceil(p.shield)}]`;
+                }
+                if (p.fadingSoulTimer && p.fadingSoulTimer > 0) {
+                    hpLabel += `  [👻 FADING SOUL -10% MAX HP: ${p.fadingSoulTimer.toFixed(1)}s]`;
+                    if (hpb) hpb.style.background = '#14b8a6';
+                }
+                hpt.innerText = hpLabel;
+            }
             let c1,c2,c3,m1,m2,m3,c4,m4;
             // Map cooldowns for HUD
             if(p instanceof Paul){c1=p.qCD;m1=4;c2=p.eCD;m2=7;c3=p.fCD;m3=15;c4=0;m4=1;}
@@ -43441,6 +45054,7 @@
             else if(p instanceof Guest){c1=p.qCD;m1=7;c2=p.eCD;m2=4;c3=p.fCD;m3=20;c4=0;m4=1;}
             else if(p instanceof Cole){c1=p.qCD;m1=6;c2=p.eCD;m2=8;c3=p.fCharges>0?0:p.fCD;m3=4;c4=0;m4=1;}
             else if(p instanceof Rico){c1=p.qCD;m1=10;c2=p.eCD;m2=4;c3=p.fCD;m3=15;c4=0;m4=1;}
+            else if(typeof Mecca !== 'undefined' && p instanceof Mecca){c1=p.qCD;m1=5;c2=p.eCD;m2=p.ascended?12:6;c3=p.fCD;m3=15;c4=p.ascended?0:Math.max(0,(100-(p.gCharge||0))/100);m4=1;}
             else{c1=0;m1=1;c2=0;m2=1;c3=0;m3=1;c4=0;m4=1;}
             if(p instanceof Melvin) {
                 document.getElementById('eCharge').style.display = 'block';
@@ -43564,6 +45178,13 @@
             if(p instanceof Christian) {
                 document.getElementById('skill4Box').style.display = 'flex';
                 document.getElementById('iconG').innerText = '🚘';
+            } else if(typeof Mecca !== 'undefined' && p instanceof Mecca) {
+                document.getElementById('skill4Box').style.display = 'flex';
+                document.getElementById('iconG').innerText = p.ascended ? '🔥' : '⚡';
+                if (gChargeEl) {
+                    gChargeEl.style.display = 'block';
+                    gChargeEl.innerText = p.ascended ? 'MAX' : `${Math.floor(p.gCharge || 0)}%`;
+                }
             } else if(p instanceof BrunoAlexander) {
                 document.getElementById('skill4Box').style.display = 'flex';
                 document.getElementById('iconG').innerText = p.ascended ? '👑' : '⚔️';
@@ -43742,6 +45363,13 @@
                     passiveBar.style.backgroundColor = passiveBar.style.background;
                     passiveBar.style.width = (p.resolve / p.maxResolve) * 100 + '%';
                 }
+            } else if(typeof Mecca !== 'undefined' && p instanceof Mecca) {
+                if(passiveBar) {
+                    passiveBar.style.display = 'block';
+                    passiveBar.style.background = p.ascended ? '#00f5d4' : '#ff7b00';
+                    passiveBar.style.backgroundColor = passiveBar.style.background;
+                    passiveBar.style.width = (p.ascended ? 100 : Math.min(100, p.gCharge || 0)) + '%';
+                }
             } else {
                 // non-passive-bar heroes: nothing shown
             }
@@ -43767,6 +45395,7 @@
                 }
             }
             
+            window._lastMinimapFrameId = window._renderFrameId;
             updateMinimap();
             
             // Update leaderboard display if visible
@@ -44083,6 +45712,16 @@
                 ctx.textAlign = 'center';
                 ctx.fillText(ent.freezeTimer > 0 ? 'FROZEN' : 'STUNNED', sx, sy - ent.radius - 12);
             }
+            if (ent.fadingSoulTimer && ent.fadingSoulTimer > 0) {
+                ctx.fillStyle = '#38f9d7';
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 2.5;
+                ctx.font = 'bold 11px Inter, Segoe UI, sans-serif';
+                ctx.textAlign = 'center';
+                const fsText = `👻 FADING SOUL (-10% HP) ${ent.fadingSoulTimer.toFixed(1)}s`;
+                ctx.strokeText(fsText, sx, sy - ent.radius - 22);
+                ctx.fillText(fsText, sx, sy - ent.radius - 22);
+            }
             if (ent.mindControlledBy && !ent.mindControlledBy.dead) {
                 const pulse = 1 + Math.sin(Date.now() * 0.012) * 0.12;
                 ctx.strokeStyle = '#f43f5e';
@@ -44298,7 +45937,9 @@
                             e.reviveTimer5v5 -= dt;
                             if (e.reviveTimer5v5 <= 0) {
                                 e.dead = false;
-                                if (e.ascended) {
+                                if (typeof Mecca !== 'undefined' && e instanceof Mecca) {
+                                    e.restoreMechArmorOnSpawnOrRevive();
+                                } else if (e.ascended) {
                                     if (typeof BrunoAlexander !== 'undefined' && e instanceof BrunoAlexander) {
                                         e.form = 'justice';
                                         e.baseSpd = 250;
@@ -44574,7 +46215,14 @@
                     try { if(e && e.mirror && typeof e.mirror.update === 'function') e.mirror.update(dt); } catch(_){ }
                     try { enforceFarmlandHouse(e); } catch(_){ }
                     try { enforceMapWallsAndRicoBoxes(e, movementStartX, movementStartY, dt); } catch(_){ }
-                    if (e && e instanceof Entity) { e._preStepX = e.x; e._preStepY = e.y; }
+                    if (e && e instanceof Entity) {
+                        e._preStepX = e.x;
+                        e._preStepY = e.y;
+                        if (typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) {
+                            e._lastOwnX = e.x;
+                            e._lastOwnY = e.y;
+                        }
+                    }
                     if (storeBoosted && e && !e.dead) {
                         e.x = movementStartX + (e.x - movementStartX) * 1.15;
                         e.y = movementStartY + (e.y - movementStartY) * 1.15;
@@ -44624,6 +46272,7 @@
                         if(!window.worldZones[i] || window.worldZones[i].del || window.worldZones[i].duration <= 0) window.worldZones.splice(i,1);
                     }
                 }
+                try { if (typeof clampDisplacedTargetsAfterStep === 'function') clampDisplacedTargetsAfterStep(null); } catch (_) {}
                 // Update visuals via the centralized manager
                 window._suppressOnlineFxCapture = true;
                 try{ if(_visuals && typeof _visuals.update === 'function') _visuals.update(dt); } catch(err){ console.error('VisualsManager.update error', err); } finally { window._suppressOnlineFxCapture = false; }
@@ -44819,7 +46468,7 @@
                             (e.bountyTarget && e.bountyTarget.socketId && e.bountyTarget.socketId === renderObserver.socketId) ||
                             (e.linkedPrey && e.linkedPrey.socketId && e.linkedPrey.socketId === renderObserver.socketId)
                         ));
-                        const pad = Math.max((e.countsAsFFAHero === true || e.name === 'Death Dragon' || (typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy)) ? 1600 : 250, (e.radius || 0) + 250);
+                        const pad = Math.max((e.name === 'Death Dragon') ? 650 : 260, (e.radius || 0) + 220);
                         if(hasGlobalLock || (e.x>=camera.x-pad&&e.x<=camera.x+viewW+pad&&e.y>=camera.y-pad&&e.y<=camera.y+viewH+pad)) {
                             e._drawnFrameId = window._renderFrameId;
                             e.draw(CTX);
@@ -45564,6 +47213,10 @@
 
                     // restore canvas transform so HUD/UI draws at screen resolution
                     CTX.restore();
+                    if (window._lastMinimapFrameId !== window._renderFrameId) {
+                        window._lastMinimapFrameId = window._renderFrameId;
+                        updateMinimap();
+                    }
 
                     // Render world-space optical flashbang blooms (visible to everyone on screen when Q detonates)
                     if (window._activeFlashbangBlooms && window._activeFlashbangBlooms.length > 0) {
@@ -48280,8 +49933,51 @@
                 camera.zoom = 1.5; // Zoom in for better mobile gameplay
             }
 
-            window.addEventListener('keydown',e=>{if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;const key=e.key.toLowerCase();if(keys.hasOwnProperty(key))keys[key]=true;if(key==='r')activateUniversalGear(player);if(key==='t'&&typeof gameMode!=='undefined'&&gameMode==='training'){e.preventDefault();toggleTrainingPanel();}if(key==='l'&&typeof gameMode!=='undefined'&&gameMode==='training')switchTrainingDummy();if(key==='p'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCounter();if(key==='o'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCooldowns();if(e.key===' ')showLeaderboard();});
-            window.addEventListener('keyup',e=>{if(keys.hasOwnProperty(e.key.toLowerCase()))keys[e.key.toLowerCase()]=false;if(e.key===' ')hideLeaderboard();});
+            window._secretHeldKeys = window._secretHeldKeys || new Set();
+            window.unlockAndSelectMecca = function() {
+                const nowMs = Date.now();
+                if (window._lastMeccaUnlockAt && (nowMs - window._lastMeccaUnlockAt) < 800) return;
+                window._lastMeccaUnlockAt = nowMs;
+                window.heroEnabled = window.heroEnabled || {};
+                window.heroEnabled['mecca'] = true;
+                if (typeof window.selectHero === 'function') {
+                    window.selectHero('mecca');
+                } else {
+                    selectedHeroType = 'mecca';
+                }
+                const modeTitle = document.getElementById('modeTitle');
+                if (modeTitle) {
+                    modeTitle.innerHTML = '🔥 SECRET HERO SELECTED: <span style="color:#38f9d7;">MECCA</span> (Unleasher/Attacker) 🔥';
+                }
+                let toast = document.getElementById('meccaSecretToast');
+                if (!toast) {
+                    toast = document.createElement('div');
+                    toast.id = 'meccaSecretToast';
+                    toast.style.cssText = 'position:fixed;top:22px;left:50%;transform:translateX(-50%);z-index:999999;background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #00f5d4;box-shadow:0 0 24px rgba(0,245,212,0.55);color:#fff;padding:12px 24px;border-radius:10px;font-family:Inter,Arial,sans-serif;font-weight:800;font-size:15px;letter-spacing:0.6px;pointer-events:none;transition:opacity 0.35s;';
+                    document.body.appendChild(toast);
+                }
+                toast.innerHTML = '🔥 <span style="color:#ff7b00;">SECRET HERO UNLOCKED:</span> <span style="color:#00f5d4;">MECCA</span> (Unleasher/Attacker) SELECTED! 🔥';
+                toast.style.opacity = '1';
+                toast.style.display = 'block';
+                clearTimeout(window._meccaToastTimer);
+                window._meccaToastTimer = setTimeout(() => {
+                    if (toast) toast.style.opacity = '0';
+                }, 3200);
+                if (typeof gameRunning !== 'undefined' && gameRunning && gameMode === 'training' && player && !(player instanceof Mecca)) {
+                    const px = player.x, py = player.y, pGear = player.gear;
+                    const idx = entities.indexOf(player);
+                    player = new Mecca(px, py, true);
+                    player.team = 1;
+                    player.gear = pGear || selectedGear || 'speedster';
+                    if (idx !== -1) entities[idx] = player;
+                    else entities.push(player);
+                    updateHUD(player);
+                    addKillMsg('🔥 Switched to Secret Hero: MECCA!');
+                }
+            };
+            window.addEventListener('keydown',e=>{if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;const key=e.key.toLowerCase();window._secretHeldKeys.add(key);if(window._secretHeldKeys.has('m')&&window._secretHeldKeys.has('e')&&window._secretHeldKeys.has('c')&&window._secretHeldKeys.has('a')){window.unlockAndSelectMecca();}if(keys.hasOwnProperty(key))keys[key]=true;if(key==='r')activateUniversalGear(player);if(key==='t'&&typeof gameMode!=='undefined'&&gameMode==='training'){e.preventDefault();toggleTrainingPanel();}if(key==='l'&&typeof gameMode!=='undefined'&&gameMode==='training')switchTrainingDummy();if(key==='p'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCounter();if(key==='o'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCooldowns();if(e.key===' ')showLeaderboard();});
+            window.addEventListener('keyup',e=>{const k=e.key.toLowerCase();if(window._secretHeldKeys)window._secretHeldKeys.delete(k);if(keys.hasOwnProperty(k))keys[k]=false;if(e.key===' ')hideLeaderboard();});
+            window.addEventListener('blur',()=>{if(window._secretHeldKeys)window._secretHeldKeys.clear();});
             const universalGearButton = document.getElementById('skillRBox');
             if (universalGearButton) {
                 universalGearButton.addEventListener('pointerdown', e => {
@@ -49882,6 +51578,7 @@
                         trent: '#00008B',
                         cole: '#38bdf8',
                         rico: '#06b6d4',
+                        mecca: '#ff6b00',
                         guest: '#8B4513',
                         jimeka: '#FF1493',
                         dayum: '#000000',
@@ -49958,6 +51655,7 @@
                         trent: '#191970',
                         cole: '#1e40af',
                         rico: '#0284c7',
+                        mecca: '#e85d04',
                         guest: '#654321',
                         jimeka: '#8B008B',
                         dayum: '#000000',
@@ -49995,7 +51693,7 @@
                 bountyhunter: 26, karen: 20, caskrice: 20, jeffrey: 13, don: 20, monza: 20, christian: 24,
                 faik: 22, fletcher: 20, darrick: 20, twins: 22, trent: 22, guest: 20, jimeka: 25,
                 dayum: 30, ash: 19, zappa: 18, cyrus: 18, ambrose: 20, austin: 20, winston: 16,
-                amir: 18, steven: 20, cole: 20, rico: 20
+                amir: 18, steven: 20, cole: 20, rico: 20, mecca: 21
             };
             return manual[String(heroType).toLowerCase()] || 20;
         }
@@ -50340,6 +52038,7 @@
             else if(heroType==='jeffrey')player=new Jeffrey(playerData.x,playerData.y,true);
             else if(heroType==='cole')player=new Cole(playerData.x,playerData.y,true);
             else if(heroType==='rico')player=new Rico(playerData.x,playerData.y,true);
+            else if(heroType==='mecca')player=new Mecca(playerData.x,playerData.y,true);
             else player=new Paul(playerData.x,playerData.y,true);
             
             // Set socketId for damage reporting and distinct local team (1) so all enemy proxies (team >= 2) always collide
@@ -50640,6 +52339,7 @@
                 'jeffrey': typeof Jeffrey !== 'undefined' ? Jeffrey : null,
                 'cole': typeof Cole !== 'undefined' ? Cole : null,
                 'rico': typeof Rico !== 'undefined' ? Rico : null,
+                'mecca': typeof Mecca !== 'undefined' ? Mecca : null,
                 'lune': typeof Lune !== 'undefined' ? Lune : null,
                 'everdawn': typeof Everdawn !== 'undefined' ? Everdawn : null,
                 'gormo': typeof Gormo !== 'undefined' ? Gormo : null,
@@ -50654,7 +52354,7 @@
         }
 
         const ONLINE_HERO_DRAW_SCALARS = [
-            'abilityActive', 'activeTwin', 'adrenalineTimer', 'aiScanSpinAngle', 'aimAngle',
+            'abilityActive', 'activeTwin', 'hasMechArmor', 'gCharge', 'soulZoneTimer', 'soulZoneRadius', 'soulZoneHasEnemy', 'soulFlightTimer', 'soulQSlashTimer', 'punchAnimTimer', 'punchHandSide', 'kickAnimTimer', 'fadingSoulTimer', 'adrenalineTimer', 'aiScanSpinAngle', 'aimAngle',
             'airborne', 'airborneDuration', 'airborneTime', 'airborneTimer', 'allSeeingActive',
             'allSeeingTimer', 'alpha', 'ammo', 'arrowCount', 'ascended', 'auraActive', 'auraX', 'auraY',
             'barrageActive', 'baseHp', 'baseMaxHp', 'baseX', 'baseY', 'basketsScored', 'beamTimer',
@@ -51489,6 +53189,9 @@
                     if (src && src.fPenetrationTimer > 0) totalPenetration += 0.40;
                     if (src && src.magnitudeBreakActive) totalPenetration = 1.0;
                     totalPenetration = Math.max(0, Math.min(1, totalPenetration));
+                    if ((ht === 'mecca' || this.hasMechArmor) && this.shield > 0) {
+                        totalPenetration = 0;
+                    }
 
                     if (this.defenseShredTimer > 0) {
                         normalDamagePart *= 1 + (this.defenseShred || 0.20);
@@ -51530,16 +53233,26 @@
                     const totalDamageToApply = normalDamagePart + trueDamagePart;
                     if (!Number.isFinite(totalDamageToApply) || totalDamageToApply <= 0) return;
 
-                    // 5. Apply Normal Damage to Shield first, while True Damage bypasses Shield directly to HP!
+                    // 5. Apply Normal Damage to Shield first (and if victim is Mecca with Mech Armor, shield also blocks True Damage!)
                     let shieldAbsorbed = 0;
                     let hpFromNormal = normalDamagePart;
+                    let remTruePart = trueDamagePart;
                     if (this.shield > 0 && normalDamagePart > 0) {
                         shieldAbsorbed = Math.min(this.shield, normalDamagePart);
                         this.shield = Math.max(0, this.shield - shieldAbsorbed);
                         hpFromNormal = Math.max(0, normalDamagePart - shieldAbsorbed);
                     }
-                    const totalHpDamage = hpFromNormal + trueDamagePart;
+                    if (this.shield > 0 && remTruePart > 0 && (ht === 'mecca' || this.hasMechArmor)) {
+                        const trueAbs = Math.min(this.shield, remTruePart);
+                        this.shield = Math.max(0, this.shield - trueAbs);
+                        remTruePart = Math.max(0, remTruePart - trueAbs);
+                        shieldAbsorbed += trueAbs;
+                    }
+                    const totalHpDamage = hpFromNormal + remTruePart;
                     const finalCombinedDamage = shieldAbsorbed + totalHpDamage;
+                    if (src && typeof Mecca !== 'undefined' && src instanceof Mecca && !src.ascended && finalCombinedDamage > 0) {
+                        src.addGCharge(Math.min(8, finalCombinedDamage / 195));
+                    }
 
                     if (src && src instanceof Entity && src !== this) {
                         src.totalDamage = (src.totalDamage || 0) + Math.ceil(Math.max(finalCombinedDamage, 0));
@@ -51608,12 +53321,13 @@
 
             applyServerState(data) {
                 if (!data) return;
+                this.syncDirectStatusEffectsToServer();
                 this.prevServerX = this.serverX;
                 this.prevServerY = this.serverY;
                 this.prevServerTs = this.lastServerUpdate || Date.now();
 
                 const nowMs = Date.now();
-                const recentlyPushedLocally = (nowMs - (this._lastLocalPushAt || 0)) < 260;
+                const recentlyPushedLocally = (nowMs - (this._lastLocalPushAt || 0)) < 320 || Math.hypot(this._localKbVx || 0, this._localKbVy || 0) > 5;
 
                 if (typeof data.x === 'number' && Number.isFinite(data.x)) {
                     if (!recentlyPushedLocally) {
@@ -51742,12 +53456,12 @@
             syncDirectStatusEffectsToServer() {
                 if (!(gameMode && gameMode.includes('online') && typeof onlineSocket !== 'undefined' && onlineSocket)) return;
 
-                // 1. Detect direct position displacement (pushes/pulls/drags like Ian's F ability, Blackhole, Tornado, Hook, Gregory Q, Winston Wind, etc.)
+                // 1. Detect direct position displacement (pushes/pulls/drags like Ian's F ability, Blackhole, Tornado, Hook, Gregory Q, Winston Wind, Mecca F, etc.)
                 if (typeof this._lastOwnX === 'number' && typeof this._lastOwnY === 'number') {
                     const rawDx = this.x - this._lastOwnX;
                     const rawDy = this.y - this._lastOwnY;
                     const rawDist = Math.hypot(rawDx, rawDy);
-                    if (rawDist > 0.02 && rawDist < 1200) {
+                    if (rawDist > 0.05 && rawDist < 1400) {
                         this._lastKnockbackOrHitMs = Date.now();
                         this._postDashWallGrace = 0;
                         if (typeof clampEntityKnockbackWalls === 'function') {
@@ -51757,14 +53471,14 @@
                         const pushedDy = this.y - this._lastOwnY;
                         this._lastOwnX = this.x;
                         this._lastOwnY = this.y;
-                        this.serverX = (typeof this.serverX === 'number' ? this.serverX : this.x) + pushedDx;
-                        this.serverY = (typeof this.serverY === 'number' ? this.serverY : this.y) + pushedDy;
-                        this.prevServerX = this.serverX;
-                        this.prevServerY = this.serverY;
-                        if (Math.hypot(pushedDx, pushedDy) >= 12) {
+                        this.serverX = this.x;
+                        this.serverY = this.y;
+                        this.prevServerX = this.x;
+                        this.prevServerY = this.y;
+                        this.vx = 0;
+                        this.vy = 0;
+                        if (Math.hypot(pushedDx, pushedDy) > 0.05) {
                             this._lastLocalPushAt = Date.now();
-                        }
-                        if (Math.hypot(pushedDx, pushedDy) > 0.02) {
                             this._pendingPushDx = (this._pendingPushDx || 0) + pushedDx;
                             this._pendingPushDy = (this._pendingPushDy || 0) + pushedDy;
                             const flushPushNow = () => {
@@ -51772,8 +53486,8 @@
                                     clearTimeout(this._pushFlushTimer);
                                     this._pushFlushTimer = null;
                                 }
-                                const sendDx = Math.trunc(this._pendingPushDx || 0);
-                                const sendDy = Math.trunc(this._pendingPushDy || 0);
+                                const sendDx = Math.round(this._pendingPushDx || 0);
+                                const sendDy = Math.round(this._pendingPushDy || 0);
                                 if (sendDx === 0 && sendDy === 0) return;
                                 this._pendingPushDx = (this._pendingPushDx || 0) - sendDx;
                                 this._pendingPushDy = (this._pendingPushDy || 0) - sendDy;
@@ -51795,10 +53509,10 @@
                                 } catch (_) {}
                             };
                             const nowPushMs = Date.now();
-                            if ((nowPushMs - (this._lastPushEmitMs || 0)) >= 16 || Math.hypot(this._pendingPushDx || 0, this._pendingPushDy || 0) >= 10) {
+                            if ((nowPushMs - (this._lastPushEmitMs || 0)) >= 14 || Math.hypot(this._pendingPushDx || 0, this._pendingPushDy || 0) >= 3) {
                                 flushPushNow();
                             } else if (!this._pushFlushTimer) {
-                                this._pushFlushTimer = setTimeout(flushPushNow, 16);
+                                this._pushFlushTimer = setTimeout(flushPushNow, 14);
                             }
                         }
                     }
@@ -51825,7 +53539,8 @@
                     ['echoTimer', 'echoTimer'],
                     ['defenseShredTimer', 'defenseShredTimer'],
                     ['austinMarkTimer', 'austinMarkTimer'],
-                    ['terrifedTimer', 'terrifedTimer']
+                    ['terrifedTimer', 'terrifedTimer'],
+                    ['fadingSoulTimer', 'fadingSoul']
                 ];
                 for (let i = 0; i < statusKeys.length; i++) {
                     const prop = statusKeys[i][0];
@@ -51847,7 +53562,7 @@
                 }
 
                 // Convert Twins/Ken knockbackX/knockbackY/knockbackDuration into kbx/kby so it replicates seamlessly
-                if (this.knockbackDuration > 0 && Math.hypot(this.knockbackX || 0, this.knockbackY || 0) > 5) {
+                if (this.knockbackDuration > 0 && Math.hypot(this.knockbackX || 0, this.knockbackY || 0) > 2) {
                     const mult = Math.max(1.0, (this.knockbackDuration || 0.3) * 5.5);
                     this.kbx = (this.kbx || 0) + (this.knockbackX || 0) * mult;
                     this.kby = (this.kby || 0) + (this.knockbackY || 0) * mult;
@@ -51857,7 +53572,7 @@
                 }
 
                 // 3. Detect direct knockback velocity assignments (kbx, kby), emit to server, and transfer to _localKbVx/_localKbVy for smooth wall-clamped 60fps knockback!
-                if (Math.hypot(this.kbx || 0, this.kby || 0) > 15) {
+                if (Math.hypot(this.kbx || 0, this.kby || 0) > 2) {
                     const kx = Math.round(this.kbx || 0);
                     const ky = Math.round(this.kby || 0);
                     this.kbx = 0;
@@ -51924,6 +53639,13 @@
                     if (this.austinMarkTimer <= 0) this.austinMarkedBy = null;
                 }
                 if (this.defenseShredTimer > 0) this.defenseShredTimer = Math.max(0, this.defenseShredTimer - dt);
+                if (this.fadingSoulTimer > 0) {
+                    this.fadingSoulTimer = Math.max(0, this.fadingSoulTimer - dt);
+                    if (this.fadingSoulTimer <= 0 && this._fadingSoulOrigMaxHp) {
+                        this.maxHp = this._fadingSoulOrigMaxHp;
+                        delete this._fadingSoulOrigMaxHp;
+                    }
+                }
                 if (this.apolloFireTimer > 0) {
                     this.apolloFireTimer = Math.max(0, this.apolloFireTimer - dt);
                     this.lastApolloFireTick = (this.lastApolloFireTick || 0) + dt;
@@ -52935,8 +54657,9 @@
               }
               const prox = entities.find(e => e instanceof OnlinePlayerProxy && e.socketId === data.playerId);
               if (!prox) return;
+              prox.syncDirectStatusEffectsToServer();
               const nowMs = Date.now();
-              if ((nowMs - (prox._lastLocalPushAt || 0)) < 260) return;
+              if (!data.forcedPush && ((nowMs - (prox._lastLocalPushAt || 0)) < 320 || Math.hypot(prox._localKbVx || 0, prox._localKbVy || 0) > 5)) return;
               const dt = (nowMs - (prox.lastServerUpdate || nowMs)) / 1000;
               if (typeof data.x === 'number' && Number.isFinite(data.x)) {
                 if (dt > 0.004 && dt < 0.4) prox.vx = (data.x - prox.serverX) / dt;
@@ -53548,6 +55271,7 @@
                 else if(heroType==='jeffrey')player=new Jeffrey(playerData.x,playerData.y,true);
                 else if(heroType==='cole')player=new Cole(playerData.x,playerData.y,true);
             else if(heroType==='rico')player=new Rico(playerData.x,playerData.y,true);
+                else if(heroType==='mecca')player=new Mecca(playerData.x,playerData.y,true);
                 else if(heroType==='everdawn')player=new Everdawn(playerData.x,playerData.y,true);
                 else player=new Paul(playerData.x,playerData.y,true);
 
@@ -53785,6 +55509,7 @@
             else if (selectedHeroType === 'jeffrey') player = new Jeffrey(750, 750, true);
             else if (selectedHeroType === 'cole') { if (q) q.innerText = '💥'; if (e) e.innerText = '🎯'; if (f) f.innerText = '⚡'; player = new Cole(750, 750, true); }
             else if (selectedHeroType === 'rico') { if (q) q.innerText = '📦'; if (e) e.innerText = '🔴'; if (f) f.innerText = '🟡'; player = new Rico(750, 750, true); }
+            else if (selectedHeroType === 'mecca') { if (q) q.innerText = '🥊'; if (e) e.innerText = '💨'; if (f) f.innerText = '🦶'; if (g) g.innerText = '⚡'; player = new Mecca(750, 750, true); }
             else if (selectedHeroType === 'everdawn') { if (q) q.innerText = '✨'; if (e) e.innerText = '🪞'; if (f) f.innerText = '⛓️'; if (g) g.innerText = '🔮'; player = new Everdawn(750, 750, true); }
             else player = new Paul(750, 750, true);
             
