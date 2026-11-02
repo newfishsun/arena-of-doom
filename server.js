@@ -133,6 +133,7 @@ function getHeroBaseHp(heroType) {
     trent: 5900,
     cole: 5000,
     rico: 4750,
+    mecca: 5200,
     guest: 7200,
     jimeka: 5600,
     dayum: 69420,
@@ -450,9 +451,16 @@ class GameRoom {
         p.nextDirTime = now + 1200 + Math.random() * 1800;
       }
 
-      const botPushDamp = (p.lastPushedAt && (now - p.lastPushedAt) < 220) ? 0.2 : 1.0;
+      const botPushDamp = (p.lastPushedAt && (now - p.lastPushedAt) < 280) ? 0.15 : 1.0;
       p.x += p.vx * botPushDamp * dt;
       p.y += p.vy * botPushDamp * dt;
+      if (Math.hypot(p.kbVx || 0, p.kbVy || 0) > 5) {
+        p.x += (p.kbVx || 0) * dt;
+        p.y += (p.kbVy || 0) * dt;
+        p.kbVx = (p.kbVx || 0) * Math.pow(0.12, dt);
+        p.kbVy = (p.kbVy || 0) * Math.pow(0.12, dt);
+        if (Math.hypot(p.kbVx, p.kbVy) <= 5) { p.kbVx = 0; p.kbVy = 0; }
+      }
 
       // Stay within world bounds
       const pad = 60;
@@ -608,13 +616,14 @@ class GameRoom {
     if (!this.players.has(socketId) || !data) return;
     const player = this.players.get(socketId);
     const now = Date.now();
-    const recentlyPushed = player.lastPushedAt && (now - player.lastPushedAt) < 110;
-    if (!recentlyPushed) {
+    const recentlyPushed = player.lastPushedAt && (now - player.lastPushedAt) < 280;
+    if (data.pushAck === true) {
       if (typeof data.x === 'number' && Number.isFinite(data.x)) player.x = data.x;
       if (typeof data.y === 'number' && Number.isFinite(data.y)) player.y = data.y;
-    } else if (typeof data.x === 'number' && typeof data.y === 'number' && Math.hypot(data.x - player.x, data.y - player.y) < 140) {
-      player.x = data.x;
-      player.y = data.y;
+      player.lastPushedAt = 0;
+    } else if (!recentlyPushed) {
+      if (typeof data.x === 'number' && Number.isFinite(data.x)) player.x = data.x;
+      if (typeof data.y === 'number' && Number.isFinite(data.y)) player.y = data.y;
     }
     player.lastUpdate = now;
 
@@ -1161,7 +1170,11 @@ io.on('connection', (socket) => {
     let damageToShield = 0;
     let damageToHp = 0;
 
-    if (trueDamage || rawTrueAmt >= clampedByGlobal) {
+    const victimIsMecca = String(victim.heroType || '').toLowerCase() === 'mecca';
+    if (victimIsMecca && prevShield > 0) {
+      damageToShield = Math.min(prevShield, clampedByGlobal);
+      damageToHp = Math.min(prevHp, Math.max(0, clampedByGlobal - damageToShield));
+    } else if (trueDamage || rawTrueAmt >= clampedByGlobal) {
       damageToHp = Math.min(clampedByGlobal, prevHp);
     } else if (rawTrueAmt > 0) {
       const normalPart = Math.max(0, clampedByGlobal - rawTrueAmt);
@@ -1238,23 +1251,46 @@ io.on('connection', (socket) => {
 
     const eff = data.effect;
     const now = Date.now();
+    let displaced = false;
     if (eff.type === 'push' && eff.value) {
-      if (typeof eff.value.dx === 'number' && typeof eff.value.dy === 'number' && (Math.abs(eff.value.dx) > 0 || Math.abs(eff.value.dy) > 0)) {
-        victim.x = Math.max(40, Math.min(room.worldSize - 40, victim.x + eff.value.dx));
-        victim.y = Math.max(40, Math.min(room.worldSize - 40, victim.y + eff.value.dy));
-      } else if (typeof eff.value.x === 'number' && typeof eff.value.y === 'number' && Math.hypot(eff.value.x - victim.x, eff.value.y - victim.y) < 900) {
+      if (typeof eff.value.x === 'number' && typeof eff.value.y === 'number' && Math.hypot(eff.value.x - victim.x, eff.value.y - victim.y) < 950) {
         victim.x = Math.max(40, Math.min(room.worldSize - 40, eff.value.x));
         victim.y = Math.max(40, Math.min(room.worldSize - 40, eff.value.y));
+        displaced = true;
+      } else if (typeof eff.value.dx === 'number' && typeof eff.value.dy === 'number' && (Math.abs(eff.value.dx) > 0 || Math.abs(eff.value.dy) > 0)) {
+        victim.x = Math.max(40, Math.min(room.worldSize - 40, victim.x + eff.value.dx));
+        victim.y = Math.max(40, Math.min(room.worldSize - 40, victim.y + eff.value.dy));
+        displaced = true;
       }
       victim.lastPushedAt = now;
     } else if (eff.type === 'pull' && eff.value) {
       if (typeof eff.value.dx === 'number') victim.x = Math.max(40, Math.min(room.worldSize - 40, victim.x + eff.value.dx));
       if (typeof eff.value.dy === 'number') victim.y = Math.max(40, Math.min(room.worldSize - 40, victim.y + eff.value.dy));
       victim.lastPushedAt = now;
+      displaced = true;
     } else if (eff.type === 'knockback' && eff.value) {
-      if (typeof eff.value.x === 'number') victim.x = Math.max(40, Math.min(room.worldSize - 40, victim.x + eff.value.x * 0.12));
-      if (typeof eff.value.y === 'number') victim.y = Math.max(40, Math.min(room.worldSize - 40, victim.y + eff.value.y * 0.12));
+      const kx = Number(eff.value.x) || 0;
+      const ky = Number(eff.value.y) || 0;
+      victim.x = Math.max(40, Math.min(room.worldSize - 40, victim.x + kx * 0.165));
+      victim.y = Math.max(40, Math.min(room.worldSize - 40, victim.y + ky * 0.165));
+      if (victim.isBot) {
+        victim.kbVx = (victim.kbVx || 0) + kx * 0.65;
+        victim.kbVy = (victim.kbVy || 0) + ky * 0.65;
+      }
       victim.lastPushedAt = now;
+      displaced = true;
+    }
+    if (displaced) {
+      io.to(roomId).emit('playerMoved', {
+        playerId: victim.socketId,
+        x: victim.x,
+        y: victim.y,
+        angle: victim.angle || 0,
+        color: victim.color || null,
+        heroType: victim.heroType || null,
+        currentSkin: victim.currentSkin || null,
+        forcedPush: true
+      });
     }
     if (victim.isBot) {
       if (eff.type === 'stun' || eff.type === 'freeze' || eff.type === 'fightingTimer' || eff.type === 'movementLockdownTimer') {
