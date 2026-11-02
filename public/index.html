@@ -2941,6 +2941,7 @@
                 </div>
                 <div id="tpHeroGrid" onwheel="event.stopPropagation();" style="display: grid; pointer-events: auto; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 8px; max-height: 320px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 6px; background: rgba(15, 23, 42, 0.75); border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.2);"></div>
             </div>
+            <button id="squadQuitBtn" onclick="window.quitMatchImmediately && window.quitMatchImmediately()" style="display:none; position:fixed; top:20px; right:182px; z-index:1200; background:linear-gradient(135deg,#dc2626,#991b1b); color:#ffffff; border:2px solid #fca5a5; border-radius:8px; padding:9px 16px; font-family:Inter,Segoe UI,Arial,sans-serif; font-weight:800; font-size:13px; letter-spacing:0.6px; cursor:pointer; box-shadow:0 4px 14px rgba(220,38,38,0.55); pointer-events:auto;">QUIT (TAKE LOSS)</button>
             <div id="minimapContainer"><canvas id="minimapCanvas" width="150" height="150"></canvas></div>
         </div>
         <div id="gameOverScreen">
@@ -3308,7 +3309,14 @@
 
         function isEntityDashingNow(entity, startX, startY, dt) {
             if (!entity || entity.isDrone) return false;
-            // Strict check for active short dash/lunge/leap/flight abilities only (never sticky timers or speed buffs!)
+            const isBeingKnocked =
+                Math.hypot(entity.kbx || 0, entity.kby || 0) > 1.5 ||
+                Math.hypot(entity._localKbVx || 0, entity._localKbVy || 0) > 1.5 ||
+                (entity.knockbackDuration && entity.knockbackDuration > 0 && !(typeof Twins !== 'undefined' && entity instanceof Twins)) ||
+                ((Date.now() - (entity._lastKnockbackOrHitMs || 0)) < 110);
+            if (isBeingKnocked) return false;
+
+            // 1. Explicit active dash/lunge/leap/flight flags & timers
             if (entity.dashing === true || entity.isDashing === true || entity.qDashing === true ||
                 entity.eDashing === true || entity.fDashing === true || entity.isDashingF === true ||
                 entity.isDashingUlt === true || entity.dash === true || entity.gActive === true ||
@@ -3317,6 +3325,7 @@
                 entity.leaping === true || entity.flying === true || entity.fJumpActive === true ||
                 entity.dashBurst === true || entity.curvedDash === true || entity.corneringActive === true ||
                 entity.helicopterActive === true || entity.fCharging === true ||
+                (entity._blinkWallGrace && entity._blinkWallGrace > 0) ||
                 (entity.qDash && typeof entity.qDash.time === 'number' && entity.qDash.time > 0) ||
                 (entity.returnDash && typeof entity.returnDash.time === 'number' && entity.returnDash.time > 0) ||
                 (entity.qDashTimer && entity.qDashTimer > 0) ||
@@ -3330,6 +3339,9 @@
                 (entity.fJumpTimer && entity.fJumpTimer > 0) ||
                 (entity.fDashTimer && entity.fDashTimer > 0) ||
                 (entity.flyingTimer && entity.flyingTimer > 0) ||
+                (entity.soulFlightTimer && entity.soulFlightTimer > 0) ||
+                (entity.soulQDashTimer && entity.soulQDashTimer > 0) ||
+                (entity.kickAnimTimer && entity.kickAnimTimer > 0) ||
                 (entity.jumpTimer && entity.jumpTimer > 0) ||
                 (entity.jumpT && entity.jumpT > 0) ||
                 (entity.waterPunchTimer && entity.waterPunchTimer > 0) ||
@@ -3338,6 +3350,20 @@
                 (entity.windupF && entity.windupF > 0) ||
                 (entity.ultChargeT && entity.ultChargeT > 0)) {
                 return true;
+            }
+
+            // 2. Detect instant single-frame Blinks / Teleports / Burst Dashes (Melvin E, Don E, Gregory E, Blink Gear, Noli G, Ming G, etc.)
+            if (typeof startX === 'number' && typeof startY === 'number' && !(typeof OnlinePlayerProxy !== 'undefined' && entity instanceof OnlinePlayerProxy)) {
+                const stepDist = Math.hypot((entity.x || 0) - startX, (entity.y || 0) - startY);
+                if (stepDist > 42) {
+                    const effSpd = typeof entity.getEffectiveSpeed === 'function'
+                        ? (Number(entity.getEffectiveSpeed()) || 280)
+                        : (Number(entity.speed) || Number(entity.baseSpd) || 280);
+                    const maxNormalWalkStep = Math.max(40, effSpd * Math.max(dt || 0.016, 0.02) * 1.45);
+                    if (stepDist > maxNormalWalkStep) {
+                        return true;
+                    }
+                }
             }
             return false;
         }
@@ -3482,7 +3508,7 @@
                     entity._lastDashDirX = Math.cos(entity.angle || 0);
                     entity._lastDashDirY = Math.sin(entity.angle || 0);
                 }
-                entity._postDashWallGrace = 0.14;
+                entity._postDashWallGrace = 0.18;
             } else if (entity._postDashWallGrace && entity._postDashWallGrace > 0) {
                 const isKnocked =
                     Math.hypot(entity.kbx || 0, entity.kby || 0) > 1 ||
@@ -4925,13 +4951,33 @@
 
         window.spectateIndex = 0;
         window.spectatedTeammate = null;
+        window._lockedPlacementRank = null;
+        window._placementAnimStartMs = 0;
+        window._winSequence = null;
+        window._winSequenceFinished = false;
+        window._lastDestroyedMainTower = null;
 
         function isTeamSpectateMode() {
-            return gameMode === 'squad' || gameMode === '5v5' || gameMode === '5v5_online';
+            return gameMode === 'squad' || gameMode === '5v5' || gameMode === '5v5_online' || gameMode === 'ffa' || gameMode === 'ffa_online';
         }
 
         function getAliveSquadTeammates() {
             if (!player) return [];
+            if (gameMode === 'ffa' || gameMode === 'ffa_online') {
+                return entities.filter(e =>
+                    e &&
+                    e instanceof Entity &&
+                    e !== player &&
+                    !e.dead &&
+                    !e.del &&
+                    (e.countsAsFFAHero === true || (typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy)) &&
+                    !(e instanceof Sentry) &&
+                    !(e instanceof Tripmine) &&
+                    (typeof DefenseTower === 'undefined' || !(e instanceof DefenseTower)) &&
+                    (typeof MainTower === 'undefined' || !(e instanceof MainTower)) &&
+                    (typeof FallenStatue === 'undefined' || !(e instanceof FallenStatue))
+                );
+            }
             const playerTeam = typeof player.team !== 'undefined' ? player.team : 0;
             return entities.filter(e =>
                 e &&
@@ -4964,10 +5010,138 @@
             }
             window.spectatedTeammate = aliveTeammates[window.spectateIndex];
             if (step !== 0 && window.spectatedTeammate) {
-                addKillMsg(`Spectating: ${window.spectatedTeammate.name || 'Teammate'}`);
+                addKillMsg(`Spectating: ${window.spectatedTeammate.name || 'Player'}`);
             }
             return window.spectatedTeammate;
         }
+
+        function computePlayerPlacementRank(isWinner = false) {
+            if (isWinner) return 1;
+            if (typeof window._lockedPlacementRank === 'number' && window._lockedPlacementRank >= 1) {
+                return window._lockedPlacementRank;
+            }
+            if (gameMode === 'squad') {
+                const pTeam = player ? player.team : 0;
+                const enemyTeams = new Set();
+                for (let e of entities) {
+                    if (e && e instanceof Entity && !e.dead && !e.del && e.countsAsFFAHero !== false && !(e instanceof Sentry) && !(e instanceof Tripmine) && e.team !== undefined && e.team !== pTeam) {
+                        enemyTeams.add(e.team);
+                    }
+                }
+                return Math.max(2, enemyTeams.size + 1);
+            }
+            if (gameMode === 'ffa_online') {
+                const proxyAlive = entities.filter(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && !e.dead).length;
+                if (typeof window.latestServerAliveCount === 'number') {
+                    return Math.max(2, Math.max(proxyAlive + 1, window.latestServerAliveCount));
+                }
+                return Math.max(2, proxyAlive + 1);
+            }
+            if (gameMode === 'ffa') {
+                const botsAlive = entities.filter(e => isCountedAsHero(e) && !e.isPlayer && !e.dead).length;
+                return Math.max(2, botsAlive + 1);
+            }
+            return isWinner ? 1 : 2;
+        }
+
+        function lockPlayerPlacementOnDeath() {
+            if (typeof window._lockedPlacementRank !== 'number' || window._lockedPlacementRank < 1) {
+                window._lockedPlacementRank = computePlayerPlacementRank(false);
+                window._placementAnimStartMs = Date.now();
+            }
+            return window._lockedPlacementRank;
+        }
+
+        // Animated #XX Position Badge Renderer (used in Spectate Mode and Winning Camera Zoom Animation)
+        function drawPlacementRankAnimation(ctx, rankNum, startMs, cx, cy, isVictory = false) {
+            const elapsedSec = Math.max(0, (Date.now() - (startMs || Date.now())) / 1000);
+            // Elastic pop-in scale animation over first 0.65s, then smooth pulse
+            let scale = 1.0;
+            if (elapsedSec < 0.22) {
+                scale = 0.25 + (elapsedSec / 0.22) * 1.15; // 0.25 -> 1.40
+            } else if (elapsedSec < 0.42) {
+                scale = 1.40 - ((elapsedSec - 0.22) / 0.20) * 0.48; // 1.40 -> 0.92
+            } else if (elapsedSec < 0.62) {
+                scale = 0.92 + ((elapsedSec - 0.42) / 0.20) * 0.14; // 0.92 -> 1.06
+            } else {
+                scale = 1.0 + Math.sin(elapsedSec * 4.5) * 0.04;
+            }
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(scale, scale);
+
+            // Rotating polygon prestige rays behind #XX badge
+            const rayCount = 8;
+            const rot = elapsedSec * 1.1;
+            for (let i = 0; i < rayCount; i++) {
+                const a = rot + (i * Math.PI * 2) / rayCount;
+                ctx.save();
+                ctx.rotate(a);
+                ctx.fillStyle = isVictory
+                    ? (i % 2 === 0 ? 'rgba(250, 204, 21, 0.28)' : 'rgba(0, 245, 212, 0.24)')
+                    : (i % 2 === 0 ? 'rgba(239, 68, 68, 0.22)' : 'rgba(251, 191, 36, 0.18)');
+                ctx.beginPath();
+                ctx.moveTo(0, -8);
+                ctx.lineTo(95, -18);
+                ctx.lineTo(112, 0);
+                ctx.lineTo(95, 18);
+                ctx.lineTo(0, 8);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Octagonal Crest Plate
+            const plateW = 148, plateH = 64, cut = 14;
+            ctx.fillStyle = 'rgba(9, 13, 22, 0.92)';
+            ctx.strokeStyle = isVictory ? '#facc15' : '#f59e0b';
+            ctx.lineWidth = 3.2;
+            ctx.beginPath();
+            ctx.moveTo(-plateW / 2 + cut, -plateH / 2);
+            ctx.lineTo(plateW / 2 - cut, -plateH / 2);
+            ctx.lineTo(plateW / 2, -plateH / 2 + cut);
+            ctx.lineTo(plateW / 2, plateH / 2 - cut);
+            ctx.lineTo(plateW / 2 - cut, plateH / 2);
+            ctx.lineTo(-plateW / 2 + cut, plateH / 2);
+            ctx.lineTo(-plateW / 2, plateH / 2 - cut);
+            ctx.lineTo(-plateW / 2, -plateH / 2 + cut);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Animated #XX Text
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = '900 36px Inter, Segoe UI, Arial, sans-serif';
+            ctx.fillStyle = isVictory ? '#fde047' : '#fbbf24';
+            ctx.strokeStyle = '#090d16';
+            ctx.lineWidth = 4;
+            const rankStr = `#${rankNum}`;
+            ctx.strokeText(rankStr, 0, -2);
+            ctx.fillText(rankStr, 0, -2);
+
+            ctx.font = 'bold 11px Inter, Segoe UI, Arial, sans-serif';
+            ctx.fillStyle = isVictory ? '#67e8f9' : '#cbd5e1';
+            ctx.fillText(isVictory ? 'CHAMPION POSITION' : 'YOUR POSITION', 0, 22);
+
+            ctx.restore();
+        }
+
+        // Immediate Quit for Squad Mode & FFA Spectating (takes the loss & leaves immediately without any animation; blocked in 5v5)
+        window.quitMatchImmediately = function() {
+            if (gameMode === '5v5' || gameMode === '5v5_online') return;
+            window._winSequence = null;
+            window._winSequenceFinished = true;
+            gameRunning = false;
+            window.spectatedTeammate = null;
+            const quitBtn = document.getElementById('squadQuitBtn');
+            if (quitBtn) quitBtn.style.display = 'none';
+            if (typeof onlineSocket !== 'undefined' && onlineSocket) {
+                try { onlineSocket.emit('leaveQueue'); } catch (_) {}
+            }
+            location.reload();
+        };
 
         function cleanupEntityVisualsAndEffects(entity) {
             if (!entity) return;
@@ -8649,12 +8823,19 @@
                     }
                 }
 
-                // If a MainTower dies in 5v5, immediately end the match.
+                // If a MainTower dies in 5v5, record its coordinates for the broken-tower zoom animation and trigger endGame
                 if ((gameMode === '5v5' || gameMode === '5v5_online') && this instanceof MainTower) {
-                    // Determine winning team: opposite of the destroyed main tower
+                    window._lastDestroyedMainTower = {
+                        x: this.x,
+                        y: this.y,
+                        team: this.team,
+                        name: this.name || (this.team === 1 ? 'Blue Base' : 'Red Base'),
+                        color: this.color || (this.team === 1 ? '#00BFFF' : '#FF4444'),
+                        destroyedAt: Date.now()
+                    };
+                    this.hp = 0;
                     const winningTeam = (this.team === 1) ? 2 : 1;
-                    const playerWon = (typeof player !== 'undefined' && player.team === winningTeam);
-                    // Ensure UI/game loop transitions to end state
+                    const playerWon = (typeof player !== 'undefined' && player && player.team === winningTeam);
                     endGame(playerWon);
                     return; // stop further death processing
                 }
@@ -8769,23 +8950,27 @@
                 // Check if Vival has a revive available - require `reviveReady` flag too
                 let vivalCanRevive = this instanceof Vival && this.ritualActive && !this.secondLifeTriggered && this.reviveReady;
                 if(!vivalCanRevive) {
-                    if(this.isPlayer && gameMode === 'squad') {
-                        const aliveTeammates = getAliveSquadTeammates();
-                        if(aliveTeammates.length > 0) {
+                    if (this.isPlayer && gameMode !== '5v5' && gameMode !== '5v5_online' && gameMode !== 'training') {
+                        lockPlayerPlacementOnDeath();
+                    }
+                    if(this.isPlayer && (gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'ffa_online')) {
+                        const aliveTargets = getAliveSquadTeammates();
+                        if(aliveTargets.length > 0) {
                             window.spectateIndex = 0;
-                            window.spectatedTeammate = aliveTeammates[0];
-                            addKillMsg(`You died! Spectating ${window.spectatedTeammate.name || 'Teammate'} (Right-click to switch)`);
+                            window.spectatedTeammate = aliveTargets[0];
+                            const rankLocked = lockPlayerPlacementOnDeath();
+                            addKillMsg(`Eliminated at #${rankLocked}! Spectating ${window.spectatedTeammate.name || 'Player'} (Right-click to switch)`);
                         } else {
                             endGame(false);
                         }
-                    } else if(!this.isPlayer && gameMode === 'squad' && player && player.dead && this.team === player.team) {
-                        const aliveTeammates = getAliveSquadTeammates();
-                        if(aliveTeammates.length > 0) {
-                            if(!window.spectatedTeammate || window.spectatedTeammate.dead || window.spectatedTeammate === this) {
-                                switchSpectateTeammate(0);
-                            }
-                        } else {
+                    } else if(!this.isPlayer && (gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'ffa_online') && player && player.dead) {
+                        const aliveTargets = getAliveSquadTeammates();
+                        if ((gameMode === 'ffa' || gameMode === 'ffa_online') && aliveTargets.length <= 1) {
                             endGame(false);
+                        } else if (gameMode === 'squad' && aliveTargets.length === 0) {
+                            endGame(false);
+                        } else if (!window.spectatedTeammate || window.spectatedTeammate.dead || window.spectatedTeammate === this) {
+                            switchSpectateTeammate(0);
                         }
                     } else if(this.isPlayer && gameMode === 'training') {
                         this.dead = false;
@@ -9582,7 +9767,8 @@
                     ctx.fillStyle = getHealthBarColor(this, canExecuteNow);
                     ctx.fillRect(bx, by, bw * hpRatio, bh);
                     if(this.shield>0){
-                        ctx.fillStyle = '#e0f2fe';
+                        const isMeccaYellowShield = !!(this.hasMechArmor || (typeof Mecca !== 'undefined' && this instanceof Mecca) || String(this.heroType || '').toLowerCase() === 'mecca');
+                        ctx.fillStyle = isMeccaYellowShield ? '#facc15' : '#e0f2fe';
                         ctx.fillRect(bx, by, bw * Math.min(1, this.shield / (this.maxHp || 1)), bh);
                     }
                     if (this.enhancedTimer && this.enhancedTimer > 0) {
@@ -30102,10 +30288,16 @@
                         this.deathDragon.hp = Math.max(0, Number(this.deathDragon.maxHp) || 0);
                         this.deathDragon.hitFlash = 0.35;
 
-                        const playerDamage = Math.max(0, Number(amt) || 0) * 0.35;
-                        const cappedDamage = Math.min(playerDamage, Math.max(0, this.hp - 1));
-                        if (cappedDamage > 0) {
-                            this.hp = Math.max(1, this.hp - cappedDamage);
+                        const sharedDamage = Math.ceil(Math.max(0, Number(amt) || 0) * 0.40);
+                        if (sharedDamage > 0) {
+                            this.hp = Math.max(0, this.hp - sharedDamage);
+                            this.totalDamageTaken = (this.totalDamageTaken || 0) + sharedDamage;
+                            if (src && src instanceof Entity && src !== this) {
+                                src.totalDamage = (src.totalDamage || 0) + sharedDamage;
+                            }
+                            if (this.hp <= 0 && !this.dead) {
+                                this.die(src);
+                            }
                         }
 
                         particles.push(new Particle(this.deathDragon.x, this.deathDragon.y, '#d8b4fe', 6, 0.5, 0, 0));
@@ -30563,12 +30755,15 @@
                     if (raw <= 0) return;
                     if (src && (src === this || src === this.owner || (this.team !== undefined && src.team === this.team))) return;
                     this.hitFlash = 0.35;
-                    // Death Dragon has no HP of its own (only targetable) — transfers damage directly to Caskrice
+                    // Death Dragon transfers 40% of incoming damage directly to Caskrice and CAN kill Caskrice if HP reaches 0!
                     if (this.owner && !this.owner.dead) {
-                        const reduced = Math.ceil(raw * 0.35);
+                        const reduced = Math.ceil(raw * 0.40);
                         if (reduced > 0) {
-                            this.owner.hp = Math.max(1, this.owner.hp - reduced);
+                            this.owner.hp = Math.max(0, this.owner.hp - reduced);
                             this.owner.totalDamageTaken = (this.owner.totalDamageTaken || 0) + reduced;
+                            if (src && src instanceof Entity && src !== this.owner) {
+                                src.totalDamage = (src.totalDamage || 0) + reduced;
+                            }
                             if (typeof createDamageNumber === 'function') {
                                 createDamageNumber(this.owner.x, this.owner.y - 28, reduced, false);
                             }
@@ -30592,6 +30787,9 @@
                                         });
                                     } catch (_) {}
                                 }
+                            }
+                            if (this.owner.hp <= 0 && !this.owner.dead) {
+                                this.owner.die(src);
                             }
                         }
                     }
@@ -35497,6 +35695,7 @@
         }
 
         window.startGame = function() {
+            window._lockedPlacementRank = null; window._placementAnimStartMs = 0; window._winSequence = null; window._winSequenceFinished = false; window._lastDestroyedMainTower = null; window._ffaSpectateLastDelay = 0;
             if (window.enforceNoDayumInOnlineQueue && window.enforceNoDayumInOnlineQueue(gameMode)) {
                 return;
             }
@@ -43391,16 +43590,20 @@
             }
 
             restoreMechArmorOnSpawnOrRevive() {
-                if (this.ascended) {
-                    this.form = 'soul_flame';
-                    this.maxHp = 6000;
-                    this.hp = 6000;
-                    this.maxShield = 1200;
-                    this.shield = 1200;
+                // If Mecca already unlocked/used G once, reviving keeps G charged at 100% so G can be activated again (healing the normal 1200 amount instead of full HP)
+                if (this._hasUsedGOnce || this.ascended) {
+                    this._hasUsedGOnce = true;
+                    this.ascended = false;
+                    this.form = 'base';
+                    this.gCharge = 100;
+                    this.maxHp = 5200;
+                    this.hp = 5200;
+                    this.maxShield = 1000;
+                    this.shield = 1000;
                     this.hasMechArmor = true;
-                    this.baseSpd = 325; // +25% faster walkspeed
-                    this.speed = 325;
-                    this.penetration = 0.25; // 25% penetration
+                    this.baseSpd = 260;
+                    this.speed = 260;
+                    this.penetration = 0;
                 } else {
                     this.form = 'base';
                     this.maxHp = 5200;
@@ -43515,15 +43718,11 @@
                     }
                 }
 
-                // Base E: Dash movement after stationary charge release
+                // Base E: Dash movement after stationary charge release (can dash through walls)
                 if (this.eDashTimer > 0) {
                     const stepDt = Math.min(dt, this.eDashTimer);
-                    const preX = this.x, preY = this.y;
                     this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x + this.eDashVx * stepDt));
                     this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y + this.eDashVy * stepDt));
-                    if (typeof clampEntityKnockbackWalls === 'function') {
-                        clampEntityKnockbackWalls(this, preX, preY);
-                    }
                     if (Math.random() < 0.75) {
                         particles.push(new Particle(this.x - Math.cos(this.angle) * 18, this.y - Math.sin(this.angle) * 18, Math.random() < 0.5 ? '#ff5500' : '#ffae00', 4, 0.32));
                     }
@@ -43567,9 +43766,6 @@
                     this.y = this.soulFlightStartY + (this.soulFlightTargetY - this.soulFlightStartY) * prog;
                     this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x));
                     this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y));
-                    if (typeof clampEntityKnockbackWalls === 'function') {
-                        clampEntityKnockbackWalls(this, preX, preY);
-                    }
 
                     // Dual flame + mint fire trail along flight path
                     if (Math.random() < 0.9) {
@@ -43796,12 +43992,8 @@
                 this.kickAnimTimer = 0.42;
 
                 // Extended forward kick lunge
-                const preSelfX = this.x, preSelfY = this.y;
                 this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x + Math.cos(this.angle) * 130));
                 this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y + Math.sin(this.angle) * 130));
-                if (typeof clampEntityKnockbackWalls === 'function') {
-                    clampEntityKnockbackWalls(this, preSelfX, preSelfY);
-                }
 
                 const kickRange = 330; // Much longer max range!
                 const halfWidth = 64;
@@ -43866,14 +44058,17 @@
                 this.form = 'soul_flame';
                 this.gCharge = 100;
 
-                // Permanent stat ascension: 6000 max HP, instant 1200 Mech Armor restore & cap, +25% walk speed, 25% penetration
+                // First time use of G heals ALL HP; subsequent activations after revive heal the normal amount (+1200 HP)
+                const isFirstTimeG = !this._hasUsedGOnce;
+                this._hasUsedGOnce = true;
                 if (this._fadingSoulOrigMaxHp) {
                     this._fadingSoulOrigMaxHp = 6000;
                     this.maxHp = Math.round(6000 * 0.90);
                 } else {
                     this.maxHp = 6000;
                 }
-                this.hp = Math.min(this.maxHp, this.hp + 1200);
+                const healGiven = isFirstTimeG ? this.maxHp : 1200;
+                this.hp = isFirstTimeG ? this.maxHp : Math.min(this.maxHp, this.hp + 1200);
                 this.maxShield = 1200;
                 this.shield = 1200;
                 this.hasMechArmor = true;
@@ -43901,7 +44096,7 @@
 
                 if (this.isPlayer && gameMode && gameMode.includes('online') && typeof onlineSocket !== 'undefined' && onlineSocket) {
                     try {
-                        onlineSocket.emit('playerHeal', { amount: 1200 });
+                        onlineSocket.emit('playerHeal', { amount: healGiven });
                         onlineSocket.emit('playerUpdate', {
                             x: Math.round(this.x),
                             y: Math.round(this.y),
@@ -43934,9 +44129,6 @@
                 const dirX = Math.cos(this.angle), dirY = Math.sin(this.angle);
                 this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x + dirX * dashLen));
                 this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y + dirY * dashLen));
-                if (typeof clampEntityKnockbackWalls === 'function') {
-                    clampEntityKnockbackWalls(this, startX, startY);
-                }
 
                 // Draw exact dash & slash corridor in Normal Flame + Mint Soul Fire
                 visualEffects.push(new MeccaPolygonAttackEffect('dash_corridor', startX, startY, this.angle, {
@@ -44498,11 +44690,12 @@
                 ctx.closePath();
                 ctx.fill();
 
-                // E. Mech Armor Hex-Shield Frame (when 1000 / 1200 Mech Armor is active)
+                // E. Yellow Mech Armor Hex-Shield Frame (indicates true damage & penetration block without text/emoji)
                 if (this.shield > 0 && this.hasMechArmor) {
                     const sr = this.radius + 8;
-                    ctx.strokeStyle = isSoul ? '#00f5d4' : '#ffae00';
-                    ctx.lineWidth = 2.8;
+                    ctx.strokeStyle = '#facc15';
+                    ctx.fillStyle = 'rgba(250, 204, 21, 0.14)';
+                    ctx.lineWidth = 3.0;
                     ctx.beginPath();
                     for (let i = 0; i < 8; i++) {
                         const a = tNow * 0.2 + (i * Math.PI * 2) / 8;
@@ -44590,7 +44783,13 @@
                 }
                 return;
             }
-            if(player.dead) return;
+            if(!player || player.dead) {
+                if (gameMode === 'ffa') {
+                    let remainingBots = entities.filter(e => isCountedAsHero(e) && !e.isPlayer && !e.dead).length;
+                    if (remainingBots <= 1) endGame(false);
+                }
+                return;
+            }
             
             if(gameMode === '5v5') {
                 // 5v5 Mode: Check if all enemies on red team (team 2) are eliminated
@@ -44602,28 +44801,64 @@
                 if(remainingBots === 0) endGame(true);
             }
         }
-        function endGame(vic){
+        function endGame(vic, opts = null){
+            if (opts && opts.immediateQuit) {
+                window.quitMatchImmediately();
+                return;
+            }
             if (!gameRunning && window._endGameShownAt && (Date.now() - window._endGameShownAt < 2500)) return;
+            const rankNum = vic ? 1 : computePlayerPlacementRank(false);
+
+            // Trigger Winning Camera Zoom Animation (zooms to player in FFA/1v1/Squad, or to the broken Main Tower in 5v5) before showing the win screen!
+            const shouldPlayWinZoom = (vic || ((gameMode === '5v5' || gameMode === '5v5_online') && window._lastDestroyedMainTower)) && !window._winSequenceFinished;
+            if (shouldPlayWinZoom) {
+                if (window._winSequence && window._winSequence.active) return;
+                let zoomX = player ? player.x : WORLD_SIZE / 2;
+                let zoomY = player ? player.y : WORLD_SIZE / 2;
+                if ((gameMode === '5v5' || gameMode === '5v5_online') && window._lastDestroyedMainTower) {
+                    zoomX = window._lastDestroyedMainTower.x;
+                    zoomY = window._lastDestroyedMainTower.y;
+                } else if (gameMode === 'squad' && player && player.dead && window.spectatedTeammate && !window.spectatedTeammate.dead) {
+                    zoomX = window.spectatedTeammate.x;
+                    zoomY = window.spectatedTeammate.y;
+                }
+                window._winSequence = {
+                    active: true,
+                    vic: !!vic,
+                    rank: rankNum,
+                    startMs: Date.now(),
+                    durationMs: 2400,
+                    targetX: zoomX,
+                    targetY: zoomY
+                };
+                if (vic && (gameMode === 'ffa_online' || gameMode === 'duel_online') && onlineSocket) {
+                    onlineSocket.emit('playerVictory', {
+                        winnerId: onlineSocket.id,
+                        winnerName: player?.name || 'Player'
+                    });
+                }
+                return;
+            }
+
             window._endGameShownAt = Date.now();
             gameRunning=false;
+            const quitBtn = document.getElementById('squadQuitBtn');
+            if (quitBtn) quitBtn.style.display = 'none';
             let s=document.getElementById('gameOverScreen');
             s.style.display='flex';
             let t=document.getElementById('goTitle'),sub=document.getElementById('goSub');
             if(vic){
                 t.innerText="VICTORY";
                 t.style.color="#00bcd4";
-                sub.innerText="Champion!";
-                // Broadcast victory to all other players in online FFA
-                if((gameMode === 'ffa_online' || gameMode === 'duel_online') && onlineSocket) {
-                    onlineSocket.emit('playerVictory', {
-                        winnerId: onlineSocket.id,
-                        winnerName: player?.name || 'Player'
-                    });
-                }
+                sub.innerText = (gameMode === '5v5' || gameMode === '5v5_online')
+                    ? "Enemy Base Destroyed! Champion!"
+                    : `Position #1 — Champion!`;
             } else {
                 t.innerText="DEFEAT";
                 t.style.color="#e74c3c";
-                sub.innerText="Try again.";
+                sub.innerText = (gameMode === '5v5' || gameMode === '5v5_online')
+                    ? "Your Base Was Destroyed!"
+                    : `Final Position: #${rankNum}`;
             }
         }
         
@@ -44951,6 +45186,8 @@
             }
             if(sb){
                 if(p.shield > 0){
+                    const isMeccaYellowShield = !!(p.hasMechArmor || (typeof Mecca !== 'undefined' && p instanceof Mecca) || String(p.heroType || '').toLowerCase() === 'mecca');
+                    sb.style.background = isMeccaYellowShield ? '#facc15' : 'rgba(228, 228, 231, 0.75)';
                     const shieldPct = Math.max(0, Math.min(100, (p.shield / maxHpSafe) * 100));
                     const shieldLeft = Math.max(0, Math.min(100 - shieldPct, hpPct));
                     sb.style.left = shieldLeft + '%';
@@ -45841,7 +46078,8 @@
                 ctx.fillStyle = getHealthBarColor(ent, false);
                 ctx.fillRect(bx, by, bw * hpRatio, bh);
                 if (ent.shield > 0) {
-                    ctx.fillStyle = '#e0f2fe';
+                    const isMeccaYellowShield = !!(ent.hasMechArmor || (typeof Mecca !== 'undefined' && ent instanceof Mecca) || String(ent.heroType || '').toLowerCase() === 'mecca');
+                    ctx.fillStyle = isMeccaYellowShield ? '#facc15' : '#e0f2fe';
                     ctx.fillRect(bx, by, bw * Math.min(1, ent.shield / (ent.maxHp || 1)), bh);
                 }
                 if (ent.enhancedTimer && ent.enhancedTimer > 0) {
@@ -46413,10 +46651,15 @@
                     let warning = document.getElementById('safeZoneWarning');
                     if((distToCenter > safeZoneRadius) && !gameMode.includes('online') && gameMode !== '1v1' && gameMode !== 'duel_online') warning.style.display = 'block';
                     else warning.style.display = 'none';
-                } else if (player && player.dead && gameMode === 'squad') {
+                } else if (player && player.dead && (gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'ffa_online')) {
                     const aliveTeammates = getAliveSquadTeammates();
-                    if (aliveTeammates.length === 0) {
-                        endGame(false);
+                    if (aliveTeammates.length === 0 || ((gameMode === 'ffa' || gameMode === 'ffa_online') && aliveTeammates.length <= 1 && !window._winSequence)) {
+                        if ((gameMode === 'ffa' || gameMode === 'ffa_online') && aliveTeammates.length === 1 && !window._ffaSpectateLastDelay) {
+                            window._ffaSpectateLastDelay = Date.now();
+                        }
+                        if (gameMode === 'squad' || aliveTeammates.length === 0 || (Date.now() - (window._ffaSpectateLastDelay || Date.now())) > 1200) {
+                            endGame(false);
+                        }
                     } else {
                         if (!window.spectatedTeammate || window.spectatedTeammate.dead || !aliveTeammates.includes(window.spectatedTeammate)) {
                             switchSpectateTeammate(0);
@@ -46435,7 +46678,7 @@
                             updateHUD(specTarget);
                             let distToCenter = Math.sqrt((specTarget.x - WORLD_SIZE/2)**2 + (specTarget.y - WORLD_SIZE/2)**2);
                             let warning = document.getElementById('safeZoneWarning');
-                            if (warning) warning.style.display = (distToCenter > safeZoneRadius) ? 'block' : 'none';
+                            if (warning) warning.style.display = ((distToCenter > safeZoneRadius) && !gameMode.includes('online')) ? 'block' : 'none';
                         }
                     }
                 } else if (player && player.dead && (gameMode === '5v5' || gameMode === '5v5_online')) {
@@ -46500,6 +46743,36 @@
                         }
                     }
                     
+                    // Draw shattered Main Tower rubble during 5v5 broken-tower zoom animation
+                    if ((gameMode === '5v5' || gameMode === '5v5_online') && window._lastDestroyedMainTower) {
+                        const bt = window._lastDestroyedMainTower;
+                        const btx = bt.x - camera.x, bty = bt.y - camera.y;
+                        const age = Math.min(1, (Date.now() - (bt.destroyedAt || Date.now())) / 2200);
+                        CTX.save();
+                        CTX.fillStyle = '#1e293b';
+                        CTX.strokeStyle = bt.team === 1 ? '#00BFFF' : '#FF4444';
+                        CTX.lineWidth = 4;
+                        CTX.beginPath();
+                        CTX.arc(btx, bty, 62, 0, Math.PI * 2);
+                        CTX.fill();
+                        CTX.stroke();
+                        // Jagged fracture cracks across the broken tower base
+                        CTX.strokeStyle = '#facc15';
+                        CTX.lineWidth = 3.5;
+                        for (let k = 0; k < 6; k++) {
+                            const ca = (k * Math.PI) / 3 + 0.2;
+                            CTX.beginPath();
+                            CTX.moveTo(btx, bty);
+                            CTX.lineTo(btx + Math.cos(ca) * 58, bty + Math.sin(ca) * 58);
+                            CTX.stroke();
+                        }
+                        CTX.fillStyle = `rgba(255, 85, 0, ${0.85 * (1 - age * 0.4)})`;
+                        CTX.beginPath();
+                        CTX.arc(btx, bty, 28 * (1 + Math.sin(Date.now() * 0.025) * 0.2), 0, Math.PI * 2);
+                        CTX.fill();
+                        CTX.restore();
+                    }
+
                     // Draw Safe Zone
                     CTX.strokeStyle = '#0f0'; CTX.lineWidth = 5;
                     CTX.beginPath(); 
@@ -47323,52 +47596,136 @@
                         CTX.restore();
                     }
 
-                    // Draw Squad mode teammate HUD & spectating overlay on top of world canvas
+                    // Manage Squad Quit Button visibility (visible in Squad mode or when spectating in FFA; NEVER in 5v5)
+                    const quitBtnEl = document.getElementById('squadQuitBtn');
+                    if (quitBtnEl) {
+                        const showQuit = gameRunning && !window._winSequence && (
+                            gameMode === 'squad' ||
+                            ((gameMode === 'ffa' || gameMode === 'ffa_online') && player && player.dead)
+                        );
+                        quitBtnEl.style.display = showQuit ? 'block' : 'none';
+                    }
+
+                    // Draw Squad mode teammate HUD & Spectating Overlay (for both Squad and FFA!) with animated #XX Position Badge
                     if (gameMode === 'squad') {
                         drawTeammateHUD(CTX);
-                        if (player && player.dead) {
-                            const aliveTeammates = getAliveSquadTeammates();
-                            const spec = window.spectatedTeammate;
-                            if (spec && !spec.dead && aliveTeammates.length > 0) {
-                                const specIdx = aliveTeammates.indexOf(spec) + 1;
-                                const heroClass = spec.constructor && spec.constructor.name ? spec.constructor.name : 'Hero';
-                                CTX.save();
-                                const panelW = 420, panelH = 96;
-                                const panelX = (CANVAS.width - panelW) / 2;
-                                const panelY = CANVAS.height - 210;
-                                CTX.fillStyle = 'rgba(10, 15, 28, 0.82)';
-                                CTX.fillRect(panelX, panelY, panelW, panelH);
-                                CTX.strokeStyle = '#00e676';
-                                CTX.lineWidth = 2;
-                                CTX.strokeRect(panelX, panelY, panelW, panelH);
+                    }
+                    if ((gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'ffa_online') && player && player.dead && !window._winSequence) {
+                        const aliveTeammates = getAliveSquadTeammates();
+                        const spec = window.spectatedTeammate;
+                        if (spec && !spec.dead && aliveTeammates.length > 0) {
+                            const specIdx = aliveTeammates.indexOf(spec) + 1;
+                            const heroClass = (typeof OnlinePlayerProxy !== 'undefined' && spec instanceof OnlinePlayerProxy)
+                                ? (spec.heroType ? spec.heroType.toUpperCase() : 'PLAYER')
+                                : (spec.constructor && spec.constructor.name ? spec.constructor.name : 'Hero');
+                            const myRank = lockPlayerPlacementOnDeath();
 
-                                CTX.textAlign = 'center';
-                                CTX.fillStyle = '#00e676';
-                                CTX.font = 'bold 20px Arial';
-                                CTX.fillText(`SPECTATING: ${spec.name || 'Teammate'} (${heroClass})`, CANVAS.width / 2, panelY + 28);
+                            // Render animated #XX Position Badge above the spectate panel
+                            drawPlacementRankAnimation(
+                                CTX,
+                                myRank,
+                                window._placementAnimStartMs || Date.now(),
+                                CANVAS.width / 2,
+                                CANVAS.height - 268,
+                                false
+                            );
 
-                                // Spectated teammate HP bar
-                                const hpBarW = 280, hpBarH = 14;
-                                const hpBarX = (CANVAS.width - hpBarW) / 2;
-                                const hpBarY = panelY + 40;
-                                const hpPct = Math.max(0, Math.min(1, spec.hp / (spec.maxHp || 1)));
-                                CTX.fillStyle = 'rgba(50, 50, 50, 0.9)';
-                                CTX.fillRect(hpBarX, hpBarY, hpBarW, hpBarH);
-                                CTX.fillStyle = hpPct > 0.5 ? '#00e676' : (hpPct > 0.25 ? '#ffeb3b' : '#ff5252');
-                                CTX.fillRect(hpBarX, hpBarY, hpBarW * hpPct, hpBarH);
-                                CTX.strokeStyle = '#ffffff';
-                                CTX.lineWidth = 1;
-                                CTX.strokeRect(hpBarX, hpBarY, hpBarW, hpBarH);
+                            CTX.save();
+                            const panelW = 440, panelH = 98;
+                            const panelX = (CANVAS.width - panelW) / 2;
+                            const panelY = CANVAS.height - 210;
+                            CTX.fillStyle = 'rgba(10, 15, 28, 0.86)';
+                            CTX.fillRect(panelX, panelY, panelW, panelH);
+                            CTX.strokeStyle = gameMode === 'squad' ? '#00e676' : '#38bdf8';
+                            CTX.lineWidth = 2;
+                            CTX.strokeRect(panelX, panelY, panelW, panelH);
 
-                                CTX.fillStyle = '#ffffff';
-                                CTX.font = 'bold 11px Arial';
-                                CTX.fillText(`${Math.ceil(spec.hp)} / ${spec.maxHp} HP`, CANVAS.width / 2, hpBarY + 11);
+                            CTX.textAlign = 'center';
+                            CTX.fillStyle = gameMode === 'squad' ? '#00e676' : '#38bdf8';
+                            CTX.font = 'bold 19px Arial';
+                            CTX.fillText(`SPECTATING: ${spec.name || 'Player'} (${heroClass})`, CANVAS.width / 2, panelY + 26);
 
-                                CTX.fillStyle = '#ffd54f';
-                                CTX.font = 'bold 14px Arial';
-                                CTX.fillText(`Right-Click to Switch Teammate (${specIdx}/${aliveTeammates.length})`, CANVAS.width / 2, panelY + 80);
-                                CTX.restore();
-                            }
+                            // Spectated entity HP bar
+                            const hpBarW = 280, hpBarH = 14;
+                            const hpBarX = (CANVAS.width - hpBarW) / 2;
+                            const hpBarY = panelY + 38;
+                            const hpPct = Math.max(0, Math.min(1, spec.hp / (spec.maxHp || 1)));
+                            CTX.fillStyle = 'rgba(50, 50, 50, 0.9)';
+                            CTX.fillRect(hpBarX, hpBarY, hpBarW, hpBarH);
+                            CTX.fillStyle = hpPct > 0.5 ? '#00e676' : (hpPct > 0.25 ? '#ffeb3b' : '#ff5252');
+                            CTX.fillRect(hpBarX, hpBarY, hpBarW * hpPct, hpBarH);
+                            CTX.strokeStyle = '#ffffff';
+                            CTX.lineWidth = 1;
+                            CTX.strokeRect(hpBarX, hpBarY, hpBarW, hpBarH);
+
+                            CTX.fillStyle = '#ffffff';
+                            CTX.font = 'bold 11px Arial';
+                            CTX.fillText(`${Math.ceil(spec.hp)} / ${spec.maxHp} HP`, CANVAS.width / 2, hpBarY + 11);
+
+                            CTX.fillStyle = '#ffd54f';
+                            CTX.font = 'bold 13px Arial';
+                            const switchLabel = gameMode === 'squad' ? 'Teammate' : 'Player';
+                            CTX.fillText(`Position #${myRank}  •  Right-Click to Switch ${switchLabel} (${specIdx}/${aliveTeammates.length})`, CANVAS.width / 2, panelY + 78);
+                            CTX.restore();
+                        }
+                    }
+
+                    // Winning Camera Zoom Animation (zooms to player in FFA/1v1/Squad, or to broken Main Tower in 5v5) + #1 Position Animation!
+                    if (window._winSequence && window._winSequence.active) {
+                        const ws = window._winSequence;
+                        const elapsed = Date.now() - ws.startMs;
+                        const prog = Math.max(0, Math.min(1, elapsed / (ws.durationMs || 2400)));
+                        const ease = 1 - Math.pow(1 - prog, 3);
+
+                        // Keep target updated if zooming to live player in FFA/1v1
+                        if (gameMode !== '5v5' && gameMode !== '5v5_online' && player && !player.dead) {
+                            ws.targetX = player.x;
+                            ws.targetY = player.y;
+                        }
+                        camera.zoom = 1.0 + 1.05 * ease; // Smooth zoom in up to 2.05x
+                        const viewWZoom = CANVAS.width / camera.zoom;
+                        const viewHZoom = CANVAS.height / camera.zoom;
+                        const desiredCamX = Math.max(0, Math.min(WORLD_SIZE - viewWZoom, ws.targetX - viewWZoom / 2));
+                        const desiredCamY = Math.max(0, Math.min(WORLD_SIZE - viewHZoom, ws.targetY - viewHZoom / 2));
+                        camera.x += (desiredCamX - camera.x) * 0.22;
+                        camera.y += (desiredCamY - camera.y) * 0.22;
+
+                        // If 5v5 broken tower zoom, spawn continuous collapse explosions around the broken tower
+                        if ((gameMode === '5v5' || gameMode === '5v5_online') && window._lastDestroyedMainTower && Math.random() < 0.65) {
+                            const bt = window._lastDestroyedMainTower;
+                            const a = Math.random() * Math.PI * 2;
+                            const r = Math.random() * 65;
+                            particles.push(new Particle(bt.x + Math.cos(a) * r, bt.y + Math.sin(a) * r, Math.random() < 0.5 ? '#ff5500' : '#facc15', 5.5, 0.55));
+                        } else if (ws.vic && Math.random() < 0.55) {
+                            const a = Math.random() * Math.PI * 2;
+                            particles.push(new Particle(ws.targetX + Math.cos(a) * 45, ws.targetY + Math.sin(a) * 45, Math.random() < 0.5 ? '#fde047' : '#00f5d4', 4.5, 0.5));
+                        }
+
+                        // Render dramatic Victory / Tower Destroyed Banner & Animated #1 Position Badge
+                        CTX.save();
+                        CTX.textAlign = 'center';
+                        CTX.font = '900 42px Inter, Segoe UI, Arial, sans-serif';
+                        CTX.fillStyle = ws.vic ? '#00f5d4' : '#ef4444';
+                        CTX.strokeStyle = '#090d16';
+                        CTX.lineWidth = 6;
+                        const headerTxt = (gameMode === '5v5' || gameMode === '5v5_online')
+                            ? (ws.vic ? 'ENEMY BASE DESTROYED!' : 'BASE DESTROYED!')
+                            : 'VICTORY!';
+                        CTX.strokeText(headerTxt, CANVAS.width / 2, 110);
+                        CTX.fillText(headerTxt, CANVAS.width / 2, 110);
+                        CTX.restore();
+
+                        if (gameMode !== '5v5' && gameMode !== '5v5_online') {
+                            drawPlacementRankAnimation(CTX, ws.rank || 1, ws.startMs, CANVAS.width / 2, 190, ws.vic);
+                        }
+
+                        if (elapsed >= (ws.durationMs || 2400)) {
+                            const finalVic = ws.vic;
+                            window._winSequence.active = false;
+                            window._winSequence = null;
+                            window._winSequenceFinished = true;
+                            camera.zoom = 1.0;
+                            endGame(finalVic);
                         }
                     }
 
@@ -53200,7 +53557,7 @@
                             const dDist = Math.hypot(src.x - this.deathDragon.x, src.y - this.deathDragon.y);
                             const pDist = Math.hypot(src.x - this.x, src.y - this.y);
                             if (dDist <= 170 && dDist < pDist) {
-                                baseAmt *= 0.35;
+                                baseAmt *= 0.40;
                             }
                         }
                     }
@@ -54509,6 +54866,21 @@
                   finalDmg *= src.dmgMult;
                 }
                 if (finalDmg <= 0) return;
+
+                if (this.summonType === 'deathDragon') {
+                  const sharedDmg = Math.max(1, Math.ceil(finalDmg * 0.40));
+                  if (this.owner && !this.owner.dead && typeof this.owner.broadcastDamageToServer === 'function') {
+                    const nextOwnerHp = Math.max(0, (this.owner.hp || 0) - sharedDmg);
+                    this.owner.setAuthoritativeHp(nextOwnerHp);
+                    this.owner.broadcastDamageToServer(sharedDmg, src || player, { isTrue: true });
+                  } else {
+                    this.emitSummonDamageToOwner(finalDmg);
+                  }
+                  try {
+                    effects.push(new TextPop(this.x, this.y - (this.radius || 20) - 6, "-" + sharedDmg, '#e879f9'));
+                  } catch (_) {}
+                  return;
+                }
 
                 this._inTakeDamage = true;
                 try {
