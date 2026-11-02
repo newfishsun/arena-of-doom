@@ -862,17 +862,18 @@ io.on('connection', (socket) => {
     } else {
       if (!matchmakingTimers[mode] || !matchmakingTimers[mode].timeoutId) {
         if (!matchmakingTimers[mode]) matchmakingTimers[mode] = {};
-        console.log(`⏳ Queue for '${mode}' has ${q.length} player(s); starting 8s auto-start timer`);
+        const autoStartWaitMs = (mode === 'ffa' || mode === '5v5') ? 30000 : 8000;
+        console.log(`⏳ Queue for '${mode}' has ${q.length} player(s); starting ${autoStartWaitMs / 1000}s auto-start timer`);
         matchmakingTimers[mode].timeoutId = setTimeout(() => {
           const currentQ = queues.get(mode) || [];
           if (currentQ.length > 0) {
-            const needBots = currentQ.length === 1;
             const matchCap = mode === 'duel' ? 2 : (mode === '5v5' ? 10 : Math.min(maxPlayers, 6));
-            console.log(`⏱️ Auto-starting '${mode}' match with ${currentQ.length} human player(s) (fillWithBots=${needBots})`);
+            const needBots = currentQ.length < matchCap;
+            console.log(`⏱️ Auto-starting '${mode}' match with ${currentQ.length} human player(s) after ${autoStartWaitMs / 1000}s (fillWithBots=${needBots}, matchCap=${matchCap})`);
             createMatch(mode, needBots, matchCap, true);
           }
           if (matchmakingTimers[mode]) matchmakingTimers[mode].timeoutId = null;
-        }, 8000);
+        }, autoStartWaitMs);
       }
     }
   });

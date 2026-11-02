@@ -3257,7 +3257,9 @@
                         convenienceStores.push(new ConvenienceStore(st.x, st.y));
                     }
                 }
-                if (Array.isArray(layoutData.mapWalls)) {
+                if (gameMode === '5v5' || gameMode === '5v5_online') {
+                    spawnMapWalls();
+                } else if (Array.isArray(layoutData.mapWalls)) {
                     for (const mw of layoutData.mapWalls) {
                         mapWalls.push(new MapWall(mw.x, mw.y, mw.width || mw.w, mw.height || mw.h));
                     }
@@ -3305,58 +3307,37 @@
         }
 
         function isEntityDashingNow(entity, startX, startY, dt) {
-            if (!entity) return false;
-            // Comprehensive check across all hero dash, rush, lunge, jump, dive, and vehicle abilities (including Ian's qDashTimer / fRushTimer)
-            if (entity.dashing || entity.isDashing || entity.qDashing || entity.eDashing || entity.fDashing ||
-                entity.isDashingF || entity.isDashingUlt || entity.dash || entity.gActive ||
-                entity.inNihilityCounter || entity.waterPunching || entity.rushing || entity.eRushing ||
-                entity.carRushing || entity.drive || entity.jumping || entity.isJumping ||
-                entity.leaping || entity.flying || entity.fJumpActive || entity.dashBurst ||
-                entity.dashSequenceActive || entity.curvedDash || entity.carLiftActive ||
-                entity.corneringActive || entity.skyscraperActive || entity.helicopterActive ||
-                entity.truckActive || entity.bikeActive || entity.skatingActive || entity.hookActive ||
+            if (!entity || entity.isDrone) return false;
+            // Strict check for active short dash/lunge/leap/flight abilities only (never sticky timers or speed buffs!)
+            if (entity.dashing === true || entity.isDashing === true || entity.qDashing === true ||
+                entity.eDashing === true || entity.fDashing === true || entity.isDashingF === true ||
+                entity.isDashingUlt === true || entity.dash === true || entity.gActive === true ||
+                entity.waterPunching === true || entity.rushing === true || entity.eRushing === true ||
+                entity.carRushing === true || entity.jumping === true || entity.isJumping === true ||
+                entity.leaping === true || entity.flying === true || entity.fJumpActive === true ||
+                entity.dashBurst === true || entity.curvedDash === true || entity.corneringActive === true ||
+                entity.helicopterActive === true || entity.fCharging === true ||
+                (entity.qDash && typeof entity.qDash.time === 'number' && entity.qDash.time > 0) ||
+                (entity.returnDash && typeof entity.returnDash.time === 'number' && entity.returnDash.time > 0) ||
                 (entity.qDashTimer && entity.qDashTimer > 0) ||
                 (entity.fRushTimer && entity.fRushTimer > 0) ||
                 (entity.fWindupTimer && entity.fWindupTimer > 0) ||
                 (entity.eDashTimer && entity.eDashTimer > 0) ||
                 (entity.eRushTimer && entity.eRushTimer > 0) ||
-                (entity.rushTimer && entity.rushTimer > 0) ||
                 (entity.dashTimer && entity.dashTimer > 0) ||
                 (entity.dashT && entity.dashT > 0) ||
                 (entity.qLungeTimer && entity.qLungeTimer > 0) ||
                 (entity.fJumpTimer && entity.fJumpTimer > 0) ||
                 (entity.fDashTimer && entity.fDashTimer > 0) ||
                 (entity.flyingTimer && entity.flyingTimer > 0) ||
-                (entity.fAirTimer && entity.fAirTimer > 0) ||
                 (entity.jumpTimer && entity.jumpTimer > 0) ||
+                (entity.jumpT && entity.jumpT > 0) ||
                 (entity.waterPunchTimer && entity.waterPunchTimer > 0) ||
-                (entity.nihilityTimer && entity.nihilityTimer > 0) ||
                 (entity.stutterSteps && entity.stutterSteps > 0) ||
                 (entity.dodgeTimer && entity.dodgeTimer > 0) ||
                 (entity.windupF && entity.windupF > 0) ||
                 (entity.ultChargeT && entity.ultChargeT > 0)) {
                 return true;
-            }
-            if (typeof startX === 'number' && typeof startY === 'number' && dt > 0) {
-                const moved = Math.hypot((entity.x || 0) - startX, (entity.y || 0) - startY);
-                const effSpd = typeof entity.getEffectiveSpeed === 'function' ? entity.getEffectiveSpeed() : (entity.speed || entity.baseSpd || 250);
-                const maxNormalStep = Math.max(effSpd, (entity.baseSpd || 250) * (entity.speedsterTimer > 0 ? 1.5 : 1.0)) * dt;
-                // Never classify knockback, push, pull, stun, or external displacement as a dash!
-                const isBeingKnockedBack =
-                    Math.hypot(entity.kbx || 0, entity.kby || 0) > 1 ||
-                    Math.hypot(entity._localKbVx || 0, entity._localKbVy || 0) > 1 ||
-                    (entity.knockbackDuration && entity.knockbackDuration > 0) ||
-                    (entity.enhancedKBTimer && entity.enhancedKBTimer > 0) ||
-                    (entity.stunTimer && entity.stunTimer > 0) ||
-                    (entity.freezeTimer && entity.freezeTimer > 0) ||
-                    (entity.fightingTimer && entity.fightingTimer > 0) ||
-                    (entity.terrifedTimer && entity.terrifedTimer > 0) ||
-                    (entity.movementLockdownTimer && entity.movementLockdownTimer > 0) ||
-                    ((Date.now() - (entity._lastKnockbackOrHitMs || 0)) < 260) ||
-                    (window._currentlyUpdatingEntity && window._currentlyUpdatingEntity !== entity);
-                if (!isBeingKnockedBack && moved > Math.max(2.5, maxNormalStep * 1.35)) {
-                    return true;
-                }
             }
             return false;
         }
@@ -8041,6 +8022,19 @@
                     }
                 } else if (type === 'blind') {
                     this.blindTimer = Math.max(this.blindTimer || 0, Number(value) || 0);
+                } else if (type === 'cooldownIncrease') {
+                    const addCd = Math.max(0, Number(value) || 2);
+                    this.shockedTimer = Math.max(this.shockedTimer || 0, 2.2);
+                    this.qCD = Math.max(0, Number(this.qCD) || 0) + addCd;
+                    this.eCD = Math.max(0, Number(this.eCD) || 0) + addCd;
+                    this.fCD = Math.max(0, Number(this.fCD) || 0) + addCd;
+                    if (typeof this.gCD === 'number') this.gCD = Math.max(0, this.gCD) + addCd;
+                    if (typeof this.futureQCD === 'number') this.futureQCD = Math.max(0, this.futureQCD) + addCd;
+                    if (typeof this.futureECD === 'number') this.futureECD = Math.max(0, this.futureECD) + addCd;
+                    if (typeof this.futureFCD === 'number') this.futureFCD = Math.max(0, this.futureFCD) + addCd;
+                    if (typeof this.qChargeCD === 'number' && this.qChargeCD > 0) this.qChargeCD += addCd;
+                    if (typeof this.eChargeCD === 'number' && this.eChargeCD > 0) this.eChargeCD += addCd;
+                    if (this === player) addKillMsg(`⚡ Shocked! Ability Cooldowns +${addCd}s!`);
                 } else if (type === 'slow') {
                     this.slowTimer = Math.max(this.slowTimer || 0, Number(value) || 0);
                 } else if (type === 'terminatorSlow') {
@@ -8495,7 +8489,7 @@
                 }
 
                 // If a MainTower dies in 5v5, immediately end the match.
-                if (gameMode === '5v5' && this instanceof MainTower) {
+                if ((gameMode === '5v5' || gameMode === '5v5_online') && this instanceof MainTower) {
                     // Determine winning team: opposite of the destroyed main tower
                     const winningTeam = (this.team === 1) ? 2 : 1;
                     const playerWon = (typeof player !== 'undefined' && player.team === winningTeam);
@@ -8572,7 +8566,7 @@
                     }
 
                     // Track team kill counts for 5v5 mode
-                    if(gameMode === '5v5' && window.gameState5v5) {
+                    if((gameMode === '5v5' || gameMode === '5v5_online') && window.gameState5v5) {
                         if(typeof src.team !== 'undefined') {
                             if(src.team === 1) gameState5v5.blueScore++;
                             else if(src.team === 2) gameState5v5.redScore++;
@@ -24905,7 +24899,7 @@
             basicAtk() {
                 if (this.futureTimeline) {
                     if (this.futureBasicCD > 0) return;
-                    this.futureBasicCD = 0.4;
+                    this.futureBasicCD = 0.18;
                     const shot = new Projectile(this, this.x + Math.cos(this.angle) * 26, this.y + Math.sin(this.angle) * 26, this.angle, 760, 100, 160, '#d8b4fe', 7);
                     shot.onHit = (target) => {
                         if (target && !target.dead) {
@@ -24920,7 +24914,7 @@
                 }
 
                 if (this.basicCD > 0) return;
-                this.basicCD = 2;
+                this.basicCD = 0.45;
                 const x = this.x + Math.cos(this.angle) * 26;
                 const y = this.y + Math.sin(this.angle) * 26;
                 const shot = new Projectile(this, x, y, this.angle, 720, 150, 150, '#7dd3fc', 8);
@@ -25016,10 +25010,7 @@
                         if (dist < attackRadius) {
                             hitCount++;
                             e.takeDamage(450, this);
-                            e.shockedTimer = 2.2;
-                            e.qCD = Math.max(0, Number(e.qCD) || 0) + 2;
-                            e.eCD = Math.max(0, Number(e.eCD) || 0) + 2;
-                            e.fCD = Math.max(0, Number(e.fCD) || 0) + 2;
+                            safeApplyStatus(e, 'cooldownIncrease', 2, this);
                             if (typeof e.applyStatus === 'function') safeApplyStatus(e, 'slow', 8, this);
                         }
                     }
@@ -25173,7 +25164,7 @@
                     this.y += norm.y * spd * dt;
                 }
                 this.angle = getMouseAimAngle(this.x, this.y);
-                if (mouse.down && this.basicCD <= 0) this.basicAtk();
+                if (mouse.down && (this.futureTimeline ? this.futureBasicCD <= 0 : this.basicCD <= 0)) this.basicAtk();
                 if (keys.q && !this._qWas) this.skill1();
                 if (keys.e && !this._eWas) this.doE();
                 if (keys.f && !this._fWas) this.doF();
@@ -25202,7 +25193,7 @@
                     if (this.eCD <= 0 && d < 260) this.doE();
                     if (this.fCD <= 0 && d < 300) this.doF();
                 }
-                if (this.basicCD <= 0 && d < 170) this.basicAtk();
+                if ((this.futureTimeline ? this.futureBasicCD <= 0 : this.basicCD <= 0) && d < 170) this.basicAtk();
             }
 
             wander(dt, spd) {
@@ -28242,7 +28233,7 @@
             abilityQ() { this.qCD = 6.5; this.qActive = true; this.qMaxTimer = 1.5 + this.resolve * 0.3; this.qTimer = this.qMaxTimer; this.qVisualTimer = 0; this.qTickTimer = 0; this.qSlashCount = 0; this.damageReductionTimer = this.qTimer; this.damageReduction = 0.25; ringEffects.push({ x: this.x, y: this.y, life: 0.8, duration: 0.8, maxRadius: 180, color: '#ffd700' }); for (let i = 0; i < 28; i++) particles.push(new Particle(this.x, this.y, '#ffd700', 4, 0.7)); }
             finishQ() { this.qActive = false; this.qTimer = 0; this.qMaxTimer = 0; this.damageReductionTimer = 0; const stacks = this.resolve; this.resolve = 0; for (const e of entities) { if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.hypot(e.x - this.x, e.y - this.y) < 180) { e.takeDamage(100 + stacks * 100, this); e.takeDamage(stacks * 100, this, { isTrue: true, sourceHero: 'Kujou' }); } } ringEffects.push({ x: this.x, y: this.y, life: 0.6, duration: 0.6, maxRadius: 180, color: '#ffd700' }); }
             abilityE() { if (this.qActive) this.finishQ(); if (this.eStage === 0) { this.eCD = 7.5; this.eStage = 1; } else if (this.eStage === 1) { this.eStage = 2; } this.eDashing = true; this.eDashTimer = 0.22; this.eDashDir = this.isPlayer ? getMouseAimAngle(this.x, this.y) : this.angle; this.eDashHits.clear(); ringEffects.push({ x: this.x, y: this.y, life: 0.5, duration: 0.5, maxRadius: 70, color: '#fff1a8' }); }
-            releaseF() { this.fCharging = false; this.isTargetable = true; this.fCD = 28; this.fSpeedTimer = 4; const x = this.fTargetX, y = this.fTargetY; this.x = x; this.y = y; this.shield = this.maxHp * 0.15; for (const e of entities) if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.hypot(e.x - x, e.y - y) < this.fRadius) { e.takeDamage(1270, this, { sourceHero: 'Kujou' }); e.slowTimer = Math.max(e.slowTimer || 0, 1); if (e.hp < 500) e.die(this); this.addResolve(); } for (let i = 0; i < 42; i++) particles.push(new Particle(x, y, '#ffd700', 5, 0.8)); ringEffects.push({ x, y, life: 1.1, duration: 1.1, maxRadius: this.fRadius, color: '#ffd700' }); }
+            releaseF() { this.fCharging = false; this.fChargeTimer = 0; this.fAirTimer = 0; this.isTargetable = true; this.fCD = 28; this.fSpeedTimer = 4; const x = this.fTargetX, y = this.fTargetY; this.x = x; this.y = y; this._postDashWallGrace = 0.08; this.shield = this.maxHp * 0.15; for (const e of entities) if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.hypot(e.x - x, e.y - y) < this.fRadius) { e.takeDamage(1270, this, { sourceHero: 'Kujou' }); e.slowTimer = Math.max(e.slowTimer || 0, 1); if (e.hp < 500) e.die(this); this.addResolve(); } for (let i = 0; i < 42; i++) particles.push(new Particle(x, y, '#ffd700', 5, 0.8)); ringEffects.push({ x, y, life: 1.1, duration: 1.1, maxRadius: this.fRadius, color: '#ffd700' }); }
             ai(dt, spd) {
                 if (this.dead) return;
                 if (this.handleSafeZone(dt)) return;
@@ -42964,7 +42955,7 @@
             
             let ac=document.getElementById('aliveCounter'); 
             if(ac) {
-                if(gameMode === '5v5') {
+                if(gameMode === '5v5' || gameMode === '5v5_online') {
                     ac.style.display = 'none';
                 } else {
                     ac.style.display = 'block';
@@ -43148,7 +43139,7 @@
                         MINIMAP_CTX.fillStyle='#0f0'; // Player is green
                     } else if(gameMode === 'squad' && e.team === player.team) {
                         MINIMAP_CTX.fillStyle='#0f0'; // Teammates are green in squad
-                    } else if(gameMode === '5v5') {
+                    } else if(gameMode === '5v5' || gameMode === '5v5_online') {
                         // 5v5: Blue team vs Red team
                         if(e.team === 1) MINIMAP_CTX.fillStyle='#00bfff'; // Blue team
                         else MINIMAP_CTX.fillStyle='#ff6b6b'; // Red team
@@ -43569,7 +43560,7 @@
                 }
                 
                 // Check if Fallen Statue should spawn (less than 10 players remaining and no statue exists) - NOT in 5v5, training, online FFA, or any 1v1 mode
-                if(gameMode !== '5v5' && gameMode !== 'training' && gameMode !== 'ffa_online' && gameMode !== 'duel_online' && gameMode !== '1v1') {
+                if(gameMode !== '5v5' && gameMode !== '5v5_online' && gameMode !== 'training' && gameMode !== 'ffa_online' && gameMode !== 'duel_online' && gameMode !== '1v1') {
                     let alivePlayerCount = entities.filter(isCountedAsHero).length;
                     let statueExists = entities.some(e => e instanceof FallenStatue && !e.dead);
                     if(alivePlayerCount < 10 && !statueExists && !window.fallenStatueSpawned) {
@@ -43663,7 +43654,7 @@
                     }
                 }
                 // don't shrink safe zone in modes where it shouldn't exist
-                if(gameMode !== '5v5' && gameMode !== 'training' && gameMode !== 'ffa_online' && gameMode !== '1v1' && gameMode !== 'duel_online') {
+                if(gameMode !== '5v5' && gameMode !== '5v5_online' && gameMode !== 'training' && gameMode !== 'ffa_online' && gameMode !== '1v1' && gameMode !== 'duel_online') {
                     safeZoneRadius -= safeZoneShrinkRate * dt;
                     if(safeZoneRadius < minSafeZone) safeZoneRadius = minSafeZone;
                 }
@@ -43741,7 +43732,7 @@
                         }
                         clampDisplacedTargetsAfterStep(e);
                         // Universal AI Combat-Footwork Fallback: ensure no AI hero ever stands frozen when able to move (excluding stationary Practice Dummy and online proxies)
-                        if (e && !e.isPlayer && !(typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) && !(gameMode && gameMode.includes('online')) && !e.isTrainingPracticeDummy && !(gameMode === 'training' && trainingDummyMode === 'practice' && e === trainingDummy) && e.countsAsFFAHero === true && !e.dead && !(e instanceof FallenStatue) && !(e instanceof DefenseTower) && !(e instanceof MainTower)) {
+                        if (e && !e.isPlayer && !(typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) && (!(gameMode && gameMode.includes('online')) || gameMode === '5v5_online') && !e.isTrainingPracticeDummy && !(gameMode === 'training' && trainingDummyMode === 'practice' && e === trainingDummy) && e.countsAsFFAHero === true && !e.dead && !(e instanceof FallenStatue) && !(e instanceof DefenseTower) && !(e instanceof MainTower)) {
                             const canMove = !(e.stunTimer > 0) && !(e.freezeTimer > 0) && !(e.fightingTimer > 0) && !(e.movementLockdownTimer > 0) && !e.eCharging && !(e.deathLaserTimer > 0) && !(e.droneActive) && !(e.mountedTarget) && (e.baseSpd !== 0) && (e.speed !== 0);
                             const movedDist = Math.hypot((e.x || 0) - movementStartX, (e.y || 0) - movementStartY);
                             if (canMove && movedDist < 0.05 && dt > 0) {
@@ -45673,10 +45664,14 @@
                     } else if (this.drone) {
                         const tgt = this.findTarget();
                         if (tgt && !tgt.dead && this.drone) {
+                            const prevDx = this.drone.x, prevDy = this.drone.y;
                             const dAng = Math.atan2(tgt.y - this.drone.y, tgt.x - this.drone.x);
                             this.drone.angle = dAng;
                             this.drone.x += Math.cos(dAng) * 340 * dt;
                             this.drone.y += Math.sin(dAng) * 340 * dt;
+                            if (typeof enforceMapWallsAndRicoBoxes === 'function') {
+                                enforceMapWallsAndRicoBoxes(this.drone, prevDx, prevDy, dt);
+                            }
                         }
                     }
                     return;
@@ -45723,8 +45718,17 @@
                         this.drone.vy *= scale;
                     }
 
-                    this.drone.x += this.drone.vx * dt;
-                    this.drone.y += this.drone.vy * dt;
+                    const prevDroneX = this.drone.x;
+                    const prevDroneY = this.drone.y;
+                    const rawDroneX = prevDroneX + this.drone.vx * dt;
+                    const rawDroneY = prevDroneY + this.drone.vy * dt;
+                    this.drone.x = rawDroneX;
+                    this.drone.y = rawDroneY;
+                    if (typeof enforceMapWallsAndRicoBoxes === 'function') {
+                        enforceMapWallsAndRicoBoxes(this.drone, prevDroneX, prevDroneY, dt);
+                    }
+                    if (Math.abs(this.drone.x - rawDroneX) > 0.5) this.drone.vx *= 0.25;
+                    if (Math.abs(this.drone.y - rawDroneY) > 0.5) this.drone.vy *= 0.25;
                     if (currentSpeed > 8) {
                         this.drone.angle = Math.atan2(this.drone.vy, this.drone.vx);
                     }
@@ -52564,15 +52568,91 @@
                 
                 entities.push(player);
 
+                WORLD_SIZE = 5000;
+                if (typeof setHeroAbilityIcons === 'function') {
+                    try { setHeroAbilityIcons(player); } catch (_) {}
+                }
+
                 // set initial gameState5v5 object for client usage
-                window.gameState5v5 = window.gameState5v5 || {};
-                window.gameState5v5.blueScore = 0;
-                window.gameState5v5.redScore = 0;
-                window.gameState5v5.reviveQueue = [];
-                window.gameState5v5.reviveDuration = 6;
-                window.gameState5v5.isReviving = false;
+                window.gameState5v5 = {
+                    blueScore: 0,
+                    redScore: 0,
+                    gameTimer: 0,
+                    maxGameTime: 600,
+                    reviveTimer: 0,
+                    reviveDuration: 5,
+                    isReviving: false,
+                    reviveQueue: [],
+                    playerRevivalCount: 0
+                };
 
                 applyGlobalOnlineMapLayout((matchMeta && matchMeta.mapLayout) || window.currentRoomMapLayout, (matchMeta && matchMeta.mapSeed) || window.currentMapSeed);
+                if (mapWalls.length === 0) {
+                    spawnMapWalls();
+                }
+
+                // Spawn all 12 DefenseTowers (6 Blue, 6 Red) and 2 MainTowers in Online 5v5
+                const blueTowerPositions = [
+                    {x: 1000, y: 1200, team: 1}, {x: 1700, y: 1200, team: 1},
+                    {x: 1000, y: 2500, team: 1}, {x: 1700, y: 2500, team: 1},
+                    {x: 1000, y: 3800, team: 1}, {x: 1700, y: 3800, team: 1}
+                ];
+                const redTowerPositions = [
+                    {x: 3300, y: 1200, team: 2}, {x: 4000, y: 1200, team: 2},
+                    {x: 3300, y: 2500, team: 2}, {x: 4000, y: 2500, team: 2},
+                    {x: 3300, y: 3800, team: 2}, {x: 4000, y: 3800, team: 2}
+                ];
+                blueTowerPositions.forEach((pos, idx) => {
+                    const tower = new DefenseTower(pos.x, pos.y, pos.team, false);
+                    tower.towerId = `blue_${idx}`;
+                    entities.push(tower);
+                });
+                redTowerPositions.forEach((pos, idx) => {
+                    const tower = new DefenseTower(pos.x, pos.y, pos.team, false);
+                    tower.towerId = `red_${idx}`;
+                    entities.push(tower);
+                });
+                const blueMainTower = new MainTower(500, 2500, 1);
+                blueMainTower.towerId = 'main_1';
+                const redMainTower = new MainTower(4500, 2500, 2);
+                redMainTower.towerId = 'main_2';
+                entities.push(blueMainTower, redMainTower);
+
+                // If server sent fewer than 10 players in matchMeta.players, fill remaining team slots up to 5v5 with seeded AI bots
+                const rosterPlayers = (matchMeta && Array.isArray(matchMeta.players)) ? matchMeta.players : [{ id: player.socketId, team: player.team }];
+                let blueCount = 0, redCount = 0;
+                rosterPlayers.forEach((rp, idx) => {
+                    const t = (typeof rp.team === 'number' && (rp.team === 1 || rp.team === 2)) ? rp.team : ((idx % 2 === 0) ? 1 : 2);
+                    if (t === 1) blueCount++; else redCount++;
+                });
+                const botRng = createSeededRng(((matchMeta && matchMeta.mapSeed) || window.currentMapSeed || 12345) + 99);
+                const botCtors = [Paul, Noob, Kaiser, Tate, Edgar, Coolkidd, Builderman, Mamba, LightHero, Kai, Acheron, Noli, Don, Glace, Ming, Nos, Buster, Ren, Melvin, Gamb, Winston, Neo, Chimera, Li, Lav, Max, Fred, Kenshi, Gigi, Benjamin, Zappa, Austin, Ambrose, Wesley, Ash, Yun, Monza, Vival, Aurora, Bai, Apollo, BrunoAlexander, Amir, Cornelius, Twins, Guest, Jimeka, Trent, Cole, Rico, Steven, Christian, Gregory, Kujou, Lune, Zeus, Karen, Caskrice, Cyrus, Jeffrey];
+                while (blueCount < 5) {
+                    const bIdx = blueCount;
+                    const Ctor = botCtors[Math.floor(botRng() * botCtors.length)] || Paul;
+                    const bx = 800 + Math.round((botRng() - 0.5) * 180);
+                    const by = 1500 + bIdx * 450;
+                    const allyBot = new Ctor(bx, by, false);
+                    if (typeof allyBot.ai !== 'function') allyBot.ai = Entity.prototype.ai;
+                    allyBot.team = 1;
+                    allyBot.name = `Blue Bot ${bIdx}`;
+                    allyBot.gear = ['speedster', 'rage', 'blink'][Math.floor(botRng() * 3)];
+                    entities.push(allyBot);
+                    blueCount++;
+                }
+                while (redCount < 5) {
+                    const rIdx = redCount;
+                    const Ctor = botCtors[Math.floor(botRng() * botCtors.length)] || Paul;
+                    const rx = 4200 + Math.round((botRng() - 0.5) * 180);
+                    const ry = 1500 + rIdx * 450;
+                    const enemyBot = new Ctor(rx, ry, false);
+                    if (typeof enemyBot.ai !== 'function') enemyBot.ai = Entity.prototype.ai;
+                    enemyBot.team = 2;
+                    enemyBot.name = `Red Bot ${rIdx + 1}`;
+                    enemyBot.gear = ['speedster', 'rage', 'blink'][Math.floor(botRng() * 3)];
+                    entities.push(enemyBot);
+                    redCount++;
+                }
 
                 // Preserve skin modal if it's open - don't auto-close it
                 let skinModal = document.getElementById('skinSelectModal');
