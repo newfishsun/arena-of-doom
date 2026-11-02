@@ -307,6 +307,8 @@ class GameRoom {
   addPlayer(socketId, playerData) {
     const baseHp = getHeroBaseHp(playerData && playerData.heroType);
     const actualMaxHp = Math.min(baseHp, SERVER_MAX_HP);
+    const isMecca = String((playerData && playerData.heroType) || '').toLowerCase() === 'mecca';
+    const initShield = isMecca ? 1000 : 0;
     const isBot = !!playerData.isBot;
     const assignedIndex = typeof playerData.assignedIndex === 'number' ? playerData.assignedIndex : this.players.size;
     const team = typeof playerData.team === 'number'
@@ -322,8 +324,9 @@ class GameRoom {
       hp: actualMaxHp,
       maxHp: actualMaxHp,
       lastClientReportedHp: actualMaxHp,
-      shield: 0,
-      maxShield: 0,
+      shield: initShield,
+      maxShield: initShield,
+      lastClientReportedShield: initShield,
       speedMult: 1,
       dmgMult: 1,
       kills: 0,
@@ -1094,14 +1097,26 @@ io.on('connection', (socket) => {
   });
 
   // Handle respawn requests (for 5v5 or custom respawn modes)
-  socket.on('requestRespawn', () => {
+  socket.on('requestRespawn', (data) => {
     const { roomId, room } = findPlayerRoom(socket.id);
     if (!room) return;
     const player = room.players.get(socket.id);
     if (!player) return;
+    const isMecca = String(player.heroType || '').toLowerCase() === 'mecca';
+    if (data && typeof data.maxHp === 'number' && data.maxHp >= 100) {
+      player.maxHp = Math.min(SERVER_MAX_HP, Math.round(data.maxHp));
+    }
     player.hp = player.maxHp;
     player.lastClientReportedHp = player.maxHp;
-    player.shield = 0;
+    if (isMecca) {
+      const meccaShield = (data && data.ascended) || player.maxHp >= 6000 ? 1200 : 1000;
+      player.shield = meccaShield;
+      player.maxShield = meccaShield;
+      player.lastClientReportedShield = meccaShield;
+    } else {
+      player.shield = 0;
+      player.lastClientReportedShield = 0;
+    }
     player.x = player.team === 1 ? 800 : (player.team === 2 ? 4200 : 500 + Math.random() * (room.worldSize - 1000));
     player.y = room.mode === '5v5' ? 2500 : 500 + Math.random() * (room.worldSize - 1000);
     io.to(roomId).emit('playerRespawned', {
@@ -1109,6 +1124,8 @@ io.on('connection', (socket) => {
       socketId: socket.id,
       hp: player.hp,
       maxHp: player.maxHp,
+      shield: player.shield,
+      maxShield: player.maxShield,
       x: player.x,
       y: player.y
     });
@@ -1219,11 +1236,13 @@ io.on('connection', (socket) => {
       attacker.kills = (attacker.kills || 0) + 1;
     }
 
+    const mechArmorBrokenNow = !!(victimIsMecca && prevShield > 0 && victim.shield <= 0);
     io.to(roomId).emit('playerHealthUpdated', {
       socketId: data.socketId,
       hp: victim.hp,
       maxHp: victim.maxHp,
       shield: victim.shield,
+      mechArmorBroken: mechArmorBrokenNow,
       x: vivalRevivedNow ? victim.x : undefined,
       y: vivalRevivedNow ? victim.y : undefined,
       vivalRevived: vivalRevivedNow,

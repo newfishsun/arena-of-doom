@@ -43033,7 +43033,7 @@
         }
         
 
-        // Bespoke polygon visual effect for Mecca attacks so every ability clearly displays its exact true range & hitbox without arc spam
+        // Bespoke intimidating polygon visual effects for Mecca (straight-in-front punches, zero text clutter, zero arc spam)
         class MeccaPolygonAttackEffect {
             constructor(kind, x, y, angle, opts = {}) {
                 this.kind = kind;
@@ -43041,7 +43041,7 @@
                 this.y = y;
                 this.angle = angle || 0;
                 this.opts = opts;
-                this.maxLife = opts.duration || 0.35;
+                this.maxLife = opts.duration || 0.32;
                 this.life = this.maxLife;
                 this.del = false;
             }
@@ -43057,84 +43057,93 @@
                 const sy = this.y - camera.y;
                 ctx.save();
 
-                if (this.kind === 'cone_blast') {
-                    // Exact range & cone angle polygon blast (used by Basic Attack 185px, Base Q 180/205px, Base F Kick 215px)
-                    const range = this.opts.range || 185;
-                    const halfArc = this.opts.halfArc || (Math.PI * 0.45);
+                if (this.kind === 'front_punch' || this.kind === 'cone_blast') {
+                    // Straight-in-front linear pile-bunker / mecha-fist shock corridor (NO ARCS!)
+                    const range = this.opts.range || 210;
+                    const halfW = this.opts.halfWidth || 46;
                     const isSoul = !!this.opts.isSoul;
                     const isFinisher = !!this.opts.isFinisher;
                     const isKick = !!this.opts.isKick;
+                    const handOffset = (this.opts.handSide || 0) * 10;
+
                     ctx.translate(sx, sy);
                     ctx.rotate(this.angle);
 
-                    const reach = range * (0.78 + 0.22 * Math.min(1, prog * 3.2));
-                    const steps = 6;
-                    ctx.beginPath();
-                    ctx.moveTo(10, 0);
-                    for (let i = 0; i <= steps; i++) {
-                        const a = -halfArc + (halfArc * 2 * i) / steps;
-                        const r = reach * (i % 2 === 0 ? 1.0 : 0.94);
-                        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-                    }
-                    ctx.closePath();
+                    const reach = range * (0.72 + 0.28 * Math.min(1, prog * 4.2));
 
-                    const grad = ctx.createLinearGradient(0, 0, range, 0);
+                    // 1. Dark abyssal pressure vacuum corridor spanning the exact rectangular hitbox (0..range, -halfW..+halfW)
+                    const bgGrad = ctx.createLinearGradient(12, 0, range, 0);
                     if (isSoul) {
-                        grad.addColorStop(0, `rgba(255, 107, 0, ${0.62 * p})`);
-                        grad.addColorStop(0.55, `rgba(0, 245, 212, ${0.52 * p})`);
-                        grad.addColorStop(1, `rgba(128, 255, 219, ${0.18 * p})`);
+                        bgGrad.addColorStop(0, `rgba(9, 13, 22, ${0.82 * p})`);
+                        bgGrad.addColorStop(0.5, `rgba(255, 69, 0, ${0.58 * p})`);
+                        bgGrad.addColorStop(0.85, `rgba(0, 245, 212, ${0.64 * p})`);
+                        bgGrad.addColorStop(1, `rgba(128, 255, 219, ${0.28 * p})`);
                     } else if (isKick || isFinisher) {
-                        grad.addColorStop(0, `rgba(255, 69, 0, ${0.72 * p})`);
-                        grad.addColorStop(0.6, `rgba(255, 140, 0, ${0.55 * p})`);
-                        grad.addColorStop(1, `rgba(255, 209, 102, ${0.22 * p})`);
+                        bgGrad.addColorStop(0, `rgba(9, 13, 22, ${0.86 * p})`);
+                        bgGrad.addColorStop(0.5, `rgba(220, 38, 38, ${0.68 * p})`);
+                        bgGrad.addColorStop(0.85, `rgba(255, 107, 0, ${0.65 * p})`);
+                        bgGrad.addColorStop(1, `rgba(255, 209, 102, ${0.32 * p})`);
                     } else {
-                        grad.addColorStop(0, `rgba(255, 85, 0, ${0.58 * p})`);
-                        grad.addColorStop(0.65, `rgba(255, 158, 0, ${0.42 * p})`);
-                        grad.addColorStop(1, `rgba(255, 209, 102, ${0.14 * p})`);
+                        bgGrad.addColorStop(0, `rgba(12, 16, 28, ${0.78 * p})`);
+                        bgGrad.addColorStop(0.55, `rgba(255, 69, 0, ${0.58 * p})`);
+                        bgGrad.addColorStop(1, `rgba(255, 174, 0, ${0.26 * p})`);
                     }
-                    ctx.fillStyle = grad;
-                    ctx.fill();
+                    ctx.fillStyle = bgGrad;
+                    ctx.fillRect(14, -halfW, range - 14, halfW * 2);
 
-                    // Exact true-range outer perimeter line so player sees the exact max reach
-                    ctx.strokeStyle = isSoul ? `rgba(0, 245, 212, ${0.95 * p})` : `rgba(255, 195, 0, ${0.92 * p})`;
-                    ctx.lineWidth = isFinisher || isKick ? 3.5 : 2.5;
+                    // 2. Exact hitbox outer rail borders + sharp front impact bracket
+                    ctx.strokeStyle = isSoul ? `rgba(0, 245, 212, ${0.95 * p})` : `rgba(255, 140, 0, ${0.92 * p})`;
+                    ctx.lineWidth = (isFinisher || isKick) ? 3.5 : 2.5;
+                    ctx.strokeRect(14, -halfW, range - 14, halfW * 2);
+
+                    // Intimidating dark-core inner rail
+                    ctx.fillStyle = `rgba(9, 13, 22, ${0.75 * p})`;
+                    ctx.fillRect(18, -halfW * 0.42 + handOffset * 0.3, reach - 24, halfW * 0.84);
+
+                    // 3. Giant Mecha Fist / Siege Pile-Bunker Ram Head slamming straight forward
+                    const fistX = Math.max(36, reach);
+                    const fistW = halfW * (isKick ? 0.96 : 0.82);
+                    ctx.fillStyle = isSoul ? `rgba(0, 245, 212, ${0.95 * p})` : `rgba(255, 90, 0, ${0.95 * p})`;
+                    ctx.strokeStyle = isSoul ? `rgba(255, 123, 0, ${0.98 * p})` : `rgba(255, 209, 102, ${0.95 * p})`;
+                    ctx.lineWidth = 2.8;
                     ctx.beginPath();
-                    ctx.moveTo(Math.cos(-halfArc) * 24, Math.sin(-halfArc) * 24);
-                    for (let i = 0; i <= steps; i++) {
-                        const a = -halfArc + (halfArc * 2 * i) / steps;
-                        ctx.lineTo(Math.cos(a) * range, Math.sin(a) * range);
-                    }
-                    ctx.lineTo(Math.cos(halfArc) * 24, Math.sin(halfArc) * 24);
+                    ctx.moveTo(fistX + 18, handOffset * 0.25);
+                    ctx.lineTo(fistX - 10, -fistW);
+                    ctx.lineTo(fistX - 38, -fistW * 0.72);
+                    ctx.lineTo(fistX - 24, handOffset * 0.25);
+                    ctx.lineTo(fistX - 38, fistW * 0.72);
+                    ctx.lineTo(fistX - 10, fistW);
+                    ctx.closePath();
+                    ctx.fill();
                     ctx.stroke();
 
-                    // Internal flame spear chevrons
-                    const spearCount = isFinisher || isKick ? 5 : 3;
-                    for (let s = 0; s < spearCount; s++) {
-                        const sa = -halfArc * 0.65 + (halfArc * 1.3 * s) / Math.max(1, spearCount - 1);
-                        ctx.save();
-                        ctx.rotate(sa);
-                        ctx.fillStyle = (isSoul && s % 2 === 1) ? `rgba(56, 249, 215, ${0.85 * p})` : `rgba(255, 183, 3, ${0.85 * p})`;
+                    // 4. Jagged shock-chevrons & lightning-flame rails inside the punch corridor
+                    const numChevrons = (isKick || isFinisher) ? 5 : 3;
+                    for (let c = 1; c <= numChevrons; c++) {
+                        const cx = 24 + ((reach - 32) * c) / (numChevrons + 0.4);
+                        const col = (isSoul && c % 2 === 0)
+                            ? `rgba(0, 245, 212, ${0.9 * p})`
+                            : `rgba(255, 140, 0, ${0.9 * p})`;
+                        ctx.strokeStyle = col;
+                        ctx.lineWidth = (isKick || isFinisher) ? 3.2 : 2.4;
                         ctx.beginPath();
-                        ctx.moveTo(24, -7);
-                        ctx.lineTo(reach * 0.96, 0);
-                        ctx.lineTo(24, 7);
-                        ctx.lineTo(42, 0);
-                        ctx.closePath();
-                        ctx.fill();
-                        ctx.restore();
+                        ctx.moveTo(cx - 18, -halfW * 0.88);
+                        ctx.lineTo(cx + 10, 0);
+                        ctx.lineTo(cx - 18, halfW * 0.88);
+                        ctx.stroke();
                     }
 
-                    // If Base F Kick, also draw the 290px knockback trajectory track
+                    // If Base F Kick, also draw the extended knockback trajectory rail
                     if (isKick && this.opts.kbDist) {
                         const kbEnd = range + this.opts.kbDist;
-                        ctx.strokeStyle = `rgba(255, 123, 0, ${0.65 * p})`;
+                        ctx.strokeStyle = `rgba(255, 85, 0, ${0.62 * p})`;
                         ctx.lineWidth = 2;
-                        ctx.setLineDash([10, 6]);
-                        ctx.strokeRect(30, -34, kbEnd - 30, 68);
+                        ctx.setLineDash([12, 6]);
+                        ctx.strokeRect(range, -halfW * 0.75, this.opts.kbDist, halfW * 1.5);
                         ctx.setLineDash([]);
                     }
                 } else if (this.kind === 'dash_corridor') {
-                    // Exact corridor for Base E Dash or Soul Flame Q Dash (320px long, 250px wide)
+                    // Intimidating straight corridor for Base E Dash, Soul Flame Q Dash, and Soul Flame F High-Speed Flight
                     const ex = (this.opts.endX ?? this.x) - camera.x;
                     const ey = (this.opts.endY ?? this.y) - camera.y;
                     const width = this.opts.width || 110;
@@ -43148,61 +43157,89 @@
 
                     const grad = ctx.createLinearGradient(0, -width, len, width);
                     if (isSoul) {
-                        grad.addColorStop(0, `rgba(255, 107, 0, ${0.42 * p})`);
-                        grad.addColorStop(0.5, `rgba(0, 245, 212, ${0.48 * p})`);
-                        grad.addColorStop(1, `rgba(255, 158, 0, ${0.42 * p})`);
+                        grad.addColorStop(0, `rgba(9, 13, 22, ${0.75 * p})`);
+                        grad.addColorStop(0.35, `rgba(255, 85, 0, ${0.52 * p})`);
+                        grad.addColorStop(0.7, `rgba(0, 245, 212, ${0.56 * p})`);
+                        grad.addColorStop(1, `rgba(9, 13, 22, ${0.75 * p})`);
                     } else {
-                        grad.addColorStop(0, `rgba(255, 69, 0, ${0.45 * p})`);
-                        grad.addColorStop(1, `rgba(255, 183, 3, ${0.25 * p})`);
+                        grad.addColorStop(0, `rgba(9, 13, 22, ${0.72 * p})`);
+                        grad.addColorStop(0.5, `rgba(255, 69, 0, ${0.55 * p})`);
+                        grad.addColorStop(1, `rgba(255, 183, 3, ${0.32 * p})`);
                     }
                     ctx.fillStyle = grad;
                     ctx.fillRect(0, -width, len, width * 2);
 
-                    ctx.strokeStyle = isSoul ? `rgba(0, 245, 212, ${0.9 * p})` : `rgba(255, 158, 0, ${0.85 * p})`;
-                    ctx.lineWidth = 2.5;
+                    // Heavy outer rails
+                    ctx.strokeStyle = isSoul ? `rgba(0, 245, 212, ${0.95 * p})` : `rgba(255, 123, 0, ${0.92 * p})`;
+                    ctx.lineWidth = 3;
                     ctx.strokeRect(0, -width, len, width * 2);
 
-                    // Chevron velocity ribs along the dash corridor
-                    const chevronCount = Math.max(3, Math.floor(len / 65));
+                    // Jagged center spinal rift
+                    ctx.strokeStyle = isSoul ? `rgba(255, 107, 0, ${0.92 * p})` : `rgba(255, 209, 102, ${0.88 * p})`;
+                    ctx.lineWidth = 2.6;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    const segs = Math.max(4, Math.floor(len / 55));
+                    for (let i = 1; i <= segs; i++) {
+                        const jx = (len * i) / segs;
+                        const jy = (i === segs) ? 0 : ((i % 2 === 0 ? 1 : -1) * Math.min(28, width * 0.35));
+                        ctx.lineTo(jx, jy);
+                    }
+                    ctx.stroke();
+
+                    // Chevron velocity ribs along the corridor
+                    const chevronCount = Math.max(3, Math.floor(len / 75));
                     for (let i = 1; i <= chevronCount; i++) {
-                        const cx = (len * i) / (chevronCount + 0.5);
-                        ctx.strokeStyle = (isSoul && i % 2 === 0) ? `rgba(255, 123, 0, ${0.85 * p})` : (isSoul ? `rgba(128, 255, 219, ${0.85 * p})` : `rgba(255, 209, 102, ${0.8 * p})`);
+                        const cx = (len * i) / (chevronCount + 0.4);
+                        ctx.strokeStyle = (isSoul && i % 2 === 0) ? `rgba(255, 107, 0, ${0.88 * p})` : (isSoul ? `rgba(0, 245, 212, ${0.88 * p})` : `rgba(255, 183, 3, ${0.85 * p})`);
                         ctx.lineWidth = 3;
                         ctx.beginPath();
-                        ctx.moveTo(cx - 22, -width * 0.72);
-                        ctx.lineTo(cx + 12, 0);
-                        ctx.lineTo(cx - 22, width * 0.72);
+                        ctx.moveTo(cx - 24, -width * 0.78);
+                        ctx.lineTo(cx + 14, 0);
+                        ctx.lineTo(cx - 24, width * 0.78);
                         ctx.stroke();
                     }
                 } else if (this.kind === 'soul_slash') {
-                    // Single rapid polygon slash across target (alternating Normal Flame and Mint Soul Fire)
-                    const slashLen = this.opts.length || 135;
+                    // Intimidating abyss-edged Soul Blade Tear (alternating Normal Flame and Mint Soul Fire)
+                    const slashLen = this.opts.length || 155;
                     const isMint = !!this.opts.isMint;
                     ctx.translate(sx, sy);
                     ctx.rotate(this.angle);
 
-                    ctx.fillStyle = isMint ? `rgba(0, 245, 212, ${0.92 * p})` : `rgba(255, 107, 0, ${0.92 * p})`;
-                    ctx.strokeStyle = isMint ? `rgba(255, 255, 255, ${0.9 * p})` : `rgba(255, 209, 102, ${0.9 * p})`;
-                    ctx.lineWidth = 2;
+                    // Outer flame/mint blade
+                    ctx.fillStyle = isMint ? `rgba(0, 245, 212, ${0.95 * p})` : `rgba(255, 85, 0, ${0.95 * p})`;
+                    ctx.strokeStyle = isMint ? `rgba(255, 123, 0, ${0.95 * p})` : `rgba(0, 245, 212, ${0.95 * p})`;
+                    ctx.lineWidth = 2.4;
                     ctx.beginPath();
                     ctx.moveTo(-slashLen, 0);
-                    ctx.lineTo(0, -14 * p);
+                    ctx.lineTo(-slashLen * 0.25, -20 * p);
                     ctx.lineTo(slashLen, 0);
-                    ctx.lineTo(0, 14 * p);
+                    ctx.lineTo(-slashLen * 0.25, 20 * p);
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
+
+                    // Dark abyssal rift core inside the slash
+                    ctx.fillStyle = `rgba(9, 13, 22, ${0.9 * p})`;
+                    ctx.beginPath();
+                    ctx.moveTo(-slashLen * 0.72, 0);
+                    ctx.lineTo(0, -7 * p);
+                    ctx.lineTo(slashLen * 0.72, 0);
+                    ctx.lineTo(0, 7 * p);
+                    ctx.closePath();
+                    ctx.fill();
                 } else if (this.kind === 'octagon_explosion') {
-                    // Exact-radius Octagonal Explosion (used by Soul Flame Q 750-dmg explosion, Soul Flame F 225px landing impact, and Wall Slam)
+                    // Intimidating Multi-Layered Abyssal + Flame/Mint Polygon Cataclysm
                     const maxR = this.opts.radius || 225;
                     const isSoul = this.opts.isSoul !== false;
-                    const curR = maxR * (0.45 + 0.55 * Math.min(1, prog * 2.4));
+                    const curR = maxR * (0.45 + 0.55 * Math.min(1, prog * 2.8));
 
                     ctx.translate(sx, sy);
 
-                    // Outer exact-radius boundary octagon (100% maxR so player sees true AoE border)
-                    ctx.strokeStyle = isSoul ? `rgba(0, 245, 212, ${0.9 * p})` : `rgba(255, 183, 3, ${0.9 * p})`;
-                    ctx.lineWidth = 3;
+                    // 1. Dark abyssal ground-scorch octagon at exact maxR
+                    ctx.fillStyle = `rgba(9, 13, 22, ${0.52 * p})`;
+                    ctx.strokeStyle = isSoul ? `rgba(0, 245, 212, ${0.95 * p})` : `rgba(255, 140, 0, ${0.95 * p})`;
+                    ctx.lineWidth = 3.5;
                     ctx.beginPath();
                     for (let i = 0; i < 10; i++) {
                         const a = (i * Math.PI * 2) / 10;
@@ -43212,16 +43249,17 @@
                         else ctx.lineTo(px, py);
                     }
                     ctx.closePath();
+                    ctx.fill();
                     ctx.stroke();
 
-                    // Expanding dual-color polygon shock-star
-                    ctx.fillStyle = isSoul ? `rgba(0, 245, 212, ${0.34 * p})` : `rgba(255, 85, 0, ${0.42 * p})`;
-                    ctx.strokeStyle = `rgba(255, 107, 0, ${0.95 * p})`;
+                    // 2. Jagged 12-point outer eruption star
+                    ctx.fillStyle = isSoul ? `rgba(0, 245, 212, ${0.42 * p})` : `rgba(255, 69, 0, ${0.48 * p})`;
+                    ctx.strokeStyle = `rgba(255, 90, 0, ${0.96 * p})`;
                     ctx.lineWidth = 3;
                     ctx.beginPath();
                     for (let i = 0; i < 12; i++) {
-                        const a = prog * 0.6 + (i * Math.PI * 2) / 12;
-                        const r = (i % 2 === 0) ? curR : curR * 0.62;
+                        const a = prog * 0.7 + (i * Math.PI * 2) / 12;
+                        const r = (i % 2 === 0) ? curR * 1.04 : curR * 0.54;
                         const px = Math.cos(a) * r;
                         const py = Math.sin(a) * r;
                         if (i === 0) ctx.moveTo(px, py);
@@ -43231,12 +43269,14 @@
                     ctx.fill();
                     ctx.stroke();
 
-                    // Inner normal-flame diamond core
-                    ctx.fillStyle = `rgba(255, 123, 0, ${0.65 * p})`;
+                    // 3. Inner counter-rotating normal-flame + obsidian core star
+                    ctx.fillStyle = `rgba(255, 107, 0, ${0.78 * p})`;
+                    ctx.strokeStyle = isSoul ? `rgba(168, 255, 236, ${0.95 * p})` : `rgba(255, 209, 102, ${0.95 * p})`;
+                    ctx.lineWidth = 2.2;
                     ctx.beginPath();
                     for (let i = 0; i < 8; i++) {
-                        const a = -prog * 0.8 + (i * Math.PI * 2) / 8;
-                        const r = (i % 2 === 0) ? curR * 0.52 : curR * 0.25;
+                        const a = -prog * 0.9 + (i * Math.PI * 2) / 8;
+                        const r = (i % 2 === 0) ? curR * 0.62 : curR * 0.24;
                         const px = Math.cos(a) * r;
                         const py = Math.sin(a) * r;
                         if (i === 0) ctx.moveTo(px, py);
@@ -43244,6 +43284,7 @@
                     }
                     ctx.closePath();
                     ctx.fill();
+                    ctx.stroke();
                 }
 
                 ctx.restore();
@@ -43294,16 +43335,17 @@
                 this.eDashVx = 0;
                 this.eDashVy = 0;
 
-                // Soul Flame Q state (dash + 5 slashes 100 dmg each + 1 soul explosion 750 dmg + Fading Soul + main target stun)
+                // Soul Flame Q state (dash + 5 slashes 100 dmg each + 1 soul explosion 1000 dmg + Fading Soul + main target stun)
                 this.soulQDashTimer = 0;
                 this.soulQSlashTimer = 0;
 
                 // Soul Flame E state (Soul Vanisher Zone wrapped around Mecca for 6s)
                 this.soulZoneTimer = 0;
+                this.soulZoneMaxTimer = 6.0;
                 this.soulZoneRadius = 240;
                 this.soulZoneHasEnemy = false;
 
-                // Soul Flame F state (Flight to mouse location up to range limit, 500 true dmg on path, 500 true + 1500 normal + slow at end)
+                // Soul Flame F state (High-speed flight to mouse location up to long range limit, 500 true dmg on path, 500 true + 1500 normal + slow at end)
                 this.soulFlightTimer = 0;
                 this.soulFlightDuration = 0;
                 this.soulFlightStartX = 0;
@@ -43325,14 +43367,11 @@
                 }
                 const add = Number(amount) || 0;
                 if (add <= 0) return;
-                const prev = this.gCharge || 0;
-                this.gCharge = Math.min(100, prev + add);
-                if (prev < 100 && this.gCharge >= 100 && this.isPlayer) {
-                    addKillMsg('🔥 SOUL FLAME CHARGE 100%! Press G to Ascend Permanently! 🔥');
-                }
+                this.gCharge = Math.min(100, (this.gCharge || 0) + add);
             }
 
             onMechArmorBroken() {
+                if (!this.hasMechArmor && this.shield <= 0) return;
                 this.hasMechArmor = false;
                 this.shield = 0;
                 if (!this.ascended) {
@@ -43340,19 +43379,15 @@
                 }
                 try {
                     visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', this.x, this.y, 0, {
-                        radius: 95,
+                        radius: 105,
                         duration: 0.35,
                         isSoul: this.ascended
                     }));
-                    effects.push(new TextPop(this.x, this.y - 36, 'MECH ARMOR BROKEN! +10% G', '#38f9d7'));
                     for (let i = 0; i < 12; i++) {
                         const a = (Math.PI * 2 * i) / 12;
-                        particles.push(new Particle(this.x, this.y, i % 2 === 0 ? '#ff7b00' : '#38f9d7', 4, 0.45, Math.cos(a) * 190, Math.sin(a) * 190));
+                        particles.push(new Particle(this.x, this.y, i % 2 === 0 ? '#ff7b00' : '#00f5d4', 4.5, 0.42, Math.cos(a) * 195, Math.sin(a) * 195));
                     }
                 } catch (_) {}
-                if (this.isPlayer) {
-                    addKillMsg('🛡️ Mech Armor Shattered! +10% Soul Flame Charge!');
-                }
             }
 
             restoreMechArmorOnSpawnOrRevive() {
@@ -43395,6 +43430,21 @@
                 if (this.witherBuff && this.witherBuffTimer > 0) s *= 1.25;
                 if (this.terminatorSpeedTimer > 0) s += (this.terminatorSpeedBonus || s * 0.30);
                 return s;
+            }
+
+            // Straight-in-front rectangular hitbox helper (replaces arc/cone checks!)
+            isTargetInFrontBox(target, range, halfWidth) {
+                if (!target || target === this || target.dead || !(target instanceof Entity) || target.team === this.team || target.isTargetable === false) {
+                    return false;
+                }
+                const dx = target.x - this.x;
+                const dy = target.y - this.y;
+                const cosA = Math.cos(this.angle);
+                const sinA = Math.sin(this.angle);
+                const fwd = dx * cosA + dy * sinA;
+                const lat = Math.abs(-dx * sinA + dy * cosA);
+                const rPad = (target.radius || 20);
+                return (fwd >= -14 && fwd <= range + rPad && lat <= halfWidth + rPad);
             }
 
             didKnockbackHitWall(target, preX, preY, intendedX, intendedY) {
@@ -43451,7 +43501,7 @@
                     }
                 }
 
-                // Base Q: 3 stationary punches at 0.3s intervals (300, 300, 400 damage)
+                // Base Q: 3 stationary straight-in-front punches at 0.3s intervals (300, 300, 400 damage)
                 if (this.qPunchingTimer > 0) {
                     this.qPunchingTimer = Math.max(0, this.qPunchingTimer - dt);
                     this.qPunchTick -= dt;
@@ -43505,12 +43555,12 @@
                     this.soulZoneHasEnemy = false;
                 }
 
-                // Soul Flame F: Flight to mouse location with range limit
+                // Soul Flame F: High-Speed Flight to mouse location with long range limit
                 // Deals 500 true damage to enemies in the flight path; on landing deals 500 true damage + 1500 damage and slows enemies
                 if (this.soulFlightTimer > 0) {
                     const prevTimer = this.soulFlightTimer;
                     this.soulFlightTimer = Math.max(0, this.soulFlightTimer - dt);
-                    const totalDur = Math.max(0.05, this.soulFlightDuration || 0.38);
+                    const totalDur = Math.max(0.04, this.soulFlightDuration || 0.15);
                     const prog = Math.min(1, 1 - (this.soulFlightTimer / totalDur));
                     const preX = this.x, preY = this.y;
                     this.x = this.soulFlightStartX + (this.soulFlightTargetX - this.soulFlightStartX) * prog;
@@ -43522,7 +43572,7 @@
                     }
 
                     // Dual flame + mint fire trail along flight path
-                    if (Math.random() < 0.85) {
+                    if (Math.random() < 0.9) {
                         const sideOff = (Math.random() - 0.5) * 90;
                         const perpA = this.angle + Math.PI * 0.5;
                         particles.push(new Particle(
@@ -43530,21 +43580,24 @@
                             this.y + Math.sin(perpA) * sideOff,
                             Math.random() < 0.5 ? '#00f5d4' : '#ff6b00',
                             4.5,
-                            0.4
+                            0.36
                         ));
                     }
 
-                    // Deal 500 true damage to enemies along the flight path (95px path radius)
+                    // Deal 500 true damage to enemies along the flight segment (preX,preY)->(this.x,this.y)
                     for (let i = 0; i < entities.length; i++) {
                         const e = entities[i];
                         if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
                         if (this.soulFlightHitSet && this.soulFlightHitSet.has(e)) continue;
-                        if (Math.hypot(e.x - this.x, e.y - this.y) <= 95 + (e.radius || 20)) {
+                        const segDx = this.x - preX, segDy = this.y - preY;
+                        const segLenSq = segDx * segDx + segDy * segDy;
+                        let tSeg = segLenSq > 1 ? (((e.x - preX) * segDx + (e.y - preY) * segDy) / segLenSq) : 1;
+                        tSeg = Math.max(0, Math.min(1, tSeg));
+                        const closestX = preX + segDx * tSeg;
+                        const closestY = preY + segDy * tSeg;
+                        if (Math.hypot(e.x - closestX, e.y - closestY) <= 95 + (e.radius || 20)) {
                             if (this.soulFlightHitSet) this.soulFlightHitSet.add(e);
                             e.takeDamage(500, this, { isTrue: true, ignoreKnockback: true });
-                            try {
-                                effects.push(new TextPop(e.x, e.y - 26, '-500 TRUE', '#38f9d7'));
-                            } catch (_) {}
                         }
                     }
 
@@ -43624,95 +43677,87 @@
                 }
             }
 
+            // Basic Attack: Straight-in-front punch (250 damage, 2.0s CD in Base Form, 1.0s CD in Soul Flame Form)
             basicAtk() {
                 this.revealTimer = 0.5;
-                this.basicCD = 2.0; // 2s cooldown
-                this.punchAnimTimer = 0.28;
+                this.basicCD = this.ascended ? 1.0 : 2.0;
+                this.punchAnimTimer = 0.24;
                 this.punchHandSide *= -1;
-                const range = 185;
-                const halfArc = Math.PI * 0.45;
-                const dmg = 250; // 250 damage
+                const range = 210;
+                const halfWidth = 46;
+                const dmg = 250;
 
-                // Spawn full-hitbox 185px polygon blast so player sees exact true range & cone
-                visualEffects.push(new MeccaPolygonAttackEffect('cone_blast', this.x, this.y, this.angle, {
+                // Spawn straight-in-front pile-bunker punch visual (no arcs!)
+                visualEffects.push(new MeccaPolygonAttackEffect('front_punch', this.x, this.y, this.angle, {
                     range: range,
-                    halfArc: halfArc,
-                    duration: 0.28,
+                    halfWidth: halfWidth,
+                    handSide: this.punchHandSide,
+                    duration: 0.25,
                     isSoul: this.ascended
                 }));
+                const cosA = Math.cos(this.angle), sinA = Math.sin(this.angle);
                 for (let i = 0; i < 8; i++) {
-                    const sa = this.angle + (Math.random() - 0.5) * halfArc * 1.6;
-                    const dist = 60 + Math.random() * (range - 60);
+                    const fwd = 45 + Math.random() * (range - 45);
+                    const lat = (Math.random() - 0.5) * halfWidth * 1.6;
+                    const px = this.x + cosA * fwd - sinA * lat;
+                    const py = this.y + sinA * fwd + cosA * lat;
                     const col = (this.ascended && i % 2 === 0) ? '#00f5d4' : (i % 2 === 0 ? '#ff5500' : '#ffae00');
-                    particles.push(new Particle(this.x + Math.cos(sa) * dist, this.y + Math.sin(sa) * dist, col, 4, 0.32));
+                    particles.push(new Particle(px, py, col, 4, 0.28));
                 }
 
                 for (let i = 0; i < entities.length; i++) {
                     const e = entities[i];
-                    if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
-                    const dx = e.x - this.x, dy = e.y - this.y;
-                    const d = Math.hypot(dx, dy);
-                    if (d <= range + (e.radius || 20)) {
-                        const ang = Math.atan2(dy, dx);
-                        let diff = Math.abs(Math.atan2(Math.sin(this.angle - ang), Math.cos(this.angle - ang)));
-                        if (diff <= halfArc || d <= 65) {
-                            e.takeDamage(dmg, this);
-                        }
+                    if (this.isTargetInFrontBox(e, range, halfWidth)) {
+                        e.takeDamage(dmg, this);
                     }
                 }
             }
 
-            // Base Form Q: 3 stationary punches, 0.3s interval, 300 / 300 / 400 damage, 5s CD
+            // Base Form Q: 3 stationary straight-in-front punches, 0.3s interval, 300 / 300 / 400 damage, 5s CD
             startBaseQ() {
                 this.qCD = 5.0;
                 this.revealTimer = 0.8;
                 this.qPunchingTimer = 0.72;
                 this.qPunchStep = 0;
                 this.qPunchTick = 0;
-                if (this.isPlayer) addKillMsg('🔥 Blazing Tri-Fist!');
             }
 
             executeBaseQPunch(stepNum) {
                 const isFinal = stepNum >= 3;
                 const dmg = isFinal ? 400 : 300;
-                const range = isFinal ? 205 : 180;
-                const halfArc = Math.PI * 0.48;
-                this.punchAnimTimer = 0.25;
+                const range = isFinal ? 235 : 205;
+                const halfWidth = isFinal ? 58 : 48;
+                this.punchAnimTimer = 0.24;
                 this.punchHandSide = (stepNum % 2 === 1) ? 1 : -1;
 
-                // Spawn exact-range 180px / 205px polygon punch shock-cone
-                visualEffects.push(new MeccaPolygonAttackEffect('cone_blast', this.x, this.y, this.angle, {
+                // Spawn straight-in-front piston shock-punch
+                visualEffects.push(new MeccaPolygonAttackEffect('front_punch', this.x, this.y, this.angle, {
                     range: range,
-                    halfArc: halfArc,
-                    duration: isFinal ? 0.36 : 0.26,
+                    halfWidth: halfWidth,
+                    handSide: this.punchHandSide,
+                    duration: isFinal ? 0.34 : 0.24,
                     isFinisher: isFinal,
                     isSoul: false
                 }));
-                for (let i = 0; i < (isFinal ? 14 : 9); i++) {
-                    const sa = this.angle + (Math.random() - 0.5) * halfArc * 1.7;
-                    const dist = 50 + Math.random() * (range - 50);
+                const cosA = Math.cos(this.angle), sinA = Math.sin(this.angle);
+                for (let i = 0; i < (isFinal ? 12 : 8); i++) {
+                    const fwd = 45 + Math.random() * (range - 45);
+                    const lat = (Math.random() - 0.5) * halfWidth * 1.7;
                     particles.push(new Particle(
-                        this.x + Math.cos(sa) * dist,
-                        this.y + Math.sin(sa) * dist,
+                        this.x + cosA * fwd - sinA * lat,
+                        this.y + sinA * fwd + cosA * lat,
                         i % 2 === 0 ? '#ff4500' : '#ffae00',
                         isFinal ? 5 : 4,
-                        0.36
+                        0.32
                     ));
                 }
 
                 for (let i = 0; i < entities.length; i++) {
                     const e = entities[i];
-                    if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
-                    const dx = e.x - this.x, dy = e.y - this.y;
-                    const d = Math.hypot(dx, dy);
-                    if (d <= range + (e.radius || 20)) {
-                        const ang = Math.atan2(dy, dx);
-                        const diff = Math.abs(Math.atan2(Math.sin(this.angle - ang), Math.cos(this.angle - ang)));
-                        if (diff <= halfArc || d <= 70) {
-                            e.takeDamage(dmg, this);
-                            if (isFinal) {
-                                safeApplyStatus(e, 'knockback', { x: Math.cos(this.angle) * 320, y: Math.sin(this.angle) * 320 }, this);
-                            }
+                    if (this.isTargetInFrontBox(e, range, halfWidth)) {
+                        e.takeDamage(dmg, this);
+                        if (isFinal) {
+                            safeApplyStatus(e, 'knockback', { x: Math.cos(this.angle) * 320, y: Math.sin(this.angle) * 320 }, this);
                         }
                     }
                 }
@@ -43735,93 +43780,83 @@
                 this.eDashVx = Math.cos(this.angle) * (dashDist / dashDur);
                 this.eDashVy = Math.sin(this.angle) * (dashDist / dashDur);
 
-                // Visual corridor showing the exact dash trajectory
                 visualEffects.push(new MeccaPolygonAttackEffect('dash_corridor', this.x, this.y, this.angle, {
                     endX: this.x + Math.cos(this.angle) * dashDist,
                     endY: this.y + Math.sin(this.angle) * dashDist,
-                    width: 36,
-                    duration: 0.34,
+                    width: 38,
+                    duration: 0.32,
                     isSoul: false
                 }));
-                if (this.isPlayer) addKillMsg(`🔥 Thruster Surge (${Math.round(ratio * 100)}%)!`);
             }
 
-            // Base Form F: Kick forward, knock back enemies and deal 1200 damage; if knocked into a wall, stun for 1s and deal +200 extra damage (15s CD)
+            // Base Form F: Long-range forward kick, knock back enemies and deal 1200 damage; if knocked into a wall, stun for 1s and deal +200 extra damage (15s CD)
             doBaseF() {
                 this.fCD = 15.0;
                 this.revealTimer = 1.0;
                 this.kickAnimTimer = 0.42;
 
-                // Short forward kick step
+                // Extended forward kick lunge
                 const preSelfX = this.x, preSelfY = this.y;
-                this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x + Math.cos(this.angle) * 70));
-                this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y + Math.sin(this.angle) * 70));
+                this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x + Math.cos(this.angle) * 130));
+                this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y + Math.sin(this.angle) * 130));
                 if (typeof clampEntityKnockbackWalls === 'function') {
                     clampEntityKnockbackWalls(this, preSelfX, preSelfY);
                 }
 
-                const kickRange = 215;
-                const halfArc = Math.PI * 0.48;
-                const kbDist = 290;
+                const kickRange = 330; // Much longer max range!
+                const halfWidth = 64;
+                const kbDist = 380;
 
-                // Spawn exact 215px kick cleave + 290px knockback trajectory visual
-                visualEffects.push(new MeccaPolygonAttackEffect('cone_blast', this.x, this.y, this.angle, {
+                visualEffects.push(new MeccaPolygonAttackEffect('front_punch', this.x, this.y, this.angle, {
                     range: kickRange,
-                    halfArc: halfArc,
+                    halfWidth: halfWidth,
                     kbDist: kbDist,
                     duration: 0.42,
                     isKick: true,
                     isSoul: false
                 }));
+                const cosA = Math.cos(this.angle), sinA = Math.sin(this.angle);
                 for (let i = 0; i < 16; i++) {
-                    const sa = this.angle + (Math.random() - 0.5) * halfArc * 1.6;
-                    const dist = 60 + Math.random() * (kickRange - 50);
-                    particles.push(new Particle(this.x + Math.cos(sa) * dist, this.y + Math.sin(sa) * dist, i % 2 === 0 ? '#ff4500' : '#ffd166', 5, 0.45));
+                    const fwd = 50 + Math.random() * (kickRange - 40);
+                    const lat = (Math.random() - 0.5) * halfWidth * 1.8;
+                    particles.push(new Particle(this.x + cosA * fwd - sinA * lat, this.y + sinA * fwd + cosA * lat, i % 2 === 0 ? '#ff4500' : '#ffd166', 5, 0.42));
                 }
 
                 for (let i = 0; i < entities.length; i++) {
                     const e = entities[i];
-                    if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
-                    const dx = e.x - this.x, dy = e.y - this.y;
-                    const d = Math.hypot(dx, dy);
-                    if (d <= kickRange + (e.radius || 20)) {
-                        const ang = Math.atan2(dy, dx);
-                        const diff = Math.abs(Math.atan2(Math.sin(this.angle - ang), Math.cos(this.angle - ang)));
-                        if (diff <= halfArc || d <= 75) {
-                            e.takeDamage(1200, this, { ignoreKnockback: true });
+                    if (this.isTargetInFrontBox(e, kickRange, halfWidth)) {
+                        e.takeDamage(1200, this, { ignoreKnockback: true });
 
-                            const pushAng = this.angle;
-                            const preX = e.x, preY = e.y;
-                            const intendedX = preX + Math.cos(pushAng) * kbDist;
-                            const intendedY = preY + Math.sin(pushAng) * kbDist;
+                        const pushAng = this.angle;
+                        const preX = e.x, preY = e.y;
+                        const intendedX = preX + Math.cos(pushAng) * kbDist;
+                        const intendedY = preY + Math.sin(pushAng) * kbDist;
 
-                            safeApplyStatus(e, 'push', {
-                                dx: Math.cos(pushAng) * kbDist,
-                                dy: Math.sin(pushAng) * kbDist,
-                                x: Math.round(intendedX),
-                                y: Math.round(intendedY)
-                            }, this);
-                            safeApplyStatus(e, 'knockback', {
-                                x: Math.cos(pushAng) * 650,
-                                y: Math.sin(pushAng) * 650
-                            }, this);
+                        safeApplyStatus(e, 'push', {
+                            dx: Math.cos(pushAng) * kbDist,
+                            dy: Math.sin(pushAng) * kbDist,
+                            x: Math.round(intendedX),
+                            y: Math.round(intendedY)
+                        }, this);
+                        safeApplyStatus(e, 'knockback', {
+                            x: Math.cos(pushAng) * 700,
+                            y: Math.sin(pushAng) * 700
+                        }, this);
 
-                            if (this.didKnockbackHitWall(e, preX, preY, intendedX, intendedY)) {
-                                safeApplyStatus(e, 'stun', 1.0, this);
-                                e.takeDamage(200, this, { ignoreKnockback: true });
-                                visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', e.x, e.y, 0, {
-                                    radius: 110,
-                                    duration: 0.42,
-                                    isSoul: false
-                                }));
-                                try {
-                                    effects.push(new TextPop(e.x, e.y - 38, 'WALL SLAM! +200 & STUN!', '#ffae00'));
-                                } catch (_) {}
-                            }
+                        if (this.didKnockbackHitWall(e, preX, preY, intendedX, intendedY)) {
+                            safeApplyStatus(e, 'stun', 1.0, this);
+                            e.takeDamage(200, this, { ignoreKnockback: true });
+                            visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', e.x, e.y, 0, {
+                                radius: 120,
+                                duration: 0.42,
+                                isSoul: false
+                            }));
                         }
                     }
                 }
-                if (this.isPlayer) addKillMsg('🔥 Inferno Kick!');
+                if (this.isPlayer) {
+                    try { screenShake(6); } catch (_) {}
+                }
             }
 
             // G Ability: Permanent Ascension to Soul Flame Form at 100% charge
@@ -43855,7 +43890,7 @@
                 this.qPunchingTimer = 0;
 
                 visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', this.x, this.y, 0, {
-                    radius: 260,
+                    radius: 265,
                     duration: 0.65,
                     isSoul: true
                 }));
@@ -43880,25 +43915,21 @@
                         });
                     } catch (_) {}
                 }
-
-                try {
-                    effects.push(new TextPop(this.x, this.y - 42, 'SOUL FLAME ASCENSION!', '#38f9d7'));
-                } catch (_) {}
                 if (this.isPlayer) {
-                    addKillMsg('🔥 SOUL FLAME ASCENSION! 6000 HP, 1200 Mech Armor, +25% Speed & Penetration! 🔥');
+                    try { screenShake(9); } catch (_) {}
                 }
             }
 
-            // Soul Flame Q: Dash forward, dealing 5 slashes (100 dmg each) + 1 Soul Explosion (750 dmg),
+            // Soul Flame Q: Dash forward, dealing 5 slashes (100 dmg each) + 1 Soul Explosion (1000 dmg!),
             // stunning the main target, and applying Fading Soul (-10% max HP for 5s) with a 5s cooldown
             doSoulFlameQ() {
                 this.qCD = 5.0;
                 this.revealTimer = 0.8;
-                this.soulQDashTimer = 0.28;
-                this.soulQSlashTimer = 0.48;
+                this.soulQDashTimer = 0.26;
+                this.soulQSlashTimer = 0.46;
 
                 const startX = this.x, startY = this.y;
-                const dashLen = 320;
+                const dashLen = 350;
                 const corridorRadius = 125;
                 const dirX = Math.cos(this.angle), dirY = Math.sin(this.angle);
                 this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x + dirX * dashLen));
@@ -43907,12 +43938,12 @@
                     clampEntityKnockbackWalls(this, startX, startY);
                 }
 
-                // Draw exact 320px x 250px dash & slash corridor in Normal Flame + Mint Soul Fire
+                // Draw exact dash & slash corridor in Normal Flame + Mint Soul Fire
                 visualEffects.push(new MeccaPolygonAttackEffect('dash_corridor', startX, startY, this.angle, {
                     endX: this.x,
                     endY: this.y,
                     width: corridorRadius,
-                    duration: 0.48,
+                    duration: 0.46,
                     isSoul: true
                 }));
 
@@ -43946,7 +43977,7 @@
                     safeApplyStatus(mainTarget, 'stun', 0.85, this);
                 }
 
-                // Apply Fading Soul (-10% max HP for 5s) and 5 slashes (100 dmg each) + 1 Soul Explosion (750 dmg)
+                // Apply Fading Soul (-10% max HP for 5s) and 5 slashes (100 dmg each) + 1 Soul Explosion (1000 dmg!)
                 for (let idx = 0; idx < hitEnemies.length; idx++) {
                     const target = hitEnemies[idx];
                     safeApplyStatus(target, 'fadingSoul', 5.0, this);
@@ -43960,7 +43991,7 @@
                         if (this.dead) return;
                         const slashAng = this.angle + (s - 2) * 0.55 + (s % 2 === 0 ? 0.35 : -0.35);
                         visualEffects.push(new MeccaPolygonAttackEffect('soul_slash', mainTarget ? mainTarget.x : slashCenterDefaultX, mainTarget ? mainTarget.y : slashCenterDefaultY, slashAng, {
-                            length: 135,
+                            length: 155,
                             isMint: s % 2 === 0,
                             duration: 0.24
                         }));
@@ -43973,7 +44004,7 @@
                                 }
                             }
                         }
-                    }, s * 70);
+                    }, s * 65);
                 }
 
                 setTimeout(() => {
@@ -43981,41 +44012,43 @@
                     const expX = mainTarget && !mainTarget.dead ? mainTarget.x : this.x;
                     const expY = mainTarget && !mainTarget.dead ? mainTarget.y : this.y;
                     visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', expX, expY, 0, {
-                        radius: 165,
+                        radius: 175,
                         duration: 0.45,
                         isSoul: true
                     }));
                     for (let idx = 0; idx < hitEnemies.length; idx++) {
                         const target = hitEnemies[idx];
                         if (target && !target.dead) {
-                            target.takeDamage(750, this);
+                            target.takeDamage(1000, this); // Buffed from 750 to 1000!
                             safeApplyStatus(target, 'fadingSoul', 5.0, this);
                         }
                     }
-                }, 380);
-
-                if (this.isPlayer) addKillMsg('🔥👻 Soul Flame Rend (5 Slashes + Soul Explosion)!');
+                    if (this.isPlayer) {
+                        try { screenShake(6); } catch (_) {}
+                    }
+                }, 350);
             }
 
             // Soul Flame E: Soul Vanisher Zone wrapped around Mecca (6s duration, 12s CD)
             doSoulFlameE() {
                 this.eCD = 12.0;
+                this.soulZoneMaxTimer = 6.0;
                 this.soulZoneTimer = 6.0;
                 visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', this.x, this.y, 0, {
                     radius: this.soulZoneRadius || 240,
                     duration: 0.35,
                     isSoul: true
                 }));
-                if (this.isPlayer) addKillMsg('👻 Soul Vanisher Zone Activated (6s)!');
             }
 
-            // Soul Flame F: Flight to mouse location (range limit 550), 500 true dmg in flight path, 500 true + 1500 dmg + slow at end (15s CD)
+            // Soul Flame F: Much quicker high-speed flight to mouse location with much longer max range (1050px),
+            // 500 true dmg in flight path, 500 true + 1500 dmg + slow at end (15s CD)
             doSoulFlameF() {
                 this.fCD = 15.0;
                 this.revealTimer = 1.0;
-                const maxFlightRange = 550;
-                let tx = this.x + Math.cos(this.angle) * 420;
-                let ty = this.y + Math.sin(this.angle) * 420;
+                const maxFlightRange = 1050; // Much longer max range!
+                let tx = this.x + Math.cos(this.angle) * 650;
+                let ty = this.y + Math.sin(this.angle) * 650;
                 if (this.isPlayer && typeof mouse !== 'undefined' && typeof mouse.wx === 'number' && typeof mouse.wy === 'number') {
                     const dx = mouse.wx - this.x;
                     const dy = mouse.wy - this.y;
@@ -44033,32 +44066,29 @@
                 this.soulFlightStartY = this.y;
                 this.soulFlightTargetX = tx;
                 this.soulFlightTargetY = ty;
-                this.soulFlightDuration = 0.38;
-                this.soulFlightTimer = 0.38;
+                this.soulFlightDuration = 0.15; // Much quicker high-speed blitz!
+                this.soulFlightTimer = 0.15;
                 this.soulFlightHitSet = new Set();
 
-                // Show the exact 95px-radius (190px wide) true-damage flight corridor
                 visualEffects.push(new MeccaPolygonAttackEffect('dash_corridor', this.x, this.y, this.angle, {
                     endX: tx,
                     endY: ty,
                     width: 95,
-                    duration: 0.45,
+                    duration: 0.36,
                     isSoul: true
                 }));
-
-                if (this.isPlayer) addKillMsg('🔥👻 Soul Flame Flight!');
             }
 
             finishSoulFlameFlightImpact() {
-                const impactRadius = 225;
+                const impactRadius = 235;
                 visualEffects.push(new MeccaPolygonAttackEffect('octagon_explosion', this.x, this.y, 0, {
                     radius: impactRadius,
                     duration: 0.55,
                     isSoul: true
                 }));
-                for (let k = 0; k < 20; k++) {
-                    const a = (Math.PI * 2 * k) / 20;
-                    particles.push(new Particle(this.x, this.y, k % 2 === 0 ? '#00f5d4' : '#ff6b00', 5, 0.55, Math.cos(a) * 240, Math.sin(a) * 240));
+                for (let k = 0; k < 22; k++) {
+                    const a = (Math.PI * 2 * k) / 22;
+                    particles.push(new Particle(this.x, this.y, k % 2 === 0 ? '#00f5d4' : '#ff6b00', 5, 0.52, Math.cos(a) * 250, Math.sin(a) * 250));
                 }
                 for (let i = 0; i < entities.length; i++) {
                     const e = entities[i];
@@ -44071,7 +44101,7 @@
                     }
                 }
                 if (this.isPlayer) {
-                    try { screenShake(8); } catch (_) {}
+                    try { screenShake(9); } catch (_) {}
                 }
             }
 
@@ -44097,14 +44127,14 @@
                     return;
                 }
 
-                if (d > 165) {
+                if (d > 175) {
                     this.x += Math.cos(this.angle) * spd * dt;
                     this.y += Math.sin(this.angle) * spd * dt;
                 }
-                if (d <= 185 && this.basicCD <= 0) {
+                if (d <= 205 && this.basicCD <= 0) {
                     this.basicAtk();
                 }
-                if (this.qCD <= 0 && d <= (this.ascended ? 310 : 175)) {
+                if (this.qCD <= 0 && d <= (this.ascended ? 340 : 195)) {
                     if (this.ascended) this.doSoulFlameQ();
                     else this.startBaseQ();
                 }
@@ -44112,16 +44142,23 @@
                     if (this.ascended) this.doSoulFlameE();
                     else this.startBaseECharge();
                 }
-                if (this.fCD <= 0 && d <= (this.ascended ? 500 : 200)) {
+                if (this.fCD <= 0 && d <= (this.ascended ? 920 : 310)) {
                     if (this.ascended) {
                         this.soulFlightStartX = this.x;
                         this.soulFlightStartY = this.y;
                         this.soulFlightTargetX = t.x;
                         this.soulFlightTargetY = t.y;
-                        this.soulFlightDuration = 0.38;
-                        this.soulFlightTimer = 0.38;
+                        this.soulFlightDuration = 0.15;
+                        this.soulFlightTimer = 0.15;
                         this.soulFlightHitSet = new Set();
                         this.fCD = 15.0;
+                        visualEffects.push(new MeccaPolygonAttackEffect('dash_corridor', this.x, this.y, this.angle, {
+                            endX: t.x,
+                            endY: t.y,
+                            width: 95,
+                            duration: 0.36,
+                            isSoul: true
+                        }));
                     } else {
                         this.doBaseF();
                     }
@@ -44153,59 +44190,49 @@
                 const tNow = performance.now() * 0.005;
 
                 // =========================================================================
-                // 1. TACTICAL TRUE-RANGE INDICATORS (so player always sees exact attack ranges!)
+                // 1. LOCAL-ONLY STRAIGHT-IN-FRONT BASIC ATTACK INDICATOR (NEVER visible to enemies!)
                 // =========================================================================
-                if (this.isPlayer) {
+                if (this === player && this.isPlayer && !(typeof OnlinePlayerProxy !== 'undefined' && this instanceof OnlinePlayerProxy)) {
                     ctx.save();
                     ctx.translate(sx, sy);
                     ctx.rotate(this.angle);
 
-                    // Primary melee / cone range perimeter (185px Basic, 205px Base Q3, 215px Base F)
-                    const primaryRange = this.qPunchingTimer > 0 ? (this.qPunchStep >= 2 ? 205 : 180) : 185;
-                    const halfCone = Math.PI * 0.45;
-                    ctx.strokeStyle = isSoul ? 'rgba(0, 245, 212, 0.36)' : 'rgba(255, 140, 0, 0.36)';
+                    const boxRange = this.qPunchingTimer > 0 ? (this.qPunchStep >= 2 ? 235 : 205) : 210;
+                    const boxHalfW = this.qPunchingTimer > 0 ? (this.qPunchStep >= 2 ? 58 : 48) : 46;
                     ctx.fillStyle = isSoul ? 'rgba(0, 245, 212, 0.05)' : 'rgba(255, 107, 0, 0.05)';
-                    ctx.lineWidth = 1.8;
-                    ctx.beginPath();
-                    ctx.moveTo(18, 0);
-                    const coneSteps = 6;
-                    for (let i = 0; i <= coneSteps; i++) {
-                        const a = -halfCone + (halfCone * 2 * i) / coneSteps;
-                        ctx.lineTo(Math.cos(a) * primaryRange, Math.sin(a) * primaryRange);
-                    }
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.stroke();
+                    ctx.strokeStyle = isSoul ? 'rgba(0, 245, 212, 0.34)' : 'rgba(255, 140, 0, 0.34)';
+                    ctx.lineWidth = 1.6;
+                    ctx.fillRect(18, -boxHalfW, boxRange - 18, boxHalfW * 2);
+                    ctx.strokeRect(18, -boxHalfW, boxRange - 18, boxHalfW * 2);
 
-                    // Outer tick marks at F Kick range (215px) in Base Form, or Soul Q Dash range (320px) in Soul Flame Form
-                    const secondaryRange = isSoul ? 320 : 215;
-                    ctx.strokeStyle = isSoul ? 'rgba(255, 123, 0, 0.38)' : 'rgba(255, 209, 102, 0.32)';
+                    // Subtle F Kick (330px) or Soul Q Dash (350px) front notch
+                    const extRange = isSoul ? 350 : 330;
+                    ctx.strokeStyle = isSoul ? 'rgba(255, 107, 0, 0.32)' : 'rgba(255, 209, 102, 0.28)';
                     ctx.lineWidth = 1.5;
-                    ctx.setLineDash([6, 6]);
                     ctx.beginPath();
-                    ctx.moveTo(secondaryRange, -48);
-                    ctx.lineTo(secondaryRange, 48);
+                    ctx.moveTo(extRange, -28);
+                    ctx.lineTo(extRange + 10, 0);
+                    ctx.lineTo(extRange, 28);
                     ctx.stroke();
-                    ctx.setLineDash([]);
 
                     ctx.restore();
                 }
 
                 // =========================================================================
-                // 2. SOUL VANISHER ZONE (Soul Flame E - Exact 240px Radius 12-Sided Domain + Drain Tethers)
+                // 2. SOUL VANISHER ZONE (Soul Flame E - Intimidating 240px 12-Sided Abyssal Domain, Zero Text)
                 // =========================================================================
                 if (this.soulZoneTimer > 0) {
                     ctx.save();
                     const zr = this.soulZoneRadius || 240;
                     ctx.translate(sx, sy);
 
-                    // Dual Flame + Mint Fire 12-sided polygon domain
                     const zoneGrad = ctx.createLinearGradient(-zr, -zr, zr, zr);
-                    zoneGrad.addColorStop(0, 'rgba(255, 107, 0, 0.14)');
-                    zoneGrad.addColorStop(0.5, 'rgba(0, 245, 212, 0.16)');
-                    zoneGrad.addColorStop(1, 'rgba(255, 158, 0, 0.14)');
+                    zoneGrad.addColorStop(0, 'rgba(9, 13, 22, 0.32)');
+                    zoneGrad.addColorStop(0.35, 'rgba(255, 85, 0, 0.16)');
+                    zoneGrad.addColorStop(0.7, 'rgba(0, 245, 212, 0.18)');
+                    zoneGrad.addColorStop(1, 'rgba(9, 13, 22, 0.32)');
                     ctx.fillStyle = zoneGrad;
-                    ctx.strokeStyle = this.soulZoneHasEnemy ? '#ff7b00' : '#00f5d4';
+                    ctx.strokeStyle = this.soulZoneHasEnemy ? '#ff5500' : '#00f5d4';
                     ctx.lineWidth = 3.5;
                     ctx.beginPath();
                     for (let i = 0; i < 12; i++) {
@@ -44219,50 +44246,42 @@
                     ctx.fill();
                     ctx.stroke();
 
-                    // Counter-rotating inner normal-flame polygon ring
-                    ctx.strokeStyle = 'rgba(255, 123, 0, 0.72)';
-                    ctx.lineWidth = 2;
+                    // Counter-rotating inner normal-flame jagged star ring
+                    ctx.strokeStyle = 'rgba(255, 107, 0, 0.78)';
+                    ctx.lineWidth = 2.2;
                     ctx.beginPath();
-                    for (let i = 0; i < 8; i++) {
-                        const a = -tNow * 0.4 + (i * Math.PI * 2) / 8;
-                        const px = Math.cos(a) * (zr * 0.68);
-                        const py = Math.sin(a) * (zr * 0.68);
+                    for (let i = 0; i < 12; i++) {
+                        const a = -tNow * 0.45 + (i * Math.PI * 2) / 12;
+                        const r = (i % 2 === 0) ? zr * 0.78 : zr * 0.58;
+                        const px = Math.cos(a) * r;
+                        const py = Math.sin(a) * r;
                         if (i === 0) ctx.moveTo(px, py);
                         else ctx.lineTo(px, py);
                     }
                     ctx.closePath();
                     ctx.stroke();
 
-                    // Draw live soul-drain beams to every enemy currently inside the 240px Soul Vanisher Zone
+                    // Live soul-siphon lightning tethers to every enemy inside the zone
                     for (let i = 0; i < entities.length; i++) {
                         const e = entities[i];
                         if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
                         const dx = e.x - this.x, dy = e.y - this.y;
                         if (Math.hypot(dx, dy) <= zr) {
                             ctx.strokeStyle = '#00f5d4';
-                            ctx.lineWidth = 2.5;
+                            ctx.lineWidth = 2.6;
                             ctx.beginPath();
                             ctx.moveTo(0, 0);
+                            ctx.lineTo(dx * 0.5 + (Math.random() - 0.5) * 14, dy * 0.5 + (Math.random() - 0.5) * 14);
                             ctx.lineTo(dx, dy);
                             ctx.stroke();
                         }
                     }
 
-                    ctx.font = 'bold 11px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillStyle = this.soulZoneHasEnemy ? '#ffd166' : '#80ffdb';
-                    ctx.fillText(
-                        this.soulZoneHasEnemy
-                            ? `👻 SOUL VANISHER (${this.soulZoneTimer.toFixed(1)}s) • Q & F CD -1s/s!`
-                            : `👻 SOUL VANISHER ZONE (${this.soulZoneTimer.toFixed(1)}s)`,
-                        0,
-                        -zr + 18
-                    );
                     ctx.restore();
                 }
 
                 // =========================================================================
-                // 3. BASE E STATIONARY CHARGE RUNWAY (Shows 140px..520px True Dash Range & Max Cap)
+                // 3. BASE E STATIONARY CHARGE RUNWAY (140px..520px True Dash Range, Zero Text)
                 // =========================================================================
                 if (this.eCharging) {
                     const ratio = Math.min(1, (this.eChargeTime || 0) / 1.0);
@@ -44272,26 +44291,23 @@
                     ctx.translate(sx, sy);
                     ctx.rotate(this.angle);
 
-                    // Full 520px max-range ghost runway
-                    ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
-                    ctx.strokeStyle = 'rgba(255, 158, 0, 0.45)';
+                    ctx.fillStyle = 'rgba(9, 13, 22, 0.45)';
+                    ctx.strokeStyle = 'rgba(255, 140, 0, 0.45)';
                     ctx.lineWidth = 2;
                     ctx.setLineDash([8, 6]);
                     ctx.fillRect(20, -24, maxDashDist - 20, 48);
                     ctx.strokeRect(20, -24, maxDashDist - 20, 48);
                     ctx.setLineDash([]);
 
-                    // Active charged dash fill
                     const eGrad = ctx.createLinearGradient(20, 0, curDashDist, 0);
-                    eGrad.addColorStop(0, 'rgba(255, 69, 0, 0.55)');
-                    eGrad.addColorStop(1, 'rgba(255, 209, 102, 0.72)');
+                    eGrad.addColorStop(0, 'rgba(255, 69, 0, 0.65)');
+                    eGrad.addColorStop(1, 'rgba(255, 209, 102, 0.82)');
                     ctx.fillStyle = eGrad;
                     ctx.strokeStyle = '#ffd166';
                     ctx.lineWidth = 2.5;
                     ctx.fillRect(20, -22, curDashDist - 20, 44);
                     ctx.strokeRect(20, -22, curDashDist - 20, 44);
 
-                    // Endpoint chevron head at exact landing distance
                     ctx.fillStyle = '#ffae00';
                     ctx.beginPath();
                     ctx.moveTo(curDashDist + 16, 0);
@@ -44304,15 +44320,15 @@
                 }
 
                 // =========================================================================
-                // 4. SOUL FLAME F FLIGHT LANDING RETICLE (Exact 225px Final Impact Zone)
+                // 4. SOUL FLAME F FLIGHT LANDING RETICLE (Exact 235px Impact Zone)
                 // =========================================================================
                 if (this.soulFlightTimer > 0) {
                     const tx = this.soulFlightTargetX - camera.x;
                     const ty = this.soulFlightTargetY - camera.y;
-                    const impR = 225;
+                    const impR = 235;
                     ctx.save();
                     ctx.translate(tx, ty);
-                    ctx.fillStyle = 'rgba(0, 245, 212, 0.14)';
+                    ctx.fillStyle = 'rgba(0, 245, 212, 0.16)';
                     ctx.strokeStyle = '#00f5d4';
                     ctx.lineWidth = 3;
                     ctx.beginPath();
@@ -44332,7 +44348,7 @@
                 super.draw(ctx);
 
                 // =========================================================================
-                // 5. ARTICULATED MECH CHASSIS, THRUSTER WINGS & VOLCANO/SOUL GAUNTLETS
+                // 5. INTIMIDATING WARLORD MECH CHASSIS, THRUSTER WINGS & SIEGE GAUNTLETS
                 // =========================================================================
                 ctx.save();
                 ctx.translate(sx, sy);
@@ -44340,32 +44356,34 @@
 
                 // A. Rear Jet Thrusters & Ascended Dual-Color Wings (Normal Flame + Mint Fire)
                 if (isSoul || this.soulFlightTimer > 0) {
-                    const wingPulse = 1 + Math.sin(tNow * 2.4) * 0.08;
+                    const wingPulse = 1 + Math.sin(tNow * 2.8) * 0.09;
                     for (let side of [-1, 1]) {
                         ctx.save();
                         ctx.scale(1, side * wingPulse);
 
-                        // Primary Outer Wing Blade (Normal Flame #ff4500 -> #ffae00)
-                        ctx.fillStyle = '#ff5500';
+                        // Outer Jagged Wing Pinion (Normal Flame #ff4500 -> #ffae00)
+                        ctx.fillStyle = '#ff4500';
                         ctx.strokeStyle = '#ffd166';
-                        ctx.lineWidth = 1.6;
+                        ctx.lineWidth = 1.8;
                         ctx.beginPath();
                         ctx.moveTo(-6, 12);
-                        ctx.lineTo(-36, 46);
-                        ctx.lineTo(-14, 38);
+                        ctx.lineTo(-42, 52);
+                        ctx.lineTo(-22, 42);
+                        ctx.lineTo(-32, 30);
                         ctx.lineTo(-2, 20);
                         ctx.closePath();
                         ctx.fill();
                         ctx.stroke();
 
-                        // Secondary Inner Wing Blade (Mint Soul Fire #00f5d4 -> #80ffdb)
+                        // Inner Razor Wing Pinion (Mint Soul Fire #00f5d4 -> #80ffdb)
                         ctx.fillStyle = '#00f5d4';
-                        ctx.strokeStyle = '#a8ffec';
-                        ctx.lineWidth = 1.6;
+                        ctx.strokeStyle = '#090d16';
+                        ctx.lineWidth = 1.8;
                         ctx.beginPath();
                         ctx.moveTo(-2, 10);
-                        ctx.lineTo(-26, 54);
-                        ctx.lineTo(4, 34);
+                        ctx.lineTo(-30, 60);
+                        ctx.lineTo(-8, 44);
+                        ctx.lineTo(6, 36);
                         ctx.lineTo(8, 16);
                         ctx.closePath();
                         ctx.fill();
@@ -44375,12 +44393,12 @@
                     }
                 } else {
                     // Base Form Twin Thermal Exhaust Plumes (Normal Flame Colors)
-                    const plumeLen = (this.eDashTimer > 0 ? 38 : 26) + Math.sin(tNow * 4) * 4;
+                    const plumeLen = (this.eDashTimer > 0 ? 42 : 28) + Math.sin(tNow * 4.5) * 5;
                     for (let side of [-1, 1]) {
                         ctx.fillStyle = '#ff4500';
                         ctx.beginPath();
                         ctx.moveTo(-14, side * 7);
-                        ctx.lineTo(-14 - plumeLen, side * 14);
+                        ctx.lineTo(-14 - plumeLen, side * 15);
                         ctx.lineTo(-14 - plumeLen * 0.65, side * 4);
                         ctx.closePath();
                         ctx.fill();
@@ -44395,69 +44413,66 @@
                     }
                 }
 
-                // B. Heavy Mech Shoulder Pauldrons (Beveled Polygon Armor Plates)
+                // B. Heavy Obsidian Mech Shoulder Pauldrons
                 for (let side of [-1, 1]) {
                     ctx.save();
                     ctx.scale(1, side);
-                    ctx.fillStyle = isSoul ? '#0f172a' : '#1e2235';
-                    ctx.strokeStyle = isSoul ? '#00f5d4' : '#ff7b00';
-                    ctx.lineWidth = 2.2;
+                    ctx.fillStyle = '#090d16';
+                    ctx.strokeStyle = isSoul ? '#00f5d4' : '#ff5500';
+                    ctx.lineWidth = 2.4;
                     ctx.beginPath();
-                    ctx.moveTo(-12, 14);
-                    ctx.lineTo(12, 14);
-                    ctx.lineTo(16, 26);
-                    ctx.lineTo(-8, 28);
+                    ctx.moveTo(-13, 14);
+                    ctx.lineTo(14, 14);
+                    ctx.lineTo(19, 28);
+                    ctx.lineTo(-10, 30);
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
 
-                    // Shoulder Vent Trim
-                    ctx.fillStyle = isSoul ? '#ff7b00' : '#ffae00';
-                    ctx.fillRect(-4, 18, 12, 4);
+                    ctx.fillStyle = isSoul ? '#ff6b00' : '#ffae00';
+                    ctx.fillRect(-5, 19, 14, 4);
                     ctx.restore();
                 }
 
-                // C. Articulated Siege Gauntlets & Forearm Blades
-                const reachL = (this.punchAnimTimer > 0 && this.punchHandSide < 0) ? 22 : 0;
-                const reachR = (this.punchAnimTimer > 0 && this.punchHandSide > 0) ? 22 : 0;
+                // C. Massive Siege Pile-Bunker Gauntlets
+                const reachL = (this.punchAnimTimer > 0 && this.punchHandSide < 0) ? 26 : 0;
+                const reachR = (this.punchAnimTimer > 0 && this.punchHandSide > 0) ? 26 : 0;
                 for (let side of [-1, 1]) {
                     const reach = side < 0 ? reachL : reachR;
                     ctx.save();
-                    ctx.translate(reach, side * 19);
-                    // Gauntlet Housing
-                    ctx.fillStyle = '#1e293b';
-                    ctx.strokeStyle = isSoul ? (side < 0 ? '#ff7b00' : '#00f5d4') : '#ff5500';
-                    ctx.lineWidth = 2;
+                    ctx.translate(reach, side * 20);
+                    ctx.fillStyle = '#090d16';
+                    ctx.strokeStyle = isSoul ? (side < 0 ? '#ff6b00' : '#00f5d4') : '#ff5500';
+                    ctx.lineWidth = 2.2;
                     ctx.beginPath();
-                    ctx.moveTo(4, -5);
-                    ctx.lineTo(22, -6);
-                    ctx.lineTo(26, 0);
-                    ctx.lineTo(22, 6);
-                    ctx.lineTo(4, 5);
+                    ctx.moveTo(2, -6);
+                    ctx.lineTo(24, -7);
+                    ctx.lineTo(30, 0);
+                    ctx.lineTo(24, 7);
+                    ctx.lineTo(2, 6);
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
 
-                    // Knuckle Flame Emitter / Soul Blade
-                    ctx.fillStyle = isSoul ? (side < 0 ? '#00f5d4' : '#ff9e00') : '#ffae00';
+                    ctx.fillStyle = isSoul ? (side < 0 ? '#00f5d4' : '#ff7b00') : '#ffae00';
                     ctx.beginPath();
-                    ctx.moveTo(22, -4);
-                    ctx.lineTo(isSoul ? 34 : 29, 0);
-                    ctx.lineTo(22, 4);
+                    ctx.moveTo(22, -5);
+                    ctx.lineTo(isSoul ? 38 : 32, 0);
+                    ctx.lineTo(22, 5);
                     ctx.closePath();
                     ctx.fill();
                     ctx.restore();
                 }
 
-                // D. Central Armored Torso & Furnace Core + Head Visor Crest
-                ctx.fillStyle = isSoul ? '#0f172a' : '#222638';
-                ctx.strokeStyle = isSoul ? '#38f9d7' : '#ff9e00';
-                ctx.lineWidth = 2.2;
+                // D. Central Obsidian Armored Torso & Furnace Core + Fierce Horned Warlord Visor
+                ctx.fillStyle = '#090d16';
+                ctx.strokeStyle = isSoul ? '#00f5d4' : '#ff7b00';
+                ctx.lineWidth = 2.5;
                 ctx.beginPath();
                 for (let i = 0; i < 6; i++) {
                     const a = (i * Math.PI) / 3;
-                    const rx = Math.cos(a) * 16;
-                    const ry = Math.sin(a) * 16;
+                    const rx = Math.cos(a) * 17;
+                    const ry = Math.sin(a) * 17;
                     if (i === 0) ctx.moveTo(rx, ry);
                     else ctx.lineTo(rx, ry);
                 }
@@ -44465,23 +44480,21 @@
                 ctx.fill();
                 ctx.stroke();
 
-                // Molten / Soul Furnace Core Diamond
-                ctx.fillStyle = isSoul ? '#00f5d4' : '#ff5500';
+                ctx.fillStyle = isSoul ? '#00f5d4' : '#ff4500';
                 ctx.beginPath();
-                ctx.moveTo(11, 0);
-                ctx.lineTo(0, -9);
-                ctx.lineTo(-9, 0);
-                ctx.lineTo(0, 9);
+                ctx.moveTo(12, 0);
+                ctx.lineTo(0, -10);
+                ctx.lineTo(-10, 0);
+                ctx.lineTo(0, 10);
                 ctx.closePath();
                 ctx.fill();
 
-                // Forward V-Visor & Horned Mech Crest
-                ctx.fillStyle = isSoul ? '#ffae00' : '#ffd166';
+                ctx.fillStyle = isSoul ? '#ff7b00' : '#ffd166';
                 ctx.beginPath();
-                ctx.moveTo(15, 0);
-                ctx.lineTo(5, -10);
+                ctx.moveTo(16, 0);
+                ctx.lineTo(5, -12);
                 ctx.lineTo(9, 0);
-                ctx.lineTo(5, 10);
+                ctx.lineTo(5, 12);
                 ctx.closePath();
                 ctx.fill();
 
@@ -44504,16 +44517,29 @@
 
                 ctx.restore();
 
-                // Overhead Form, Mech Armor & G Charge Indicator
-                ctx.save();
-                ctx.font = 'bold 11px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillStyle = isSoul ? '#38f9d7' : '#ffae00';
-                const labelText = isSoul
-                    ? `🔥 SOUL FLAME${this.shield > 0 ? ' [ARMOR ' + Math.ceil(this.shield) + ']' : ''}`
-                    : `⚙️ MECCA (${Math.floor(this.gCharge || 0)}%)${this.shield > 0 ? ' [ARMOR ' + Math.ceil(this.shield) + ']' : ''}`;
-                ctx.fillText(labelText, sx, sy - this.radius - 28);
-                ctx.restore();
+                // =========================================================================
+                // 6. SOUL FLAME E DURATION BAR (Clean progress bar above Mecca — ZERO TEXT!)
+                // =========================================================================
+                if (this.soulZoneTimer > 0) {
+                    const barW = 54;
+                    const barH = 5;
+                    const bx = sx - barW * 0.5;
+                    const by = sy - this.radius - 24;
+                    const maxDur = this.soulZoneMaxTimer || 6.0;
+                    const ratio = Math.max(0, Math.min(1, this.soulZoneTimer / maxDur));
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(9, 13, 22, 0.9)';
+                    ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
+                    const bGrad = ctx.createLinearGradient(bx, by, bx + barW, by);
+                    bGrad.addColorStop(0, '#ff6b00');
+                    bGrad.addColorStop(1, '#00f5d4');
+                    ctx.fillStyle = bGrad;
+                    ctx.fillRect(bx, by, barW * ratio, barH);
+                    ctx.strokeStyle = this.soulZoneHasEnemy ? '#ffd166' : '#00f5d4';
+                    ctx.lineWidth = 1.2;
+                    ctx.strokeRect(bx - 1, by - 1, barW + 2, barH + 2);
+                    ctx.restore();
+                }
             }
         }
 
@@ -44949,6 +44975,20 @@
                         eb.style.background = '#f59e0b';
                         eb.style.boxShadow = 'none';
                     }
+                } else if (typeof Mecca !== 'undefined' && p instanceof Mecca && p.soulZoneTimer > 0) {
+                    const ebPct = Math.max(0, Math.min(100, (p.soulZoneTimer / (p.soulZoneMaxTimer || 6.0)) * 100));
+                    eb.style.display = 'block';
+                    eb.style.left = '0%';
+                    eb.style.width = ebPct + '%';
+                    eb.style.background = 'linear-gradient(90deg, #ff6b00 0%, #00f5d4 100%)';
+                    eb.style.boxShadow = '0 0 8px rgba(0, 245, 212, 0.8)';
+                } else if (p.fadingSoulTimer && p.fadingSoulTimer > 0) {
+                    const ebPct = Math.max(0, Math.min(100, (p.fadingSoulTimer / 5.0) * 100));
+                    eb.style.display = 'block';
+                    eb.style.left = '0%';
+                    eb.style.width = ebPct + '%';
+                    eb.style.background = 'linear-gradient(90deg, #0f766e 0%, #00f5d4 100%)';
+                    eb.style.boxShadow = 'none';
                 } else {
                     eb.style.display = 'none';
                     eb.style.left = '0%';
@@ -44956,15 +44996,18 @@
                 }
             }
             if(hpt){
-                let hpLabel = `${Math.ceil(p.hp)} / ${p.maxHp}`;
-                if (typeof Mecca !== 'undefined' && p instanceof Mecca && p.shield > 0 && p.hasMechArmor) {
-                    hpLabel += `  [🛡️ MECH ARMOR: ${Math.ceil(p.shield)}]`;
+                if (p.fadingSoulTimer && p.fadingSoulTimer > 0 && hpb) {
+                    hpb.style.background = '#14b8a6';
                 }
-                if (p.fadingSoulTimer && p.fadingSoulTimer > 0) {
-                    hpLabel += `  [👻 FADING SOUL -10% MAX HP: ${p.fadingSoulTimer.toFixed(1)}s]`;
-                    if (hpb) hpb.style.background = '#14b8a6';
+                if (typeof Mecca !== 'undefined' && p instanceof Mecca) {
+                    hpt.innerText = (p.shield > 0)
+                        ? `${Math.ceil(p.hp)} (${Math.ceil(p.shield)})`
+                        : `${Math.ceil(p.hp)} / ${p.maxHp}`;
+                } else {
+                    hpt.innerText = (p.shield > 0)
+                        ? `${Math.ceil(p.hp)} / ${p.maxHp} (${Math.ceil(p.shield)})`
+                        : `${Math.ceil(p.hp)} / ${p.maxHp}`;
                 }
-                hpt.innerText = hpLabel;
             }
             let c1,c2,c3,m1,m2,m3,c4,m4;
             // Map cooldowns for HUD
@@ -45713,14 +45756,14 @@
                 ctx.fillText(ent.freezeTimer > 0 ? 'FROZEN' : 'STUNNED', sx, sy - ent.radius - 12);
             }
             if (ent.fadingSoulTimer && ent.fadingSoulTimer > 0) {
-                ctx.fillStyle = '#38f9d7';
-                ctx.strokeStyle = '#0f172a';
-                ctx.lineWidth = 2.5;
-                ctx.font = 'bold 11px Inter, Segoe UI, sans-serif';
-                ctx.textAlign = 'center';
-                const fsText = `👻 FADING SOUL (-10% HP) ${ent.fadingSoulTimer.toFixed(1)}s`;
-                ctx.strokeText(fsText, sx, sy - ent.radius - 22);
-                ctx.fillText(fsText, sx, sy - ent.radius - 22);
+                const fsW = 44, fsH = 4;
+                const fsX = sx - fsW * 0.5;
+                const fsY = sy - ent.radius - 19;
+                const fsRatio = Math.max(0, Math.min(1, ent.fadingSoulTimer / 5.0));
+                ctx.fillStyle = 'rgba(9, 13, 22, 0.88)';
+                ctx.fillRect(fsX - 1, fsY - 1, fsW + 2, fsH + 2);
+                ctx.fillStyle = '#00f5d4';
+                ctx.fillRect(fsX, fsY, fsW * fsRatio, fsH);
             }
             if (ent.mindControlledBy && !ent.mindControlledBy.dead) {
                 const pulse = 1 + Math.sin(Date.now() * 0.012) * 0.12;
@@ -45968,6 +46011,17 @@
                                         const viewH = CANVAS.height / (camera.zoom || 1);
                                         camera.x = Math.max(0, Math.min(WORLD_SIZE - viewW, player.x - viewW / 2));
                                         camera.y = Math.max(0, Math.min(WORLD_SIZE - viewH, player.y - viewH / 2));
+                                    }
+                                    if (gameMode === '5v5_online' && typeof onlineSocket !== 'undefined' && onlineSocket) {
+                                        try {
+                                            onlineSocket.emit('requestRespawn', {
+                                                maxHp: player.maxHp,
+                                                hp: player.hp,
+                                                shield: player.shield || 0,
+                                                maxShield: player.maxShield || 0,
+                                                ascended: !!player.ascended
+                                            });
+                                        } catch (_) {}
                                     }
                                     updateHUD(player);
                                     addKillMsg('Revived! Back in action!');
@@ -52354,7 +52408,7 @@
         }
 
         const ONLINE_HERO_DRAW_SCALARS = [
-            'abilityActive', 'activeTwin', 'hasMechArmor', 'gCharge', 'soulZoneTimer', 'soulZoneRadius', 'soulZoneHasEnemy', 'soulFlightTimer', 'soulQSlashTimer', 'punchAnimTimer', 'punchHandSide', 'kickAnimTimer', 'fadingSoulTimer', 'adrenalineTimer', 'aiScanSpinAngle', 'aimAngle',
+            'abilityActive', 'activeTwin', 'hasMechArmor', 'gCharge', 'qPunchingTimer', 'qPunchStep', 'soulZoneTimer', 'soulZoneMaxTimer', 'soulZoneRadius', 'soulZoneHasEnemy', 'soulFlightTimer', 'soulFlightDuration', 'soulFlightStartX', 'soulFlightStartY', 'soulFlightTargetX', 'soulFlightTargetY', 'soulQSlashTimer', 'soulQDashTimer', 'punchAnimTimer', 'punchHandSide', 'kickAnimTimer', 'fadingSoulTimer', 'adrenalineTimer', 'aiScanSpinAngle', 'aimAngle',
             'airborne', 'airborneDuration', 'airborneTime', 'airborneTimer', 'allSeeingActive',
             'allSeeingTimer', 'alpha', 'ammo', 'arrowCount', 'ascended', 'auraActive', 'auraX', 'auraY',
             'barrageActive', 'baseHp', 'baseMaxHp', 'baseX', 'baseY', 'basketsScored', 'beamTimer',
@@ -53678,7 +53732,8 @@
                     'eChargeTimer','spinTimer','ePullAnim','fBeamAnim','qBlockSuccessTimer',
                     'eHitPunchTimer','gPunchAnimTimer','gPunchSuccessTimer','invisTimer',
                     'stealthTimer','dodgeTimer','qBlockTimer','eRushTimer','gParryTimer',
-                    'jumpT','swingTimer','stabTimer','stompTimer','gTimer'
+                    'jumpT','swingTimer','stabTimer','stompTimer','gTimer',
+                    'punchAnimTimer','kickAnimTimer','soulQSlashTimer','soulQDashTimer','qPunchingTimer','soulZoneTimer','soulFlightTimer'
                 ];
                 for (let i = 0; i < animTimers.length; i++) {
                     const tk = animTimers[i];
@@ -54965,6 +55020,14 @@
                 player.shield = serverShield;
                 player._lastSyncedShield = serverShield;
 
+                if (typeof Mecca !== 'undefined' && player instanceof Mecca) {
+                  if ((currentShield > 0 && serverShield <= 0 && player.hasMechArmor) || data.mechArmorBroken) {
+                    player.onMechArmorBroken();
+                  }
+                  if (delta > 0 && Number.isFinite(delta) && !player.ascended) {
+                    player.addGCharge(Math.min(5, delta / 260));
+                  }
+                }
                 if (delta > 0 && Number.isFinite(delta)) {
                   if (player.absorbImpactTimer && player.absorbImpactTimer > 0) {
                     const absorbGain = Math.ceil(delta * 0.20);
@@ -55076,6 +55139,8 @@
                 proxy._lastLocalDamageAt = 0;
                 if (typeof data.maxHp === 'number' && Number.isFinite(data.maxHp) && data.maxHp > 0) proxy.maxHp = data.maxHp;
                 if (typeof data.hp === 'number' && Number.isFinite(data.hp)) proxy.setAuthoritativeHp(data.hp);
+                if (typeof data.shield === 'number' && Number.isFinite(data.shield)) proxy.shield = data.shield;
+                if (typeof data.maxShield === 'number' && Number.isFinite(data.maxShield)) proxy.maxShield = data.maxShield;
                 if (typeof data.x === 'number') { proxy.x = data.x; proxy.serverX = data.x; proxy.prevServerX = data.x; proxy._lastOwnX = data.x; }
                 if (typeof data.y === 'number') { proxy.y = data.y; proxy.serverY = data.y; proxy.prevServerY = data.y; proxy._lastOwnY = data.y; }
               }
