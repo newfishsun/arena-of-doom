@@ -688,9 +688,11 @@ class GameRoom {
       const ds = data.abilityVisuals.drawState;
       if (ds && typeof ds === 'object') {
         if (typeof ds.ritualActive === 'boolean') player.vivalRitualActive = ds.ritualActive;
+        if (typeof ds.reviveReady === 'boolean') player.vivalReviveReady = ds.reviveReady;
         if (typeof ds.secondLifeTriggered === 'boolean') player.vivalSecondLifeTriggered = ds.secondLifeTriggered;
         if (typeof ds.ritualX === 'number' && Number.isFinite(ds.ritualX)) player.vivalRitualX = ds.ritualX;
         if (typeof ds.ritualY === 'number' && Number.isFinite(ds.ritualY)) player.vivalRitualY = ds.ritualY;
+        if (typeof ds.hasMechArmor === 'boolean') player.hasMechArmor = ds.hasMechArmor;
       }
     }
     if (typeof data.angle === 'number' && Number.isFinite(data.angle)) {
@@ -1188,7 +1190,8 @@ io.on('connection', (socket) => {
     let damageToHp = 0;
 
     const victimIsMecca = String(victim.heroType || '').toLowerCase() === 'mecca';
-    if (victimIsMecca && prevShield > 0) {
+    const victimHasYellowShield = victimIsMecca || !!victim.hasMechArmor;
+    if (victimHasYellowShield && prevShield > 0) {
       damageToShield = Math.min(prevShield, clampedByGlobal);
       damageToHp = Math.min(prevHp, Math.max(0, clampedByGlobal - damageToShield));
     } else if (trueDamage || rawTrueAmt >= clampedByGlobal) {
@@ -1219,12 +1222,13 @@ io.on('connection', (socket) => {
     playerRoom.lastDamageTimestamps.set(data.socketId, victimMap);
     const attackerSocketId = data.attackerSocketId || socket.id;
 
-    // Check if victim is Vival with active Ritual Second Life before declaring death!
+    // Check if victim is Vival with active Ritual Second Life (requires 3 E hits -> vivalReviveReady) before declaring death!
     let vivalRevivedNow = false;
-    if (victim.hp <= 0 && String(victim.heroType || '').toLowerCase() === 'vival' && victim.vivalRitualActive && !victim.vivalSecondLifeTriggered) {
+    if (victim.hp <= 0 && String(victim.heroType || '').toLowerCase() === 'vival' && victim.vivalRitualActive && victim.vivalReviveReady && !victim.vivalSecondLifeTriggered) {
       vivalRevivedNow = true;
       victim.vivalSecondLifeTriggered = true;
       victim.vivalRitualActive = false;
+      victim.vivalReviveReady = false;
       victim.maxHp = 6000;
       victim.hp = 3600;
       victim.lastClientReportedHp = 3600;
@@ -1236,7 +1240,10 @@ io.on('connection', (socket) => {
       attacker.kills = (attacker.kills || 0) + 1;
     }
 
-    const mechArmorBrokenNow = !!(victimIsMecca && prevShield > 0 && victim.shield <= 0);
+    if (victim.shield <= 0) {
+      victim.hasMechArmor = false;
+    }
+    const mechArmorBrokenNow = !!(victimHasYellowShield && prevShield > 0 && victim.shield <= 0);
     io.to(roomId).emit('playerHealthUpdated', {
       socketId: data.socketId,
       hp: victim.hp,
