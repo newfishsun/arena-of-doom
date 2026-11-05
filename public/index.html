@@ -4597,7 +4597,7 @@
             'isBrick','isPizza','isArrow','isSword','isSquare','isFallingSquare','isHexagon','isWheel','isTire','isRifle',
             'isInsaneShot','isBasketball','isProSniper','isStormBall','isLightningSphere','isStormBolt','austinVisualType',
             'invisible','isLunarCrescent','isSolarLance','isSunballUlt','isColeBullet','isColeHeadshot',
-            'isColeFlashbang','isColeLightBullet','isMicrophone','isRicoBall','isRicoUltBall','isRicoBoxProj','noobRocketSlow','isDivineSinSword','canBounce','bouncesLeft','hasBounced','bounceCount','bonusRangeOnBounce','maxDistance','ignoreWalls','isHoming','isReflected','pierce'
+            'isColeFlashbang','isColeLightBullet','isMicrophone','isRicoBall','isRicoUltBall','isRicoBoxProj','noobRocketSlow','isDivineSinSword','isInouProj','isInouKunai','isInouShuriken','isInouGammaShuriken','canBounce','bouncesLeft','hasBounced','bounceCount','bonusRangeOnBounce','maxDistance','ignoreWalls','isHoming','isReflected','pierce'
         ];
 
         function captureProjectileSpawnForOnline(proj) {
@@ -4652,9 +4652,9 @@
                 });
                 return;
             }
-            if (cname === 'MeccaPolygonAttackEffect') {
+            if (cname === 'MeccaPolygonAttackEffect' || cname === 'InouAirSliceEffect') {
                 queueOnlineFxEntry({
-                    k: 'MeccaPolygonAttackEffect', t: targetArray,
+                    k: cname, t: targetArray,
                     kind: item.kind,
                     x: Math.round(item.x || 0), y: Math.round(item.y || 0),
                     angle: Number(item.angle) || 0,
@@ -5039,6 +5039,11 @@
                     case 'MeccaPolygonAttackEffect':
                         if (typeof MeccaPolygonAttackEffect !== 'undefined') {
                             inst = new MeccaPolygonAttackEffect(fx.kind || 'cone_blast', fxX, fxY, fx.angle || 0, fx.opts || {});
+                        }
+                        break;
+                    case 'InouAirSliceEffect':
+                        if (typeof InouAirSliceEffect !== 'undefined') {
+                            inst = new InouAirSliceEffect(fx.kind || 'air_slice', fxX, fxY, fx.angle || 0, fx.opts || {});
                         }
                         break;
                     case 'WaveShockwave':
@@ -5718,19 +5723,22 @@
                 entity.voidForm = false; entity.glitched = false;
                 if (Array.isArray(entity.hackZones)) entity.hackZones.length = 0;
                 entity.timePrediction = null; entity.futureTimeline = false; entity.shockedTimer = 0;
-                const keepAscendedIn5v5 = (gameMode === '5v5' || gameMode === '5v5_online') && (
+                const keepAscendedAlways = (
                     (typeof BrunoAlexander !== 'undefined' && entity instanceof BrunoAlexander) ||
-                    (typeof Cornelius !== 'undefined' && entity instanceof Cornelius)
+                    (typeof Cornelius !== 'undefined' && entity instanceof Cornelius) ||
+                    entity.heroType === 'bruno' || entity.heroType === 'brunoalexander' || entity.heroType === 'cornelius'
                 );
-                if (!keepAscendedIn5v5) {
+                if (!keepAscendedAlways) {
                     entity.ascended = false;
                 } else if (entity.ascended) {
-                    if (typeof BrunoAlexander !== 'undefined' && entity instanceof BrunoAlexander) {
+                    if ((typeof BrunoAlexander !== 'undefined' && entity instanceof BrunoAlexander) || entity.heroType === 'bruno' || entity.heroType === 'brunoalexander') {
                         entity.form = 'justice';
                         entity.baseSpd = 250;
+                        entity.speed = 250;
                         entity.maxHp = 6800;
-                    } else if (typeof Cornelius !== 'undefined' && entity instanceof Cornelius) {
+                    } else if ((typeof Cornelius !== 'undefined' && entity instanceof Cornelius) || entity.heroType === 'cornelius') {
                         entity.maxHp = 7800;
+                        entity.speed = entity.baseSpd * 1.2;
                         entity.color = entity.isPlayer ? '#FFD700' : '#D4A017';
                     }
                 }
@@ -6928,10 +6936,41 @@
                         return;
                     }
                 }
+                if (this.isInouProj && this.inouLingering) {
+                    this.inouLingerTimer = (this.inouLingerTimer || 0) - dt;
+                    if (this.inouLingerTimer <= 0) {
+                        this.del = true;
+                    }
+                    return;
+                }
                 const prevX = this.x, prevY = this.y;
                 this._prevX = prevX; this._prevY = prevY;
                 this.x+=this.vx*dt;this.y+=this.vy*dt;this.dist+=Math.sqrt(this.vx**2+this.vy**2)*dt;
-                if (!this.isStormBall && (this.dist>=this.range || this.dist >= this.maxDistance)) { this.del=true; this.handleExplosion(); }
+                // Stop & linger Inou projectiles ~110px after hitting their first enemy so they stay right near the enemy for E dashing!
+                if (this.isInouProj && !this.inouLingering && typeof this._firstEnemyHitDist === 'number' && (this.dist - this._firstEnemyHitDist) >= 110) {
+                    delete this._firstEnemyHitDist;
+                    this._hasLingeredOnce = true;
+                    this.inouLingering = true;
+                    this.inouLingerTimer = 2.0;
+                    this.vx = 0;
+                    this.vy = 0;
+                    return;
+                }
+                if (!this.isStormBall && (this.dist>=this.range || this.dist >= this.maxDistance)) {
+                    if (this.isInouProj && !this._hasLingeredOnce) {
+                        if (this.isInouGammaShuriken && !this._gammaExploded && typeof this.onGammaExplode === 'function') {
+                            this._gammaExploded = true;
+                            this.onGammaExplode(this.x, this.y, null);
+                        }
+                        this._hasLingeredOnce = true;
+                        this.inouLingering = true;
+                        this.inouLingerTimer = 2.0;
+                        this.vx = 0;
+                        this.vy = 0;
+                        return;
+                    }
+                    this.del=true; this.handleExplosion();
+                }
                 if(this.trail) {
                     particles.push(new Particle(this.x, this.y, this.color, 1, 0.3));
                     particles.push(new Particle(this.x, this.y, this.color, 1, 0.3));
@@ -7189,6 +7228,80 @@
                         // only draw if the owner is the local player
                         if (!(this.owner && this.owner.isPlayer && this.owner === player)) return;
                     }
+                }
+                // Inou's Yellow Gamma Ninja Projectiles (Kunai, Q Shuriken, Large Charged Gamma Shuriken)
+                if (this.isInouKunai || this.isInouShuriken || this.isInouGammaShuriken) {
+                    const x = this.x - camera.x, y = this.y - camera.y;
+                    ctx.save();
+                    ctx.translate(x, y);
+                    if (this.isInouKunai) {
+                        ctx.rotate(this.angle);
+                        ctx.shadowColor = '#facc15';
+                        ctx.shadowBlur = 12;
+                        // Ring pommel
+                        ctx.strokeStyle = '#facc15';
+                        ctx.lineWidth = 2.2;
+                        ctx.beginPath();
+                        ctx.arc(-12, 0, 3.5, 0, Math.PI * 2);
+                        ctx.stroke();
+                        // Handle wrap
+                        ctx.fillStyle = '#1e293b';
+                        ctx.fillRect(-8.5, -2, 6, 4);
+                        // Kunai diamond blade
+                        ctx.fillStyle = '#fef9c3';
+                        ctx.strokeStyle = '#facc15';
+                        ctx.lineWidth = 1.6;
+                        ctx.beginPath();
+                        ctx.moveTo(14, 0);
+                        ctx.lineTo(-2, -5.5);
+                        ctx.lineTo(-5, 0);
+                        ctx.lineTo(-2, 5.5);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                    } else {
+                        const isGammaBig = !!this.isInouGammaShuriken;
+                        const spin = Date.now() * (isGammaBig ? 0.026 : 0.019);
+                        ctx.rotate(spin);
+                        const r = isGammaBig ? 40 : 13;
+                        ctx.shadowColor = '#facc15';
+                        ctx.shadowBlur = isGammaBig ? 28 : 14;
+                        if (isGammaBig) {
+                            // Outer yellow gamma energy halo on the large Ultimate shuriken
+                            ctx.strokeStyle = 'rgba(250, 204, 21, 0.55)';
+                            ctx.lineWidth = 3;
+                            ctx.beginPath();
+                            ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2);
+                            ctx.stroke();
+                        }
+                        // 4-point ninja shuriken star
+                        ctx.fillStyle = isGammaBig ? '#facc15' : '#1e293b';
+                        ctx.strokeStyle = isGammaBig ? '#ffffff' : '#facc15';
+                        ctx.lineWidth = isGammaBig ? 2.8 : 1.8;
+                        ctx.beginPath();
+                        for (let i = 0; i < 4; i++) {
+                            const a = (Math.PI / 2) * i;
+                            const aMid = a + Math.PI / 4;
+                            const ox = Math.cos(a) * r, oy = Math.sin(a) * r;
+                            const ix = Math.cos(aMid) * (r * 0.34), iy = Math.sin(aMid) * (r * 0.34);
+                            if (i === 0) ctx.moveTo(ox, oy);
+                            else ctx.lineTo(ox, oy);
+                            ctx.lineTo(ix, iy);
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Center core ring
+                        ctx.fillStyle = '#0f172a';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = '#fef08a';
+                        ctx.lineWidth = isGammaBig ? 2.2 : 1.5;
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                    return;
                 }
                 // Lune's Lunar Crescent basic projectile: shimmering silver-indigo crescent blade with starlight motes
                 if (this.isLunarCrescent) {
@@ -9024,6 +9137,7 @@
                             if (!isFullTrue && this.shatteredContractTimer > 0) d *= 0.5;
                             if (!isFullTrue && src && src.guidingLightBuffTimer > 0) d *= (src.guidingLightDamageMult || 1.2);
                             if (!isFullTrue && this.qHoldActive && this.qHoldDamageReduction > 0) d *= (1 - this.qHoldDamageReduction);
+                            if (!isFullTrue && ((this.inouDashDRTimer && this.inouDashDRTimer > 0) || this.eDashing)) d *= 0.75;
                             const trueRatio = isFullTrue ? 1 : Math.max(0, Math.min(1, Number(meta && meta.trueDamageRatio) || 0));
                             const trueDamageAmount = d * trueRatio;
                             d -= trueDamageAmount;
@@ -9454,6 +9568,18 @@
                         }
                     } else if(this.isPlayer && gameMode === 'training') {
                         this.dead = false;
+                        if (this.ascended) {
+                            if (typeof BrunoAlexander !== 'undefined' && this instanceof BrunoAlexander) {
+                                this.form = 'justice';
+                                this.baseSpd = 250;
+                                this.speed = 250;
+                                this.maxHp = 6800;
+                            } else if (typeof Cornelius !== 'undefined' && this instanceof Cornelius) {
+                                this.maxHp = 7800;
+                                this.speed = this.baseSpd * 1.2;
+                                this.color = this.isPlayer ? '#FFD700' : '#D4A017';
+                            }
+                        }
                         this.hp = this.maxHp;
                         addKillMsg('⚡ TRAINING AUTO-REVIVED!');
                         return;
@@ -9974,6 +10100,15 @@
                 if(this.witherBuff && this.witherBuffTimer > 0) s *= 1.25; // 25% faster walkspeed
                 if(this.terminatorSpeedTimer > 0) s += (this.terminatorSpeedBonus || (this.baseSpd || s) * 0.30);
                 return s;
+            }
+            getSpeedForDamage() {
+                const savedSpeedsterTimer = this.speedsterTimer;
+                this.speedsterTimer = 0;
+                try {
+                    return typeof this.getEffectiveSpeed === 'function' ? this.getEffectiveSpeed() : this.speed;
+                } finally {
+                    this.speedsterTimer = savedSpeedsterTimer;
+                }
             }
             useGear() {
                 if (typeof Entity.prototype.useGear === 'function') {
@@ -11336,10 +11471,10 @@
                 return target;
             }
             basicAtk() {
-                this.basicCD = 0.7;
+                this.basicCD = 0.6;
                 const empowered = this.veilAttackReady;
                 this.veilAttackReady = false;
-                const bolt = new Projectile(this, this.x + Math.cos(this.angle) * 24, this.y + Math.sin(this.angle) * 24, this.angle, 850, empowered ? 560 : 120, 850, empowered ? '#ffffff' : '#ffe9a6', empowered ? 13 : 10, false, empowered, false, 0, 0, true);
+                const bolt = new Projectile(this, this.x + Math.cos(this.angle) * 24, this.y + Math.sin(this.angle) * 24, this.angle, 850, empowered ? 620 : 145, 850, empowered ? '#ffffff' : '#ffe9a6', empowered ? 13 : 10, false, empowered, false, 0, 0, true);
                 bolt.isEverdawnBolt = true;
                 bolt.onHit = (enemy) => {
                     if (empowered) {
@@ -11355,7 +11490,7 @@
             }
             abilityQ() {
                 const ally = this.findAlly();
-                this.qCD = 10; this.guidingAlly = ally; this.guidingTimer = 5;
+                this.qCD = 8.5; this.guidingAlly = ally; this.guidingTimer = 5;
                 ally.guidingLightOwner = this; ally.guidingLightBuffTimer = 5;
                 ally.guidingLightDamageMult = this.shatteredContractTimer > 0 ? 1.4 : 1.2;
                 ally.guidingLightPenetration = 0.15;
@@ -11370,14 +11505,14 @@
                 const ally = this.findAlly();
                 this.veilTarget = ally;
                 this.veilAttackReady = true;
-                this.eCD = 4; ally.reflectiveVeilOwner = this; ally.reflectiveVeilTimer = 3;
+                this.eCD = 3.5; ally.reflectiveVeilOwner = this; ally.reflectiveVeilTimer = 3;
                 this.reflectiveVeilDamageMult = this.shatteredContractTimer > 0 ? 1.2 : 0.8;
                 this.reflectiveVeilStun = this.shatteredContractTimer > 0 ? 0.5 : 0;
                 ringEffects.push({ x: ally.x, y: ally.y, life: 1.1, duration: 1.1, maxRadius: 72, color: '#fff2a8' });
                 for (let i = 0; i < 24; i++) particles.push(new Particle(ally.x, ally.y, i % 2 ? '#fff2a8' : '#ffffff', 3 + Math.random() * 2, 0.75));
             }
             abilityF() {
-                this.fCD = 25; this.shatteredContractTimer = 6; this.speed = this.baseSpd * 1.3;
+                this.fCD = 22; this.shatteredContractTimer = 6; this.speed = this.baseSpd * 1.3;
                 this.invulnerableTimer = Math.max(this.invulnerableTimer || 0, 1.0);
                 ringEffects.push({ x: this.x, y: this.y, life: 1.5, duration: 1.5, maxRadius: 125, color: '#ffcf5a' });
                 for (let i = 0; i < 42; i++) particles.push(new Particle(this.x, this.y, i % 2 ? '#fff2a8' : '#ffcf5a', 4 + Math.random() * 2, 1.1));
@@ -11385,7 +11520,7 @@
             abilityG() {
                 const target = this.findTarget();
                 if (!target) return;
-                this.gCD = 15; if (this.echoTarget) this.echoTarget.echoOwner = null;
+                this.gCD = 13; if (this.echoTarget) this.echoTarget.echoOwner = null;
                 this.echoTarget = target; this.echoTimer = 6; target.echoOwner = this;
                 target.echoTimer = 6; target.revealTimer = 6;
                 for (let i = 0; i < 24; i++) particles.push(new Particle(target.x, target.y, i % 2 ? '#e4b7ff' : '#ffffff', 3 + Math.random() * 2, 0.9));
@@ -20855,7 +20990,7 @@
             }
             basicAttack() {
                 this.revealTimer = 0.5;
-                this.basicCD = this.loveBoostActive ? 0.4 : 1.0;
+                this.basicCD = this.loveBoostActive ? 0.35 : 0.85;
                 // Shoot love projectile
                 let pX = this.x + Math.cos(this.angle) * 60;
                 let pY = this.y + Math.sin(this.angle) * 60;
@@ -20868,7 +21003,7 @@
                     if(e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                         let d = Math.sqrt((e.x-pX)**2 + (e.y-pY)**2);
                         if(d < 100) {
-                            e.takeDamage(70, this);
+                            e.takeDamage(90, this);
                             for(let i = 0; i < 6; i++) {
                                 let angle = Math.random() * Math.PI * 2;
                                 particles.push(new Particle(e.x, e.y, '#FF69B4', 3, 0.4, Math.cos(angle)*180, Math.sin(angle)*180));
@@ -20879,7 +21014,7 @@
             }
             loveBoost() {
                 this.revealTimer = 0.5;
-                this.qCD = 14;
+                this.qCD = 12;
                 this.loveBoostActive = true;
                 this.loveBoostTimer = 10;
                 this.speed = this.baseSpd * 1.5;
@@ -20905,10 +21040,10 @@
             }
             loveBall() {
                 this.revealTimer = 0.5;
-                this.eCD = 3;
+                this.eCD = 2.5;
                 if(this.isPlayer) addKillMsg('Love Ball!');
                 // Shoot love ball projectile - bigger size with explosion
-                let proj = new Projectile(this, this.x, this.y, this.angle, 600, 250, 350, '#FF69B4', 15, false, false, true, 0, 1.0);
+                let proj = new Projectile(this, this.x, this.y, this.angle, 600, 300, 350, '#FF69B4', 15, false, false, true, 0, 1.0);
                 // Add custom explosion callback
                 proj.onExplode = () => {
                     // Explosion particles
@@ -20940,7 +21075,7 @@
             }
             loveUltimate() {
                 this.revealTimer = 0.5;
-                this.fCD = 16;
+                this.fCD = 14;
                 // Ultimate explosion
                 for(let i = 0; i < 40; i++) {
                     let angle = (Math.PI * 2 * i) / 40;
@@ -20965,7 +21100,7 @@
                     if(e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                         let d = Math.sqrt((e.x-this.x)**2 + (e.y-this.y)**2);
                         if(d < 280) {
-                            e.takeDamage(600, this);
+                            e.takeDamage(700, this);
                             safeApplyStatus(e, 'stun', 1, this);
                             for(let i = 0; i < 15; i++) {
                                 let angle = Math.random() * Math.PI * 2;
@@ -22125,7 +22260,7 @@
                         }
                         
                         if (highestHPEnemy) {
-                            let trueDamage = highestHPEnemy.maxHp * 0.025; // 2.5% max HP true damage
+                            let trueDamage = highestHPEnemy.maxHp * 0.03; // 3.0% max HP true damage
                             highestHPEnemy.hp -= trueDamage;
                             if (highestHPEnemy.hp < 0) highestHPEnemy.hp = 0;
                             
@@ -22176,17 +22311,17 @@
             
             basicAttack() {
                 this.revealTimer = 0.5;
-                this.basicCD = 0.6;
+                this.basicCD = 0.5;
                 
                 // Pixel throw projectile
-                let proj = new Projectile(this, this.x, this.y, this.angle, 600, 60, 300, '#00FF00', 3);
+                let proj = new Projectile(this, this.x, this.y, this.angle, 600, 80, 300, '#00FF00', 3);
                 proj.maxDistance = 300;
                 entities.push(proj);
             }
             
             summonPixelBots() {
                 this.revealTimer = 0.5;
-                this.qCD = 8;
+                this.qCD = 7;
                 
                 // Summon 3 pixel bots
                 for (let i = 0; i < 3; i++) {
@@ -22212,7 +22347,7 @@
             
             excessiveGrinding() {
                 this.revealTimer = 0.5;
-                this.eCD = 10;
+                this.eCD = 8.5;
                 
                 // Heal all teammates by 420
                 let healed = 0;
@@ -22237,7 +22372,7 @@
             
             pixelArena() {
                 this.revealTimer = 0.5;
-                this.fCD = 26;
+                this.fCD = 23;
                 this.arenaActive = true;
                 this.arenaTimer = 10;
                 this.lastArenaApply = 0;
@@ -23189,8 +23324,8 @@
                     this.x += Math.cos(this.angle) * this.speed * dt;
                     this.y += Math.sin(this.angle) * this.speed * dt;
                 } else {
-                    // Deal 250 damage and stun for 0.5s
-                    t.takeDamage(250, this.owner);
+                    // Deal 290 damage and stun for 0.5s
+                    t.takeDamage(290, this.owner);
                     safeApplyStatus(t, 'stun', 0.5, this.owner);
                     
                     // Hit particles
@@ -23873,8 +24008,8 @@
                         this.suiWindTick -= dt;
                         if (this.suiWindTick <= 0) {
                             this.suiWindTick += 0.5;
-                            // Wind damage tick to nearby enemies (20% of current walk speed)
-                            let dmg = Math.floor(this.getEffectiveSpeed() * 0.2);
+                            // Wind damage tick to nearby enemies (32% of Fred's walkspeed, excluding Speedster gear)
+                            let dmg = Math.floor(this.getSpeedForDamage() * 0.32);
                             for (let e of entities) {
                                 if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                                     let d = Math.sqrt((e.x - this.x) ** 2 + (e.y - this.y) ** 2);
@@ -23963,7 +24098,7 @@
                     if (this.isPlayer) { this.input(dt, spd); updateHUD(this); } else this.ai(dt, spd);
                 }
 
-                getEffectiveSpeed() { let s = this.speed; if (this.suiTimer > 0) s *= 3; if (this.wallyTimer > 0) { let wallySpeedBoost = 1.0 + this.velocityBar * 0.5; s *= wallySpeedBoost; } if (this.slowTimer > 0) s *= 0.6; if (this.speedsterTimer > 0) s *= 1.5; return s; }
+                getEffectiveSpeed() { let s = this.speed; if (this.suiTimer > 0) s *= 2; if (this.wallyTimer > 0) { let wallySpeedBoost = 1.0 + this.velocityBar * 0.5; s *= wallySpeedBoost; } if (this.slowTimer > 0) s *= 0.6; if (this.speedsterTimer > 0) s *= 1.5; return s; }
 
                 basicAtk() {
                     this.revealTimer = 0.4;
@@ -23972,8 +24107,8 @@
                     
                     // Check if Wally West is active and boost hasn't been used yet
                     if (this.wallyTimer > 0 && !this.wallyWeaponBoosted) {
-                        // Enhanced Speed Blow: 150% of current walkspeed damage (min 700)
-                        let dmg = Math.max(700, Math.floor(this.getEffectiveSpeed() * 1.5));
+                        // Enhanced Speed Blow: 350% of Fred's current walkspeed (excluding Speedster gear)
+                        let dmg = Math.floor(this.getSpeedForDamage() * 3.5);
                         
                         // Lightbolt burst effect
                         particles.push(new Slash(this.x, this.y, this.angle, 180, Math.PI/2.2, '#00BFFF'));
@@ -25233,7 +25368,7 @@
             
             basicAtk() {
                 this.revealTimer = 0.5;
-                let damage = this.cycleActive ? this.cycleBasicDamage : 100;
+                let damage = this.cycleActive ? this.cycleBasicDamage : 115;
                 let hitEnemies = 0;
                 
                 if (this.cycleActive) {
@@ -25281,7 +25416,7 @@
                         }
                     }
                 }
-                this.basicCD = 0.5;
+                this.basicCD = 0.45;
 
                 // broadcast basic attack visual state so remote proxies can replicate the trail
                 this.abilityVisuals = this.abilityVisuals || {};
@@ -25290,7 +25425,7 @@
             }
             
             cycleBurst() {
-                this.qCD = 6;
+                this.qCD = 5.2;
                 // Apply 2x speed buff for 2 seconds
                 this.speedBuffTimer = 2.0;
                 
@@ -25321,7 +25456,7 @@
             }
             
             lifeAndDeath() {
-                this.eCD = 10;
+                this.eCD = 9;
                 this.lastEnemiesHit = [];
                 // Stab attack visuals: long thin core + dark blood/gore particles, looks like a deadly reaper strike
                 let stabRange = 150;
@@ -25362,7 +25497,7 @@
             }
             
             believer() {
-                this.fCD = 17;
+                this.fCD = 15.5;
                 // Create projectile that links target
                 // Buffed projectile speed and darker, deadlier visuals
                 let proj = new Projectile(this, this.x, this.y, this.angle, 1000, 220, 600, '#551A8B', 10);
@@ -27253,7 +27388,7 @@
                             
                             if (Math.abs(rotated_x) < light.width/2 && Math.abs(rotated_y) < light.height/2) {
                                 if (!light.damageDealt.has(e)) {
-                                    e.takeDamage(700, this);
+                                    e.takeDamage(780, this);
                                     light.damageDealt.add(e);
                                 }
                             }
@@ -27269,15 +27404,19 @@
                     return trap.timer > 0;
                 });
                 
-                // Check trap effects on enemies
+                // Check trap effects on enemies (stun lasts 0.75s once per enemy caught, while trap stays longer for 3.5s)
                 for (let trap of this.stormTraps) {
+                    if (!trap.stunnedSet) trap.stunnedSet = new Set();
                     for (let e of entities) {
                         if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                             let dx = e.x - trap.x, dy = e.y - trap.y;
                             let d = Math.sqrt(dx*dx + dy*dy);
                             if (d < 100) {
-                                // Keep the stun effect, but do not pull enemies toward the trap center
-                                e.stunTimer = Math.max(e.stunTimer || 0, 0.5);
+                                if (!trap.stunnedSet.has(e)) {
+                                    trap.stunnedSet.add(e);
+                                    safeApplyStatus(e, 'stun', 0.75, this);
+                                    e.stunTimer = Math.max(e.stunTimer || 0, 0.75);
+                                }
 
                                 // Prevent escape while still inside the trap zone without dragging them inward
                                 if (d > 80) {
@@ -27336,19 +27475,19 @@
             
             basicAtk() {
                 this.revealTimer = 0.5;
-                this.basicCD = 0.6;
+                this.basicCD = 0.5;
                 
                 if (this.ultimateActive) {
                     // Aurora Light Burst - ranged projectile during ultimate
-                    entities.push(new Projectile(this, this.x, this.y, this.angle, 600, 65, 500, '#00CED1', 12));
+                    entities.push(new Projectile(this, this.x, this.y, this.angle, 600, 80, 500, '#00CED1', 12));
                 } else {
                     // Normal Aurora Light - ranged projectile
-                    entities.push(new Projectile(this, this.x, this.y, this.angle, 600, 50, 500, '#00CED1', 10));
+                    entities.push(new Projectile(this, this.x, this.y, this.angle, 600, 65, 500, '#00CED1', 10));
                 }
             }
             
             northernLight() {
-                this.qCD = 10;
+                this.qCD = 8.5;
                 // Create AoE rectangular zone
                 let width = 450, height = 300;
                 this.northernLights.push({
@@ -27384,7 +27523,7 @@
             }
             
             stormTrap() {
-                this.eCD = 7;
+                this.eCD = 6;
                 // Place trap at mouse position for player or at target position for AI (max 300 units away)
                 const aimPos = getEntityAimPosition(this, 240, 300);
                 let trapX = aimPos.x;
@@ -27394,8 +27533,9 @@
                     x: trapX,
                     y: trapY,
                     radius: 100,
-                    timer: 1.5,
-                    damaged: new Set()
+                    timer: 3.5,
+                    damaged: new Set(),
+                    stunnedSet: new Set()
                 });
                 
                 // Deal damage to enemies in trap on placement
@@ -27403,7 +27543,7 @@
                     if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                         let d = Math.sqrt((e.x - trapX)**2 + (e.y - trapY)**2);
                         if (d < 100) {
-                            e.takeDamage(600, this);
+                            e.takeDamage(660, this);
                         }
                     }
                 }
@@ -27434,7 +27574,7 @@
             }
             
             auroraFreeze() {
-                this.fCD = 25;
+                this.fCD = 22;
                 this.ultimateActive = true;
                 this.ultimateTimer = 7;
                 this.teamBuffTimer = 7;
@@ -27481,7 +27621,7 @@
                     if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                         let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                         if (d < 200) {
-                            e.takeDamage(200, this);
+                            e.takeDamage(260, this);
                             e.freezeTimer = Math.max(e.freezeTimer, 1);
                         }
                     }
@@ -36541,6 +36681,7 @@
             else if(selectedHeroType==='cole'){if(q)q.innerText='💥';if(e)e.innerText='🎯';if(f)f.innerText='⚡';player=new Cole(WORLD_SIZE/2,WORLD_SIZE/2,true);}
             else if(selectedHeroType==='rico'){if(q)q.innerText='📦';if(e)e.innerText='🔴';if(f)f.innerText='🟡';player=new Rico(WORLD_SIZE/2,WORLD_SIZE/2,true);}
             else if(selectedHeroType==='mecca'){if(q)q.innerText='🥊';if(e)e.innerText='💨';if(f)f.innerText='🦶';if(g)g.innerText='⚡';player=new Mecca(WORLD_SIZE/2,WORLD_SIZE/2,true);}
+            else if(selectedHeroType==='inou'){if(q)q.innerText='手里';if(e)e.innerText='⚡';if(f)f.innerText='🕶️';player=new Inou(WORLD_SIZE/2,WORLD_SIZE/2,true);}
             else player=new Paul(WORLD_SIZE/2,WORLD_SIZE/2,true);
             entities.push(player);
             player.gear = selectedGear;
@@ -38719,7 +38860,7 @@
                 this.angle = getMouseAimAngle(this.x, this.y);
                 if (mouse.down && this.basicCD <= 0) {
                     this.basicKick();
-                    this.basicCD = this.fusionActive ? 0.5 : 0.8;
+                    this.basicCD = this.fusionActive ? 0.5 : (this.twinState === 'matthew' ? 0.68 : 0.8);
                 }
                 if (keys.q && this.qCD <= 0 && !this._qWas) {
                     this._qWas = true;
@@ -38745,7 +38886,7 @@
             }
             
             basicKick() {
-                const dmg = this.fusionActive ? 140 : 120;
+                const dmg = this.fusionActive ? 140 : (this.twinState === 'matthew' ? 145 : 120);
                 let color = this.twinState === 'ken' ? '#FF6B6B' : this.twinState === 'matthew' ? '#4ECDC4' : '#FFD700';
                 for (let e of entities) {
                     if (e instanceof Entity && e !== this && !e.dead && e.team !== this.team) {
@@ -38849,7 +38990,7 @@
                         if (e instanceof Entity && e !== this && !e.dead && e.team !== this.team) {
                             let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                             if (d < 150) {
-                                e.takeDamage(50, this);
+                                e.takeDamage(85, this);
                                 safeApplyStatus(e, 'stun', 0.5, this);
                                 for (let i = 0; i < 5; i++) {
                                     particles.push(new Particle(e.x, e.y, '#4ECDC4', 4, 0.6));
@@ -38863,7 +39004,7 @@
                         let trailY = this.y - dy * (i * 10);
                         particles.push(new Particle(trailX, trailY, '#4ECDC4', 4, 1.5));
                     }
-                    this.qCD = 2;
+                    this.qCD = 1.7;
                 }
             }
             
@@ -38930,7 +39071,7 @@
                                     if (e instanceof Entity && e !== this.owner && !e.dead && e.team !== this.owner.team) {
                                         let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                                         if (d < this.radius) {
-                                            e.takeDamage(37.5, this.owner);
+                                            e.takeDamage(45, this.owner);
                                         }
                                     }
                                 }
@@ -38967,7 +39108,7 @@
                             }
                         }, pulse * 2000);
                     }
-                    this.eCD = 8;
+                    this.eCD = 7;
                 } else {
                     // MATTEN E: Zone with slowness & football kick
                     // Add VISIBLE golden zone wave
@@ -39083,7 +39224,7 @@
                     }, 500);
                     this.fCD = 10;
                 } else if (this.twinState === 'matthew') {
-                    // MATTHEW F: Kick 1250 damage, 625 shield
+                    // MATTHEW F: Kick 1350 damage, 675 shield
                     // Add visible energy beam and shockwave
                     visualEffects.push(new EnergyBeam(this.x, this.y, this.angle, 300, '#4ECDC4', 1.0));
                     visualEffects.push(new ShockwaveRing(this.x, this.y, '#4ECDC4', 350, 1.2, 16));
@@ -39091,8 +39232,8 @@
                         if (e instanceof Entity && e !== this && !e.dead && e.team !== this.team) {
                             let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                             if (d < 250) {
-                                e.takeDamage(1250, this);
-                                this.hp = Math.min(this.maxHp, this.hp + 625);
+                                e.takeDamage(1350, this);
+                                this.hp = Math.min(this.maxHp, this.hp + 675);
                                 for (let i = 0; i < 10; i++) {
                                     particles.push(new Particle(this.x + (Math.random()-0.5)*80, this.y + (Math.random()-0.5)*80, '#4ECDC4', 7, 1.5));
                                 }
@@ -39103,7 +39244,7 @@
                             }
                         }
                     }
-                    this.fCD = 12;
+                    this.fCD = 10.5;
                 } else {
                     // MATTEN F: Devastating kick 1150 damage + enhanced basic 1250 damage, 800 shield
                     // Add VISIBLE golden beam
@@ -44321,6 +44462,889 @@
             }
         }
 
+        
+        // Linear horizontal air-slicing visual effect for Inou's Absolute Mode melee attacks & E dashes (NO circular arcs!)
+        class InouAirSliceEffect {
+            constructor(kind, x, y, angle, opts = {}) {
+                this.kind = kind || 'air_slice';
+                this.x = x;
+                this.y = y;
+                this.angle = angle || 0;
+                this.opts = opts || {};
+                this.duration = opts.duration || 0.20;
+                this.life = this.duration;
+                this.length = opts.length || 195;
+                this.width = opts.width || 184;
+                this.endX = opts.endX !== undefined ? opts.endX : (x + Math.cos(this.angle) * this.length);
+                this.endY = opts.endY !== undefined ? opts.endY : (y + Math.sin(this.angle) * this.length);
+                this.variant = opts.variant || 0;
+            }
+            update(dt) {
+                this.life -= dt;
+                return this.life > 0;
+            }
+            draw(ctx) {
+                if (this.life <= 0) return;
+                const p = Math.max(0, Math.min(1, this.life / Math.max(0.001, this.duration)));
+                const sx = this.x - camera.x;
+                const sy = this.y - camera.y;
+                ctx.save();
+                if (this.kind === 'gamma_dash_line') {
+                    const ex = this.endX - camera.x;
+                    const ey = this.endY - camera.y;
+                    ctx.globalAlpha = Math.pow(p, 0.7);
+                    ctx.shadowColor = '#facc15';
+                    ctx.shadowBlur = 18;
+                    ctx.strokeStyle = '#facc15';
+                    ctx.lineWidth = 8 * p;
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.lineTo(ex, ey);
+                    ctx.stroke();
+
+                    ctx.strokeStyle = '#fef9c3';
+                    ctx.lineWidth = 2.8 * p;
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.lineTo(ex, ey);
+                    ctx.stroke();
+                    ctx.restore();
+                    return;
+                }
+
+                // 'air_slice': Wide HORIZONTAL straight air-cleave across the front of Inou (zero circular arcs!)
+                ctx.translate(sx, sy);
+                ctx.rotate(this.angle);
+                const reach = this.length;          // forward reach (~195)
+                const halfSpan = this.width * 0.5;  // horizontal half-span (~92, total width ~184)
+                const dir = (this.variant % 2 === 0) ? 1 : -1;
+                const sweepProg = 1 - p;            // 0 -> 1 over the slash lifetime
+                const frontCenter = reach * 0.56;
+                const tilt = dir * 0.16;
+
+                ctx.globalAlpha = Math.min(1, p * 1.3);
+                ctx.shadowColor = '#facc15';
+                ctx.shadowBlur = 22;
+
+                // Primary wide horizontal diamond air-fissure plane (sweeping left-to-right / right-to-left)
+                ctx.save();
+                ctx.translate(frontCenter, 0);
+                ctx.rotate(tilt);
+
+                const thickness = 22 * (0.45 + 0.55 * p);
+                ctx.fillStyle = 'rgba(250, 204, 21, 0.90)';
+                ctx.beginPath();
+                ctx.moveTo(0, -halfSpan);
+                ctx.lineTo(thickness, 0);
+                ctx.lineTo(0, halfSpan);
+                ctx.lineTo(-thickness * 0.85, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                // White-hot inner horizontal vacuum fissure cut line
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.moveTo(0, -halfSpan * 0.94);
+                ctx.lineTo(thickness * 0.36, 0);
+                ctx.lineTo(0, halfSpan * 0.94);
+                ctx.lineTo(-thickness * 0.32, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                // Secondary horizontal & slight-angle air-shear lines slicing across the entire width
+                ctx.strokeStyle = '#fef08a';
+                ctx.lineWidth = 2.2 * p;
+                ctx.beginPath();
+                ctx.moveTo(-thickness * 1.15, -halfSpan * 0.82);
+                ctx.lineTo(thickness * 1.35, halfSpan * 0.82);
+                ctx.moveTo(thickness * 1.15, -halfSpan * 0.78);
+                ctx.lineTo(-thickness * 1.05, halfSpan * 0.78);
+                ctx.stroke();
+
+                // Parallel horizontal wind-shear streaks at inner & outer reach
+                ctx.strokeStyle = 'rgba(254, 249, 195, 0.80)';
+                ctx.lineWidth = 1.5 * p;
+                const leadY = dir * (sweepProg - 0.5) * halfSpan * 0.5;
+                ctx.beginPath();
+                ctx.moveTo(-reach * 0.26, -halfSpan * 0.72 + leadY);
+                ctx.lineTo(-reach * 0.26, halfSpan * 0.72 + leadY);
+                ctx.moveTo(reach * 0.32, -halfSpan * 0.85 - leadY);
+                ctx.lineTo(reach * 0.32, halfSpan * 0.85 - leadY);
+                ctx.stroke();
+
+                ctx.restore();
+                ctx.restore();
+            }
+        }
+
+        // SECRET CONCEPT HERO: INOU - SPEEDSTER/ASSASSIN (Unlocked only by pressing I + N + O + U simultaneously)
+        class Inou extends Entity {
+            constructor(x, y, p) {
+                super(x, y, 18, p ? '#facc15' : '#eab308', 4500);
+                this.isPlayer = p;
+                this.countsAsFFAHero = true;
+                this.heroType = 'inou';
+                this.name = p ? 'Player (Inou)' : 'Enemy Inou';
+
+                this.baseSpd = 330;
+                this.speed = this.baseSpd;
+                this.basicCD = 0;
+                this.qCD = 0;
+                this.eCD = 0;
+                this.fCD = 0;
+                this.rCD = 0;
+
+                // Speedster Bar (0..1), charges while moving, decays when idle
+                this.speedBar = 0;
+
+                // E projectile touch speed stacks: +24 walkspeed for 5s per projectile touched (max 5 stacks = +120)
+                this.projSpeedStacks = [];
+                this.eDashing = false;
+                this.inouDashDRTimer = 0;
+                this.activeEDash = null;
+                this._eTouchedProjectiles = new Set();
+
+                // Rapid consecutive Q shuriken queue used during Ultimate Mode
+                this.qBurstQueue = [];
+
+                // F Absolute Mode (Gamma Glasses): 12s duration, 45s CD, +50 base walkspeed, +900 yellow shield
+                this.absoluteTimer = 0;
+                this.absoluteMaxTimer = 12.0;
+
+                // Basic attack charging in Absolute Mode (0..1.0s)
+                this.basicCharging = false;
+                this.basicChargeTime = 0;
+                this._sliceVariant = 0;
+
+                this.gear = 'speedster';
+                this.rageTimer = 0;
+                this.speedsterTimer = 0;
+                this.bandageTimer = 0;
+
+                this._qWas = false;
+                this._eWas = false;
+                this._fWas = false;
+                this._rWas = false;
+            }
+
+            // Walkspeed including base walkspeed buffs (+50 Ultimate, +24 per E stack up to +120, Wither/Evaded/etc.),
+            // excluding Speedster gear so walkspeed buffs grant Inou extra ability damage!
+            getBuffedBaseWalkspeed() {
+                const base = (this.absoluteTimer > 0) ? 380 : 330;
+                const stackBonus = (Array.isArray(this.projSpeedStacks) ? Math.min(5, this.projSpeedStacks.length) : 0) * 24;
+                let s = base + stackBonus;
+                if (this.evadedTimer && this.evadedTimer > 0) s *= 1.20;
+                if (this.witherBuff && this.witherBuffTimer > 0) s *= 1.25;
+                if (this.terminatorSpeedTimer > 0) s += (this.terminatorSpeedBonus || base * 0.30);
+                return s;
+            }
+
+            getEffectiveSpeed() {
+                if (this.enhancedKBTimer > 0 || (this.movementLockdownTimer && this.movementLockdownTimer > 0) || (this.fightingTimer && this.fightingTimer > 0)) return 0;
+                this.baseSpd = (this.absoluteTimer > 0) ? 380 : 330;
+                const stackBonus = (Array.isArray(this.projSpeedStacks) ? Math.min(5, this.projSpeedStacks.length) : 0) * 24;
+                this.speed = this.baseSpd + stackBonus;
+                let s = this.speed;
+                if (this.evadedTimer && this.evadedTimer > 0) s *= 1.20;
+                if (this.mindControlledBy && !this.mindControlledBy.dead) s *= 1.35;
+                if (this.slowTimer > 0) s *= 0.6;
+                if (this.terminatorSlowTimer > 0) s *= 0.70;
+                if (this.speedsterTimer > 0) s *= 1.5;
+                if (this.witherBuff && this.witherBuffTimer > 0) s *= 1.25;
+                if (this.terminatorSpeedTimer > 0) s += (this.terminatorSpeedBonus || this.baseSpd * 0.30);
+                return s;
+            }
+
+            getSpeedForDamage() {
+                // Ensure Speedster gear (speedsterTimer) NEVER buffs walkspeed-based damage on Inou
+                const savedSpeedster = this.speedsterTimer;
+                this.speedsterTimer = 0;
+                try {
+                    return this.getEffectiveSpeed();
+                } finally {
+                    this.speedsterTimer = savedSpeedster;
+                }
+            }
+
+            applyMaxSpeedBarTrueDamageAndHeal(target) {
+                if (!target || target.dead) return;
+                const bonusTrue = Math.max(1, Math.floor(this.getSpeedForDamage() * 0.20));
+                target.takeDamage(bonusTrue, this, { isTrue: true, trueDamage: true });
+                this.hp = Math.min(this.maxHp, this.hp + bonusTrue);
+            }
+
+            addProjectileTouchStack() {
+                if (!Array.isArray(this.projSpeedStacks)) this.projSpeedStacks = [];
+                if (this.projSpeedStacks.length >= 5) {
+                    this.projSpeedStacks.shift();
+                }
+                this.projSpeedStacks.push(5.0);
+                this.baseSpd = (this.absoluteTimer > 0) ? 380 : 330;
+                this.speed = this.baseSpd + this.projSpeedStacks.length * 24;
+            }
+
+            // Deal 200 AoE damage in a small range (135px radius) during each E dash hop
+            dealEDashSmallRangeDamage(hitSet) {
+                const dashDmgRadius = 135;
+                for (let e of entities) {
+                    if (e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                    if (hitSet && hitSet.has(e)) continue;
+                    const d = Math.hypot(e.x - this.x, e.y - this.y);
+                    if (d <= dashDmgRadius + (e.radius || 0)) {
+                        if (hitSet) hitSet.add(e);
+                        e.takeDamage(200, this);
+                        for (let i = 0; i < 6; i++) {
+                            particles.push(new Particle(e.x, e.y, i % 2 === 0 ? '#facc15' : '#fef9c3', 3.5, 0.32));
+                        }
+                    }
+                }
+            }
+
+            update(dt) {
+                if (this.dead) return;
+                this.updateCommon(dt);
+
+                if (this.basicCD > 0) this.basicCD = Math.max(0, this.basicCD - dt);
+                if (this.qCD > 0) this.qCD = Math.max(0, this.qCD - dt);
+                if (this.eCD > 0) this.eCD = Math.max(0, this.eCD - dt);
+                if (this.fCD > 0) this.fCD = Math.max(0, this.fCD - dt);
+                if (this.rCD > 0) this.rCD = Math.max(0, this.rCD - dt);
+                if (this.inouDashDRTimer > 0) {
+                    this.inouDashDRTimer = Math.max(0, this.inouDashDRTimer - dt);
+                    if (this.inouDashDRTimer <= 0 && !this.activeEDash) this.eDashing = false;
+                }
+
+                // Process rapid consecutive Q shuriken shots in Ultimate Mode
+                if (Array.isArray(this.qBurstQueue) && this.qBurstQueue.length > 0) {
+                    for (let i = this.qBurstQueue.length - 1; i >= 0; i--) {
+                        this.qBurstQueue[i].delay -= dt;
+                        if (this.qBurstQueue[i].delay <= 0) {
+                            const item = this.qBurstQueue.splice(i, 1)[0];
+                            this.spawnSingleQShuriken(this.angle + (item.spreadOffset || 0));
+                        }
+                    }
+                }
+
+                // Process smooth 180 Hz E dash hop & chain dashes
+                if (this.activeEDash) {
+                    const hop = this.activeEDash;
+                    hop.elapsed += dt;
+                    if (hop.targetProj && !hop.targetProj.del) {
+                        hop.endX = hop.targetProj.x;
+                        hop.endY = hop.targetProj.y;
+                    }
+                    const t = Math.min(1, hop.elapsed / Math.max(0.005, hop.duration));
+                    const prevDashX = this.x, prevDashY = this.y;
+                    this.x = Math.max(20, Math.min(WORLD_SIZE - 20, hop.startX + (hop.endX - hop.startX) * t));
+                    this.y = Math.max(20, Math.min(WORLD_SIZE - 20, hop.startY + (hop.endY - hop.startY) * t));
+                    if (typeof resolveEntitySolidObstacles === 'function') resolveEntitySolidObstacles(this, prevDashX, prevDashY);
+
+                    // Deal 200 damage in a small range around Inou during this dash hop
+                    this.dealEDashSmallRangeDamage(hop.dmgHitSet);
+
+                    if (t >= 1) {
+                        if (hop.targetProj && !hop.targetProj.del) {
+                            this._eTouchedProjectiles.add(hop.targetProj);
+                            this.onTouchOwnProjectile(hop.targetProj, hop.dashAngle);
+                        }
+                        ringEffects.push({ x: this.x, y: this.y, life: 0.22, duration: 0.22, maxRadius: 95, color: '#facc15' });
+                        this.activeEDash = null;
+                        // Chain-dash immediately if another untouched projectile of Inou's is nearby!
+                        this.startNextEDashHop(false);
+                    }
+                }
+
+                // Update E projectile walkspeed stacks (5s each, up to 5 stacks)
+                if (Array.isArray(this.projSpeedStacks) && this.projSpeedStacks.length > 0) {
+                    for (let i = this.projSpeedStacks.length - 1; i >= 0; i--) {
+                        this.projSpeedStacks[i] -= dt;
+                        if (this.projSpeedStacks[i] <= 0) {
+                            this.projSpeedStacks.splice(i, 1);
+                        }
+                    }
+                }
+
+                // Update F Absolute Mode (Gamma Glasses)
+                if (this.absoluteTimer > 0) {
+                    this.absoluteTimer = Math.max(0, this.absoluteTimer - dt);
+                    this.baseSpd = 380;
+                    if (Math.random() < 0.45) {
+                        particles.push(new Particle(
+                            this.x + (Math.random() - 0.5) * 32,
+                            this.y + (Math.random() - 0.5) * 32,
+                            Math.random() < 0.5 ? '#facc15' : '#fef08a',
+                            2.5,
+                            0.35
+                        ));
+                    }
+                    if (this.absoluteTimer <= 0) {
+                        this.baseSpd = 330;
+                        this.basicCharging = false;
+                        this.basicChargeTime = 0;
+                    }
+                } else {
+                    this.baseSpd = 330;
+                    this.basicCharging = false;
+                    this.basicChargeTime = 0;
+                }
+
+                const prevX = this.x, prevY = this.y;
+                const stunnedOrFrozen = (this.stunTimer > 0 || this.freezeTimer > 0);
+                let spd = this.getEffectiveSpeed();
+
+                if (!stunnedOrFrozen) {
+                    if (this.isPlayer) {
+                        this.input(dt, spd);
+                    } else {
+                        this.ai(dt, spd);
+                    }
+                } else {
+                    this.basicCharging = false;
+                    this.basicChargeTime = 0;
+                }
+
+                // Speedster Bar charge/decay based on movement (like Winston / Amir / Fred)
+                const movedDist = Math.hypot(this.x - prevX, this.y - prevY);
+                const isMoving = !stunnedOrFrozen && (movedDist > Math.max(0.06, 35 * dt) || (this.isPlayer && (keys.w || keys.a || keys.s || keys.d)) || !!this.activeEDash);
+                if (isMoving) {
+                    this.speedBar = Math.min(1, this.speedBar + 0.48 * dt);
+                } else {
+                    this.speedBar = Math.max(0, this.speedBar - 0.55 * dt);
+                }
+
+                if (this.isPlayer) updateHUD(this);
+            }
+
+            input(dt, spd) {
+                let dx = 0, dy = 0;
+                if (keys.w) dy--;
+                if (keys.s) dy++;
+                if (keys.a) dx--;
+                if (keys.d) dx++;
+                if ((dx || dy) && !this.activeEDash) {
+                    let m = new Vector2(dx, dy).norm().mult(spd * dt);
+                    this.x += m.x;
+                    this.y += m.y;
+                }
+
+                this.angle = getMouseAimAngle(this.x, this.y);
+
+                // Basic attack handling:
+                // - Normal Mode: throws Kunai (125 dmg, 0.7s CD)
+                // - Absolute Mode (F): charge up to 1.0s for Large Explosive Gamma Energy Shuriken (2x walkspeed dmg, 1.5s slow, 50% heal),
+                //   or release before 1.0s for fast horizontal air-slice melee slash (110 dmg, 0.15s CD)
+                if (this.absoluteTimer > 0) {
+                    if (mouse.down) {
+                        if (!this.basicCharging && this.basicCD <= 0) {
+                            this.basicCharging = true;
+                            this.basicChargeTime = 0;
+                        }
+                        if (this.basicCharging) {
+                            this.basicChargeTime += dt;
+                            if (this.basicChargeTime >= 1.0) {
+                                this.fireChargedGammaShuriken();
+                                this.basicCharging = false;
+                                this.basicChargeTime = 0;
+                            }
+                        }
+                    } else if (this.basicCharging) {
+                        if (this.basicChargeTime >= 1.0) {
+                            this.fireChargedGammaShuriken();
+                        } else {
+                            this.performAbsoluteMeleeSlice();
+                        }
+                        this.basicCharging = false;
+                        this.basicChargeTime = 0;
+                    }
+                } else {
+                    if (mouse.down && this.basicCD <= 0) {
+                        this.basicAtk();
+                    }
+                }
+
+                if (keys.q && this.qCD <= 0 && !this._qWas) { this._qWas = true; this.abilityQ(); }
+                if (!keys.q) this._qWas = false;
+
+                if (keys.e && this.eCD <= 0 && !this._eWas) { this._eWas = true; this.abilityE(); }
+                if (!keys.e) this._eWas = false;
+
+                if (keys.f && this.fCD <= 0 && !this._fWas) { this._fWas = true; this.abilityF(); }
+                if (!keys.f) this._fWas = false;
+
+                if (keys.r && this.rCD <= 0 && !this._rWas) { this._rWas = true; this.useGear(); }
+                if (!keys.r) this._rWas = false;
+            }
+
+            // Normal Basic Attack: Kunai (125 dmg, 0.7s CD; +20% walkspeed true dmg & heal when speed bar is max)
+            basicAtk() {
+                if (this.basicCD > 0) return;
+                if (this.absoluteTimer > 0) {
+                    this.performAbsoluteMeleeSlice();
+                    return;
+                }
+                this.basicCD = 0.7;
+                this.revealTimer = 0.4;
+                const hadMaxSpeedBar = this.speedBar >= 0.999;
+                const spawnX = this.x + Math.cos(this.angle) * (this.radius + 8);
+                const spawnY = this.y + Math.sin(this.angle) * (this.radius + 8);
+                const kunaiSpeed = 720;
+                const kunai = new Projectile(this, spawnX, spawnY, this.angle, kunaiSpeed, 125, 560, '#facc15', 8, false, true, false, 0, 0, true);
+                kunai.isInouProj = true;
+                kunai.isInouKunai = true;
+                kunai.inouOwner = this;
+                kunai.baseInouSpeed = kunaiSpeed;
+                kunai.onHit = (enemy) => {
+                    if (!enemy || enemy.dead) return;
+                    if (kunai._firstEnemyHitDist === undefined) kunai._firstEnemyHitDist = kunai.dist;
+                    if (hadMaxSpeedBar || this.speedBar >= 0.999) {
+                        this.applyMaxSpeedBarTrueDamageAndHeal(enemy);
+                    }
+                    for (let i = 0; i < 6; i++) {
+                        particles.push(new Particle(enemy.x, enemy.y, i % 2 === 0 ? '#facc15' : '#fef9c3', 3, 0.35));
+                    }
+                };
+                projectiles.push(kunai);
+            }
+
+            // Absolute Mode Uncharged Basic: Fast Horizontal Melee Air-Slice (110 dmg, 0.15s CD, slightly bigger horizontal range, NO circular arcs!)
+            performAbsoluteMeleeSlice() {
+                if (this.basicCD > 0) return;
+                this.basicCD = 0.15;
+                this.revealTimer = 0.35;
+                const hadMaxSpeedBar = this.speedBar >= 0.999;
+                const sliceRange = 195;
+                const sliceHalfWidth = 92;
+                this._sliceVariant = (this._sliceVariant + 1) % 4;
+
+                // Spawn horizontal straight air-slicing visual effect (NO Slash arcs!)
+                visualEffects.push(new InouAirSliceEffect('air_slice', this.x, this.y, this.angle, {
+                    length: sliceRange,
+                    width: sliceHalfWidth * 2,
+                    duration: 0.19,
+                    variant: this._sliceVariant
+                }));
+
+                const cosA = Math.cos(this.angle), sinA = Math.sin(this.angle);
+                for (let e of entities) {
+                    if (e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                    const dx = e.x - this.x, dy = e.y - this.y;
+                    const fwd = dx * cosA + dy * sinA;
+                    const lat = Math.abs(-dx * sinA + dy * cosA);
+                    if (fwd >= -e.radius * 0.45 && fwd <= sliceRange + e.radius && lat <= sliceHalfWidth + e.radius) {
+                        e.takeDamage(110, this);
+                        if (hadMaxSpeedBar) {
+                            this.applyMaxSpeedBarTrueDamageAndHeal(e);
+                        }
+                        for (let i = 0; i < 5; i++) {
+                            particles.push(new Particle(e.x, e.y, i % 2 === 0 ? '#facc15' : '#ffffff', 3, 0.28));
+                        }
+                    }
+                }
+            }
+
+            // Absolute Mode 1.0s Charged Basic: Large Explosive Gamma Energy Shuriken
+            // (2x buffed walkspeed dmg, larger size, AoE crowd explosion, 1.5s slow, heals 50% of total damage dealt)
+            fireChargedGammaShuriken() {
+                this.basicCD = 0.35;
+                this.revealTimer = 0.5;
+                const hadMaxSpeedBar = this.speedBar >= 0.999;
+                const dmg = Math.floor(this.getBuffedBaseWalkspeed() * 2);
+                const spawnX = this.x + Math.cos(this.angle) * (this.radius + 14);
+                const spawnY = this.y + Math.sin(this.angle) * (this.radius + 14);
+                const projSpd = 760;
+                const shuriken = new Projectile(this, spawnX, spawnY, this.angle, projSpd, dmg, 680, '#facc15', 34, false, true, false, 0, 0, true, 1.5);
+                shuriken.isInouProj = true;
+                shuriken.isInouGammaShuriken = true;
+                shuriken.inouOwner = this;
+                shuriken.baseInouSpeed = projSpd;
+
+                const triggerGammaExplosion = (cx, cy, primaryEnemy) => {
+                    const expRadius = 195;
+                    let totalCrowdDmg = 0;
+                    if (primaryEnemy && !primaryEnemy.dead) {
+                        totalCrowdDmg += dmg;
+                        safeApplyStatus(primaryEnemy, 'slow', 1.5, this);
+                        primaryEnemy.slowTimer = Math.max(primaryEnemy.slowTimer || 0, 1.5);
+                        if (hadMaxSpeedBar || this.speedBar >= 0.999) {
+                            this.applyMaxSpeedBarTrueDamageAndHeal(primaryEnemy);
+                        }
+                    }
+                    // Deal crowd explosion damage & 1.5s slow to all other enemies in the 195px blast radius
+                    for (let e of entities) {
+                        if (e === this || e === primaryEnemy || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                        const d = Math.hypot(e.x - cx, e.y - cy);
+                        if (d <= expRadius + (e.radius || 0)) {
+                            e.takeDamage(dmg, this);
+                            safeApplyStatus(e, 'slow', 1.5, this);
+                            e.slowTimer = Math.max(e.slowTimer || 0, 1.5);
+                            totalCrowdDmg += dmg;
+                            if (!shuriken.hit.includes(e)) shuriken.hit.push(e);
+                        }
+                    }
+                    if (totalCrowdDmg > 0) {
+                        const healAmt = Math.floor(totalCrowdDmg * 0.50);
+                        this.hp = Math.min(this.maxHp, this.hp + healAmt);
+                    }
+                    try {
+                        effectsAdd(new WaveShockwave(cx, cy, expRadius, 0.55, '#facc15', '#fef08a'));
+                    } catch (_) {}
+                    ringEffects.push({ x: cx, y: cy, life: 0.45, duration: 0.45, maxRadius: expRadius, color: '#facc15' });
+                    for (let i = 0; i < 24; i++) {
+                        const a = (Math.PI * 2 * i) / 24;
+                        particles.push(new Particle(cx, cy, i % 2 === 0 ? '#facc15' : '#ffffff', 5, 0.5, Math.cos(a) * 260, Math.sin(a) * 260));
+                    }
+                };
+
+                shuriken.onGammaExplode = triggerGammaExplosion;
+                shuriken.onHit = (enemy) => {
+                    if (!enemy || enemy.dead) return;
+                    if (shuriken._firstEnemyHitDist === undefined) shuriken._firstEnemyHitDist = shuriken.dist;
+                    shuriken._gammaExploded = true;
+                    triggerGammaExplosion(enemy.x, enemy.y, enemy);
+                };
+                projectiles.push(shuriken);
+                visualEffects.push(new InouAirSliceEffect('air_slice', this.x, this.y, this.angle, {
+                    length: 185,
+                    width: 190,
+                    duration: 0.22,
+                    variant: 0
+                }));
+            }
+
+            spawnSingleQShuriken(ang) {
+                if (this.dead) return;
+                const dmgPerShuriken = Math.floor(this.getBuffedBaseWalkspeed());
+                const projSpd = 680;
+                const sx = this.x + Math.cos(ang) * (this.radius + 8);
+                const sy = this.y + Math.sin(ang) * (this.radius + 8);
+                const shuriken = new Projectile(this, sx, sy, ang, projSpd, dmgPerShuriken, 560, '#facc15', 11, false, true, false, 0, 0, true);
+                shuriken.isInouProj = true;
+                shuriken.isInouShuriken = true;
+                shuriken.isInouQ = true;
+                shuriken.inouOwner = this;
+                shuriken.baseInouSpeed = projSpd;
+                shuriken.onHit = (enemy) => {
+                    if (!enemy || enemy.dead) return;
+                    if (shuriken._firstEnemyHitDist === undefined) shuriken._firstEnemyHitDist = shuriken.dist;
+                    const healAmt = Math.floor(dmgPerShuriken * 0.20);
+                    this.hp = Math.min(this.maxHp, this.hp + healAmt);
+                    if (this.absoluteTimer > 0) {
+                        this.eCD = Math.max(0, this.eCD - 0.5);
+                    }
+                    for (let k = 0; k < 5; k++) {
+                        particles.push(new Particle(enemy.x, enemy.y, k % 2 === 0 ? '#facc15' : '#fef9c3', 3, 0.35));
+                    }
+                };
+                projectiles.push(shuriken);
+            }
+
+            // Q Ability: Throws 4 Shurikens, each deals 100% of Inou's buffed walkspeed and heals 20% of total damage (3.5s CD)
+            // - Normal Mode: tighter arc so all 4 shurikens can hit the same target at close/mid range.
+            // - Ultimate Mode: shoots the 4 shurikens consecutively and very quickly with an even smaller arc!
+            abilityQ() {
+                if (this.qCD > 0) return;
+                this.qCD = 3.5;
+                this.revealTimer = 0.45;
+
+                if (this.absoluteTimer > 0) {
+                    const ultSpreads = [-0.054, -0.018, 0.018, 0.054];
+                    this.spawnSingleQShuriken(this.angle + ultSpreads[0]);
+                    this.qBurstQueue.push(
+                        { delay: 0.045, spreadOffset: ultSpreads[1] },
+                        { delay: 0.090, spreadOffset: ultSpreads[2] },
+                        { delay: 0.135, spreadOffset: ultSpreads[3] }
+                    );
+                } else {
+                    const normalSpreads = [-0.09, -0.03, 0.03, 0.09];
+                    for (let i = 0; i < 4; i++) {
+                        this.spawnSingleQShuriken(this.angle + normalSpreads[i]);
+                    }
+                }
+            }
+
+            // Find all active projectiles owned by Inou
+            getOwnActiveProjectiles(excludeSet) {
+                const list = [];
+                const pools = [projectiles, entities];
+                for (const pool of pools) {
+                    if (!Array.isArray(pool)) continue;
+                    for (const p of pool) {
+                        if (!p || p.del || !p.isInouProj || p.inouOwner !== this) continue;
+                        if (excludeSet && excludeSet.has(p)) continue;
+                        if (!list.includes(p)) list.push(p);
+                    }
+                }
+                return list;
+            }
+
+            startNextEDashHop(isFirstHop) {
+                const candidates = this.getOwnActiveProjectiles(this._eTouchedProjectiles);
+                let nearest = null;
+                let bestDist = isFirstHop ? 900 : 580;
+                for (const p of candidates) {
+                    const d = Math.hypot(p.x - this.x, p.y - this.y);
+                    if (d <= bestDist) {
+                        bestDist = d;
+                        nearest = p;
+                    }
+                }
+
+                if (!nearest) {
+                    if (isFirstHop) {
+                        // Fallback short dash toward aim angle if no projectile is out (still deals 200 AoE dash damage!)
+                        const startX = this.x, startY = this.y;
+                        const dashDist = 210;
+                        const endX = Math.max(20, Math.min(WORLD_SIZE - 20, this.x + Math.cos(this.angle) * dashDist));
+                        const endY = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + Math.sin(this.angle) * dashDist));
+                        this.activeEDash = {
+                            targetProj: null,
+                            startX, startY, endX, endY,
+                            dashAngle: this.angle,
+                            elapsed: 0,
+                            duration: 0.06,
+                            dmgHitSet: new Set()
+                        };
+                        visualEffects.push(new InouAirSliceEffect('gamma_dash_line', startX, startY, this.angle, {
+                            endX, endY, duration: 0.24
+                        }));
+                    } else {
+                        this.eDashing = false;
+                    }
+                    return;
+                }
+
+                const startX = this.x, startY = this.y;
+                const dashAngle = Math.atan2(nearest.y - startY, nearest.x - startX);
+                this.eDashing = true;
+                this.inouDashDRTimer = Math.max(this.inouDashDRTimer || 0, 0.28);
+                this.activeEDash = {
+                    targetProj: nearest,
+                    startX,
+                    startY,
+                    endX: nearest.x,
+                    endY: nearest.y,
+                    dashAngle,
+                    elapsed: 0,
+                    duration: 0.052,
+                    dmgHitSet: new Set()
+                };
+                visualEffects.push(new InouAirSliceEffect('gamma_dash_line', startX, startY, dashAngle, {
+                    endX: nearest.x, endY: nearest.y, duration: 0.25
+                }));
+            }
+
+            // E Ability: Dashes towards her projectile (4s CD, 25% damage reduction during dash, 200 AoE damage per dash).
+            // Touching her projectile grants +24 walkspeed for 5s (max 5 stacks), pushes the projectile faster,
+            // and chains dashes if another projectile is nearby until all nearby projectiles are touched in that brief moment!
+            abilityE() {
+                if (this.eCD > 0) return;
+                this.eCD = 4.0;
+                this.eDashing = true;
+                this.inouDashDRTimer = 0.45;
+                this._eTouchedProjectiles = new Set();
+                this.startNextEDashHop(true);
+            }
+
+            onTouchOwnProjectile(proj, dashAngle) {
+                if (!proj || proj.del) return;
+                // 1. +24 walkspeed for 5s per projectile touched (max 5 stacks)
+                this.addProjectileTouchStack();
+
+                // 2. In Gamma/Absolute Mode, each projectile touched reduces Q cooldown by 0.5s
+                if (this.absoluteTimer > 0) {
+                    this.qCD = Math.max(0, this.qCD - 0.5);
+                }
+
+                // 3. Push the touched projectile faster toward nearest enemy or cursor!
+                proj.inouLingering = false;
+                proj.inouLingerTimer = 0;
+                delete proj._firstEnemyHitDist;
+                proj._hasLingeredOnce = false;
+                proj._gammaExploded = false;
+
+                let pushAngle = Number.isFinite(dashAngle) ? dashAngle : this.angle;
+                const nearestEnemy = this.findTarget();
+                if (nearestEnemy && Math.hypot(nearestEnemy.x - proj.x, nearestEnemy.y - proj.y) <= 560) {
+                    pushAngle = Math.atan2(nearestEnemy.y - proj.y, nearestEnemy.x - proj.x);
+                } else if (this.isPlayer) {
+                    pushAngle = getMouseAimAngle(proj.x, proj.y);
+                }
+                proj.angle = pushAngle;
+                proj.speed = Math.max(1260, (proj.baseInouSpeed || proj.speed || 680) * 1.85);
+                proj.vx = Math.cos(pushAngle) * proj.speed;
+                proj.vy = Math.sin(pushAngle) * proj.speed;
+                proj.dist = 0;
+                proj.range = Math.max(proj.range || 560, 660);
+                proj.hit = [];
+
+                ringEffects.push({ x: proj.x, y: proj.y, life: 0.28, duration: 0.28, maxRadius: 48, color: '#facc15' });
+                for (let i = 0; i < 8; i++) {
+                    const a = (Math.PI * 2 * i) / 8;
+                    particles.push(new Particle(proj.x, proj.y, i % 2 === 0 ? '#facc15' : '#ffffff', 3.5, 0.32, Math.cos(a) * 160, Math.sin(a) * 160));
+                }
+            }
+
+            // F Ability: Wear Gamma Glasses & turn on Absolute Mode (12s duration, 45s CD, +50 base walkspeed, +900 yellow shield)
+            abilityF() {
+                if (this.fCD > 0) return;
+                this.fCD = 45;
+                this.absoluteTimer = 12.0;
+                this.absoluteMaxTimer = 12.0;
+                this.baseSpd = 380;
+                this.speed = this.baseSpd + (Array.isArray(this.projSpeedStacks) ? this.projSpeedStacks.length * 24 : 0);
+
+                // Grant +900 Yellow Shield (takes priority over white shield & blocks true damage)
+                this.yellowShield = (this.yellowShield || 0) + 900;
+                this.shield = (this.shield || 0) + 900;
+                this.hasMechArmor = true;
+
+                ringEffects.push({ x: this.x, y: this.y, life: 0.65, duration: 0.65, maxRadius: 140, color: '#facc15' });
+                for (let i = 0; i < 28; i++) {
+                    const a = (Math.PI * 2 * i) / 28;
+                    particles.push(new Particle(this.x, this.y, i % 2 === 0 ? '#facc15' : '#fef9c3', 4.5, 0.55, Math.cos(a) * 240, Math.sin(a) * 240));
+                }
+                if (this.isPlayer) addKillMsg('🕶️ GAMMA ABSOLUTE MODE!');
+            }
+
+            ai(dt, spd) {
+                if (this.handleSafeZone && this.handleSafeZone(dt)) return;
+                let t = this.findTarget();
+                if (!t) { this.wander(dt, spd); return; }
+                let dx = t.x - this.x, dy = t.y - this.y;
+                this.angle = Math.atan2(dy, dx);
+                let d = Math.sqrt(dx * dx + dy * dy);
+
+                if (this.fCD <= 0 && d < 520) this.abilityF();
+                if (this.qCD <= 0 && d < 550) this.abilityQ();
+                if (this.eCD <= 0 && this.getOwnActiveProjectiles().length > 0) this.abilityE();
+
+                if (this.absoluteTimer > 0) {
+                    if (d < 185 && this.basicCD <= 0) {
+                        this.performAbsoluteMeleeSlice();
+                    } else if (d >= 185 && d < 620 && this.basicCD <= 0) {
+                        this.basicChargeTime = (this.basicChargeTime || 0) + dt;
+                        if (this.basicChargeTime >= 1.0) {
+                            this.fireChargedGammaShuriken();
+                            this.basicChargeTime = 0;
+                        }
+                    }
+                } else if (this.basicCD <= 0 && d < 580) {
+                    this.basicAtk();
+                }
+
+                if (!this.activeEDash && d > (this.absoluteTimer > 0 ? 125 : 240)) {
+                    this.x += Math.cos(this.angle) * spd * dt;
+                    this.y += Math.sin(this.angle) * spd * dt;
+                }
+            }
+
+            findTarget() {
+                let c = null, md = 99999;
+                for (let e of entities) {
+                    if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && e.isVisibleTo(this)) {
+                        let d = Math.hypot(e.x - this.x, e.y - this.y);
+                        if (d < md) { md = d; c = e; }
+                    }
+                }
+                return c;
+            }
+
+            wander(dt, spd) {
+                if (Math.random() < 0.05) this.angle += (Math.random() - 0.5) * 1.0;
+                this.x += Math.cos(this.angle) * spd * 0.5 * dt;
+                this.y += Math.sin(this.angle) * spd * 0.5 * dt;
+            }
+
+            draw(ctx) {
+                super.draw(ctx);
+                const sx = this.x - camera.x;
+                const sy = this.y - camera.y;
+                const r = this.radius || 18;
+                const isAbs = (this.absoluteTimer || 0) > 0;
+
+                ctx.save();
+                ctx.translate(sx, sy);
+                ctx.rotate(this.angle || 0);
+
+                // Ninja headband & flowing yellow gamma scarf tails behind Inou
+                const wave = Math.sin(Date.now() * 0.015) * 4;
+                ctx.strokeStyle = isAbs ? '#facc15' : '#ca8a04';
+                ctx.lineWidth = 3.5;
+                ctx.beginPath();
+                ctx.moveTo(-r * 0.7, -5);
+                ctx.quadraticCurveTo(-r * 1.45, -9 + wave, -r * 1.95, -6 - wave);
+                ctx.moveTo(-r * 0.7, 5);
+                ctx.quadraticCurveTo(-r * 1.4, 9 - wave, -r * 1.85, 7 + wave);
+                ctx.stroke();
+
+                // Dark ninja cowl / mask overlay
+                ctx.fillStyle = '#0f172a';
+                ctx.beginPath();
+                ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (isAbs) {
+                    // YELLOW GAMMA GLASSES (Futuristic glowing golden-yellow visor shades!)
+                    ctx.shadowColor = '#facc15';
+                    ctx.shadowBlur = 16;
+                    ctx.fillStyle = '#facc15';
+                    ctx.strokeStyle = '#fef9c3';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(4, -11);
+                    ctx.lineTo(11, -3);
+                    ctx.lineTo(11, 3);
+                    ctx.lineTo(4, 11);
+                    ctx.lineTo(1, 5);
+                    ctx.lineTo(3, 0);
+                    ctx.lineTo(1, -5);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                } else {
+                    // Focused golden-yellow gamma ninja eyes
+                    ctx.fillStyle = '#fde047';
+                    ctx.beginPath();
+                    ctx.arc(5, -5, 2.3, 0, Math.PI * 2);
+                    ctx.arc(5, 5, 2.3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // Speedster Bar above Inou (just like Winston, Amir, or Fred) + Stack pips
+                const barW = 60, barH = 6;
+                const bx = sx - barW / 2, by = sy - r - 26;
+                ctx.save();
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(bx, by, barW, barH);
+                const spdPct = Math.max(0, Math.min(1, this.speedBar || 0));
+                ctx.fillStyle = spdPct >= 0.999 ? '#fde047' : '#eab308';
+                ctx.fillRect(bx, by, barW * spdPct, barH);
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 1.2;
+                ctx.strokeRect(bx, by, barW, barH);
+
+                // Show E projectile speed stacks (up to 5 glowing yellow gamma pips above the speed bar)
+                const stackCount = Array.isArray(this.projSpeedStacks) ? Math.min(5, this.projSpeedStacks.length) : 0;
+                if (stackCount > 0) {
+                    for (let i = 0; i < 5; i++) {
+                        ctx.fillStyle = i < stackCount ? '#facc15' : 'rgba(15, 23, 42, 0.55)';
+                        ctx.fillRect(bx + i * 12.5, by - 6, 10, 3.5);
+                    }
+                }
+
+                // If charging basic attack in Absolute Mode, show charge bar right below speedster bar
+                if (isAbs && this.basicCharging && this.basicChargeTime > 0.05) {
+                    const chPct = Math.max(0, Math.min(1, this.basicChargeTime / 1.0));
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillRect(bx, by + 8, barW, 4);
+                    ctx.fillStyle = chPct >= 1 ? '#ffffff' : '#fde047';
+                    ctx.fillRect(bx, by + 8, barW * chPct, 4);
+                }
+                ctx.restore();
+            }
+        }
+
         // SECRET HERO: MECCA - UNLEASHER/ATTACKER (Unlocked only by pressing M + E + C + A simultaneously)
         class Mecca extends Entity {
             constructor(x, y, p) {
@@ -47407,6 +48431,10 @@
                 if(e) e.innerText = p.ascended ? '👻' : '💨';
                 if(f) f.innerText = p.ascended ? '☄️' : '🦶';
                 if(g) g.innerText = p.ascended ? '🔥' : '⚡';
+            } else if (typeof Inou !== 'undefined' && p instanceof Inou) {
+                if(q) q.innerText = '手里';
+                if(e) e.innerText = '⚡';
+                if(f) f.innerText = '🕶️';
             }
         }
 
@@ -47482,6 +48510,13 @@
                     eb.style.width = ebPct + '%';
                     eb.style.background = 'linear-gradient(90deg, #ff6b00 0%, #00f5d4 100%)';
                     eb.style.boxShadow = '0 0 8px rgba(0, 245, 212, 0.8)';
+                } else if (typeof Inou !== 'undefined' && p instanceof Inou && p.absoluteTimer > 0) {
+                    const ebPct = Math.max(0, Math.min(100, (p.absoluteTimer / (p.absoluteMaxTimer || 12.0)) * 100));
+                    eb.style.display = 'block';
+                    eb.style.left = '0%';
+                    eb.style.width = ebPct + '%';
+                    eb.style.background = 'linear-gradient(90deg, #ca8a04 0%, #facc15 60%, #fef08a 100%)';
+                    eb.style.boxShadow = '0 0 8px rgba(250, 204, 21, 0.85)';
                 } else if (p.fadingSoulTimer && p.fadingSoulTimer > 0) {
                     const ebPct = Math.max(0, Math.min(100, (p.fadingSoulTimer / 5.0) * 100));
                     eb.style.display = 'block';
@@ -47551,10 +48586,10 @@
             else if(p instanceof Ash){c1=p.qCD;m1=4;c2=p.eCD;m2=5;c3=p.fCD;m3=40;c4=0;m4=1;}
             else if(p instanceof Neo){c1=p.qCD;m1=4;c2=p.eCD;m2=12;c3=p.fCD;m3=13;c4=p.gCD;m4=25;}
             else if(p instanceof Li){c1=p.qCD;m1=9;c2=p.eCD;m2=6;c3=p.fCD;m3=24;c4=0;m4=1;}
-            else if(p instanceof Lav){c1=p.qCD;m1=16;c2=p.eCD;m2=3;c3=p.fCD;m3=18;c4=0;m4=1;}
+            else if(p instanceof Lav){c1=p.qCD;m1=12;c2=p.eCD;m2=2.5;c3=p.fCD;m3=14;c4=0;m4=1;}
             else if(p instanceof Max){c1=p.qCD;m1=6;c2=p.eCD;m2=12;c3=p.fCD;m3=16.5;c4=p.gCD;m4=9.9;}
             else if(p instanceof Kenshi){c1=p.qCD;m1=6;c2=p.eCD;m2=6;c3=p.fCD;m3=15;c4=0;m4=1;}
-            else if(p instanceof Gigi){c1=p.qCD;m1=8;c2=p.eCD;m2=10;c3=p.fCD;m3=26;c4=0;m4=1;}
+            else if(p instanceof Gigi){c1=p.qCD;m1=7;c2=p.eCD;m2=8.5;c3=p.fCD;m3=23;c4=0;m4=1;}
             else if(p instanceof Yun){ c1 = p.qCD; m1 = 10; c2 = p.eCD; m2 = 6; c3 = p.fCD; m3 = 18; c4 = 0; m4 = 1; }
             else if(p instanceof Gregory){
                 c1 = p.qCD; m1 = 4;
@@ -47565,16 +48600,16 @@
             else if(p instanceof RacingDuo){c1=p.qCD;m1=11;c2=p.eCD;m2=12;c3=p.fCD;m3=31;c4=p.switchCD;m4=5;}
             else if(p instanceof Monza){c1=p.qCD;m1=15;c2=p.eCD;m2=10;c3=p.fCD;m3=17;c4=0;m4=1;}
             else if(p instanceof Faik){c1=p.qCD;m1=7;c2=p.eCD;m2=5;c3=p.fCD;m3=22;c4=0;m4=1;}
-            else if(p instanceof Vival){c1=p.qCD;m1=6;c2=p.eCD;m2=10;c3=p.fCD;m3=17;c4=p.gCD;m4=90;}
+            else if(p instanceof Vival){c1=p.qCD;m1=5.2;c2=p.eCD;m2=9;c3=p.fCD;m3=15.5;c4=p.gCD;m4=90;}
             else if(p instanceof Bai){ c1 = p.qCD; m1 = 5; c2 = p.eCD; m2 = 6; c3 = p.fCD; m3 = 24; c4 = p.rCD; m4 = 24; }
             else if(p instanceof Apollo){ c1 = p.qCD; m1 = 7; c2 = p.eCD; m2 = 5; c3 = p.fCD; m3 = 40; c4 = p.rCD; m4 = 40; }
             else if(p instanceof Lune){ c1 = p.qCD; m1 = 5; c2 = p.eCD; m2 = 6; c3 = p.fCD; m3 = 15; c4 = 0; m4 = 1; }
             else if(p instanceof BrunoAlexander){ c1 = p.qCD; m1 = 11; c2 = p.eCD; m2 = 6; c3 = p.fCD; m3 = 18; c4 = p.gCD; m4 = 20; }
-            else if(p instanceof Everdawn){ c1 = p.qCD; m1 = 10; c2 = p.eCD; m2 = 8; c3 = p.fCD; m3 = 25; c4 = p.gCD; m4 = 15; }
+            else if(p instanceof Everdawn){ c1 = p.qCD; m1 = 8.5; c2 = p.eCD; m2 = 3.5; c3 = p.fCD; m3 = 22; c4 = p.gCD; m4 = 13; }
             else if(p instanceof Kujou){ c1 = p.qCD; m1 = 6.5; c2 = p.eCD; m2 = 7.5; c3 = p.fCD; m3 = 28; c4 = 0; m4 = 1; }
             else if(p instanceof Zeus){ c1 = p.qCD; m1 = 7; c2 = p.eCD; m2 = 6; c3 = p.fCD; m3 = 48; c4 = 0; m4 = 1; }
             else if(p instanceof BountyHunter){ c1 = p.mode === 'meet_your_end' ? p.qCD : p.qCD; m1 = 5; c2 = p.eCD; m2 = 7; c3 = p.fCD; m3 = 12; c4 = p.modeSwitchCD; m4 = 5; }
-            else if(p instanceof Aurora) {c1=p.qCD;m1=10;c2=p.eCD;m2=7;c3=p.fCD;m3=25;c4=0;m4=1;}
+            else if(p instanceof Aurora) {c1=p.qCD;m1=8.5;c2=p.eCD;m2=6;c3=p.fCD;m3=22;c4=0;m4=1;}
             else if(p instanceof Karen){c1=p.qCD;m1=6;c2=p.eCD;m2=10;c3=p.fCD;m3=35;c4=0;m4=1;}
             else if(p instanceof Jeffrey){c1=p.qCD;m1=4;c2=p.eCD;m2=10;c3=p.fCD;m3=28;c4=0;m4=1;}
             else if(p instanceof Caskrice){c1=p.qCD;m1=6;c2=p.eCD;m2=8;c3=p.fCD;m3=18;c4=p.gCD;m4=30;}
@@ -47598,6 +48633,7 @@
             else if(p instanceof Cole){c1=p.qCD;m1=6;c2=p.eCD;m2=8;c3=p.fCharges>0?0:p.fCD;m3=4;c4=0;m4=1;}
             else if(p instanceof Rico){c1=p.qCD;m1=10;c2=p.eCD;m2=4;c3=p.fCD;m3=15;c4=0;m4=1;}
             else if(typeof Mecca !== 'undefined' && p instanceof Mecca){c1=p.qCD;m1=5;c2=p.eCD;m2=p.ascended?12:6;c3=p.fCD;m3=15;c4=p.ascended?0:Math.max(0,(100-(p.gCharge||0))/100);m4=1;}
+            else if(typeof Inou !== 'undefined' && p instanceof Inou){c1=p.qCD;m1=3.5;c2=p.eCD;m2=4;c3=p.fCD;m3=45;c4=0;m4=1;}
             else{c1=0;m1=1;c2=0;m2=1;c3=0;m3=1;c4=0;m4=1;}
             if(p instanceof Melvin) {
                 document.getElementById('eCharge').style.display = 'block';
@@ -47912,6 +48948,13 @@
                     passiveBar.style.background = p.ascended ? '#00f5d4' : '#ff7b00';
                     passiveBar.style.backgroundColor = passiveBar.style.background;
                     passiveBar.style.width = (p.ascended ? 100 : Math.min(100, p.gCharge || 0)) + '%';
+                }
+            } else if(typeof Inou !== 'undefined' && p instanceof Inou) {
+                if(passiveBar) {
+                    passiveBar.style.display = 'block';
+                    passiveBar.style.background = p.speedBar >= 0.999 ? '#fde047' : '#eab308';
+                    passiveBar.style.backgroundColor = passiveBar.style.background;
+                    passiveBar.style.width = Math.min(100, (p.speedBar || 0) * 100) + '%';
                 }
             } else {
                 // non-passive-bar heroes: nothing shown
@@ -49955,6 +50998,86 @@
                             CTX.fill();
                             CTX.restore();
                         }
+                    }
+
+                    // Inou Ultimate (Absolute Mode): Yellow Futuristic Glasses POV Camera Overlay!
+                    if (player && !player.dead && typeof Inou !== 'undefined' && player instanceof Inou && player.absoluteTimer > 0) {
+                        CTX.save();
+                        const w = CANVAS.width, h = CANVAS.height;
+                        const cx = w * 0.5, cy = h * 0.5;
+                        const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);
+
+                        // 1. Golden-yellow futuristic lens radial tint
+                        const lensGrad = CTX.createRadialGradient(cx, cy, Math.min(w, h) * 0.18, cx, cy, Math.max(w, h) * 0.72);
+                        lensGrad.addColorStop(0, 'rgba(254, 240, 138, 0.06)');
+                        lensGrad.addColorStop(0.65, 'rgba(250, 204, 21, 0.14)');
+                        lensGrad.addColorStop(1, 'rgba(202, 138, 4, 0.28)');
+                        CTX.fillStyle = lensGrad;
+                        CTX.fillRect(0, 0, w, h);
+
+                        // 2. Subtle horizontal holographic visor scanlines
+                        CTX.fillStyle = 'rgba(254, 240, 138, 0.032)';
+                        const scanOffset = Math.floor((Date.now() * 0.06) % 6);
+                        for (let y = scanOffset; y < h; y += 6) {
+                            CTX.fillRect(0, y, w, 1.5);
+                        }
+
+                        // 3. Futuristic Yellow Glasses Frame & Nose-Bridge Silhouette around viewport perimeter
+                        CTX.strokeStyle = `rgba(250, 204, 21, ${0.72 + 0.18 * pulse})`;
+                        CTX.lineWidth = 5;
+                        CTX.shadowColor = '#facc15';
+                        CTX.shadowBlur = 18;
+
+                        // Top angular visor brow rim
+                        CTX.beginPath();
+                        CTX.moveTo(18, 56);
+                        CTX.lineTo(58, 20);
+                        CTX.lineTo(cx - 85, 20);
+                        CTX.lineTo(cx, 38);
+                        CTX.lineTo(cx + 85, 20);
+                        CTX.lineTo(w - 58, 20);
+                        CTX.lineTo(w - 18, 56);
+                        CTX.stroke();
+
+                        // Bottom dual-lens rim with center nose-bridge arch
+                        CTX.beginPath();
+                        CTX.moveTo(18, h - 56);
+                        CTX.lineTo(58, h - 22);
+                        CTX.lineTo(cx - 110, h - 22);
+                        CTX.lineTo(cx - 42, h - 72);
+                        CTX.lineTo(cx, h - 84);
+                        CTX.lineTo(cx + 42, h - 72);
+                        CTX.lineTo(cx + 110, h - 22);
+                        CTX.lineTo(w - 58, h - 22);
+                        CTX.lineTo(w - 18, h - 56);
+                        CTX.stroke();
+
+                        // Corner HUD targeting brackets inside the glasses lens
+                        CTX.lineWidth = 2.5;
+                        CTX.strokeStyle = 'rgba(254, 249, 195, 0.80)';
+                        const bPadX = 48, bPadY = 48, bLen = 34;
+                        // Top-left bracket
+                        CTX.beginPath();
+                        CTX.moveTo(bPadX, bPadY + bLen); CTX.lineTo(bPadX, bPadY); CTX.lineTo(bPadX + bLen, bPadY);
+                        // Top-right bracket
+                        CTX.moveTo(w - bPadX - bLen, bPadY); CTX.lineTo(w - bPadX, bPadY); CTX.lineTo(w - bPadX, bPadY + bLen);
+                        // Bottom-left bracket
+                        CTX.moveTo(bPadX, h - bPadY - bLen); CTX.lineTo(bPadX, h - bPadY); CTX.lineTo(bPadX + bLen, h - bPadY);
+                        // Bottom-right bracket
+                        CTX.moveTo(w - bPadX - bLen, h - bPadY); CTX.lineTo(w - bPadX, h - bPadY); CTX.lineTo(w - bPadX, h - bPadY - bLen);
+                        CTX.stroke();
+
+                        // Subtle futuristic HUD telemetry text on upper lens
+                        CTX.shadowBlur = 8;
+                        CTX.fillStyle = 'rgba(254, 240, 138, 0.88)';
+                        CTX.font = 'bold 12px monospace';
+                        CTX.textAlign = 'left';
+                        const curSpd = Math.round(player.getEffectiveSpeed ? player.getEffectiveSpeed() : player.speed);
+                        const stacks = Array.isArray(player.projSpeedStacks) ? player.projSpeedStacks.length : 0;
+                        CTX.fillText(`GAMMA VISOR // ABSOLUTE MODE [${player.absoluteTimer.toFixed(1)}s]`, bPadX + 12, bPadY + 22);
+                        CTX.fillText(`SPD: ${curSpd}  |  GAMMA STACKS: ${stacks}/5`, bPadX + 12, bPadY + 40);
+
+                        CTX.restore();
                     }
 
                     // If local player is flash-blinded by Cole's Q Flashbang, draw intense full-screen whiteout + optical afterimage glare
@@ -52894,7 +54017,49 @@
                     addKillMsg('🔥 Switched to Secret Hero: MECCA!');
                 }
             };
-            window.addEventListener('keydown',e=>{if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;const key=e.key.toLowerCase();window._secretHeldKeys.add(key);if(window._secretHeldKeys.has('m')&&window._secretHeldKeys.has('e')&&window._secretHeldKeys.has('c')&&window._secretHeldKeys.has('a')){window.unlockAndSelectMecca();}if(window._secretHeldKeys.has('b')&&window._secretHeldKeys.has('o')&&window._secretHeldKeys.has('s')){window.unlockSoloLevellingMode();}if(keys.hasOwnProperty(key))keys[key]=true;if(key==='r')activateUniversalGear(player);if(key==='t'&&typeof gameMode!=='undefined'&&gameMode==='training'){e.preventDefault();toggleTrainingPanel();}if(key==='l'&&typeof gameMode!=='undefined'&&gameMode==='training')switchTrainingDummy();if(key==='p'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCounter();if(key==='o'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCooldowns();if(e.key===' ')showLeaderboard();});
+            window.unlockAndSelectInou = function() {
+                const nowMs = Date.now();
+                if (window._lastInouUnlockAt && (nowMs - window._lastInouUnlockAt) < 800) return;
+                window._lastInouUnlockAt = nowMs;
+                window.heroEnabled = window.heroEnabled || {};
+                window.heroEnabled['inou'] = true;
+                if (typeof window.selectHero === 'function') {
+                    window.selectHero('inou');
+                } else {
+                    selectedHeroType = 'inou';
+                }
+                const modeTitle = document.getElementById('modeTitle');
+                if (modeTitle) {
+                    modeTitle.innerHTML = '⚡ SECRET HERO SELECTED: <span style="color:#facc15;">INOU</span> (Speedster/Assassin) ⚡';
+                }
+                let toast = document.getElementById('meccaSecretToast');
+                if (!toast) {
+                    toast = document.createElement('div');
+                    toast.id = 'meccaSecretToast';
+                    toast.style.cssText = 'position:fixed;top:22px;left:50%;transform:translateX(-50%);z-index:999999;background:linear-gradient(135deg,#1e293b,#422006);border:2px solid #facc15;box-shadow:0 0 24px rgba(250,204,21,0.55);color:#fff;padding:12px 24px;border-radius:10px;font-family:Inter,Arial,sans-serif;font-weight:800;font-size:15px;letter-spacing:0.6px;pointer-events:none;transition:opacity 0.35s;';
+                    document.body.appendChild(toast);
+                }
+                toast.style.borderColor = '#facc15';
+                toast.innerHTML = '⚡ <span style="color:#fef08a;">SECRET HERO UNLOCKED:</span> <span style="color:#facc15;">INOU</span> (Speedster/Assassin) SELECTED! ⚡';
+                toast.style.opacity = '1';
+                toast.style.display = 'block';
+                clearTimeout(window._meccaToastTimer);
+                window._meccaToastTimer = setTimeout(() => {
+                    if (toast) toast.style.opacity = '0';
+                }, 3200);
+                if (typeof gameRunning !== 'undefined' && gameRunning && gameMode === 'training' && player && !(player instanceof Inou)) {
+                    const px = player.x, py = player.y, pGear = player.gear;
+                    const idx = entities.indexOf(player);
+                    player = new Inou(px, py, true);
+                    player.team = 1;
+                    player.gear = pGear || selectedGear || 'speedster';
+                    if (idx !== -1) entities[idx] = player;
+                    else entities.push(player);
+                    updateHUD(player);
+                    addKillMsg('☢️ Switched to Secret Hero: INOU!');
+                }
+            };
+            window.addEventListener('keydown',e=>{if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;const key=e.key.toLowerCase();window._secretHeldKeys.add(key);if(window._secretHeldKeys.has('m')&&window._secretHeldKeys.has('e')&&window._secretHeldKeys.has('c')&&window._secretHeldKeys.has('a')){window.unlockAndSelectMecca();}if(window._secretHeldKeys.has('i')&&window._secretHeldKeys.has('n')&&window._secretHeldKeys.has('o')&&window._secretHeldKeys.has('u')){window.unlockAndSelectInou();}if(window._secretHeldKeys.has('b')&&window._secretHeldKeys.has('o')&&window._secretHeldKeys.has('s')){window.unlockSoloLevellingMode();}if(keys.hasOwnProperty(key))keys[key]=true;if(key==='r')activateUniversalGear(player);if(key==='t'&&typeof gameMode!=='undefined'&&gameMode==='training'){e.preventDefault();toggleTrainingPanel();}if(key==='l'&&typeof gameMode!=='undefined'&&gameMode==='training')switchTrainingDummy();if(key==='p'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCounter();if(key==='o'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCooldowns();if(e.key===' ')showLeaderboard();});
             window.addEventListener('keyup',e=>{const k=e.key.toLowerCase();if(window._secretHeldKeys)window._secretHeldKeys.delete(k);if(keys.hasOwnProperty(k))keys[k]=false;if(e.key===' ')hideLeaderboard();});
             window.addEventListener('blur',()=>{if(window._secretHeldKeys)window._secretHeldKeys.clear();});
             const universalGearButton = document.getElementById('skillRBox');
@@ -53433,7 +54598,7 @@
             skill1() {
                 if (this.qCD > 0) return; this.qCD = 7;
                 let speed = 850;
-                let dmg = Math.floor(this.getEffectiveSpeed() * 2.4); // scale with current effective speed
+                let dmg = Math.floor(this.getSpeedForDamage() * 2.4); // scale with speed (excluding Speedster gear)
                 let wx = this.x + Math.cos(this.angle) * (this.radius + 6);
                 let wy = this.y + Math.sin(this.angle) * (this.radius + 6);
                 // larger bag, non-piercing: set to remove on first hit via callback
@@ -53474,7 +54639,7 @@
                 this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + dy));
 
                 // Knockback enemies in 200 radius
-                let dmg = Math.floor(this.getEffectiveSpeed() * 2.5); // scale with current effective speed
+                let dmg = Math.floor(this.getSpeedForDamage() * 2.5); // scale with speed (excluding Speedster gear)
                 let totalDamage = 0;
                 for (let e of entities) if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                     let edx = e.x - this.x, edy = e.y - this.y; let ed = Math.sqrt(edx*edx + edy*edy);
@@ -54518,6 +55683,7 @@
                         cole: '#38bdf8',
                         rico: '#06b6d4',
                         mecca: '#ff6b00',
+                        inou: '#facc15',
                         guest: '#8B4513',
                         jimeka: '#FF1493',
                         dayum: '#000000',
@@ -54595,6 +55761,7 @@
                         cole: '#1e40af',
                         rico: '#0284c7',
                         mecca: '#e85d04',
+                        inou: '#eab308',
                         guest: '#654321',
                         jimeka: '#8B008B',
                         dayum: '#000000',
@@ -54632,7 +55799,7 @@
                 bountyhunter: 26, karen: 20, caskrice: 20, jeffrey: 13, don: 20, monza: 20, christian: 24,
                 faik: 22, fletcher: 20, darrick: 20, twins: 22, trent: 22, guest: 20, jimeka: 25,
                 dayum: 30, ash: 19, zappa: 18, cyrus: 18, ambrose: 20, austin: 20, winston: 16,
-                amir: 18, steven: 20, cole: 20, rico: 20, mecca: 21
+                amir: 18, steven: 20, cole: 20, rico: 20, mecca: 21, inou: 18
             };
             return manual[String(heroType).toLowerCase()] || 20;
         }
@@ -54978,6 +56145,7 @@
             else if(heroType==='cole')player=new Cole(playerData.x,playerData.y,true);
             else if(heroType==='rico')player=new Rico(playerData.x,playerData.y,true);
             else if(heroType==='mecca')player=new Mecca(playerData.x,playerData.y,true);
+            else if(heroType==='inou')player=new Inou(playerData.x,playerData.y,true);
             else player=new Paul(playerData.x,playerData.y,true);
             
             // Set socketId for damage reporting and distinct local team (1) so all enemy proxies (team >= 2) always collide
@@ -55279,6 +56447,7 @@
                 'cole': typeof Cole !== 'undefined' ? Cole : null,
                 'rico': typeof Rico !== 'undefined' ? Rico : null,
                 'mecca': typeof Mecca !== 'undefined' ? Mecca : null,
+                'inou': typeof Inou !== 'undefined' ? Inou : null,
                 'lune': typeof Lune !== 'undefined' ? Lune : null,
                 'everdawn': typeof Everdawn !== 'undefined' ? Everdawn : null,
                 'gormo': typeof Gormo !== 'undefined' ? Gormo : null,
@@ -55293,7 +56462,7 @@
         }
 
         const ONLINE_HERO_DRAW_SCALARS = [
-            'abilityActive', 'activeTwin', 'hasMechArmor', 'yellowShield', 'gCharge', 'qPunchingTimer', 'qPunchStep', 'soulZoneTimer', 'soulZoneMaxTimer', 'soulZoneRadius', 'soulZoneHasEnemy', 'soulFlightTimer', 'soulFlightDuration', 'soulFlightStartX', 'soulFlightStartY', 'soulFlightTargetX', 'soulFlightTargetY', 'soulQSlashTimer', 'soulQDashTimer', 'punchAnimTimer', 'punchHandSide', 'kickAnimTimer', 'fadingSoulTimer', 'adrenalineTimer', 'aiScanSpinAngle', 'aimAngle',
+            'abilityActive', 'activeTwin', 'hasMechArmor', 'yellowShield', 'gCharge', 'speedBar', 'absoluteTimer', 'basicCharging', 'basicChargeTime', 'qPunchingTimer', 'qPunchStep', 'soulZoneTimer', 'soulZoneMaxTimer', 'soulZoneRadius', 'soulZoneHasEnemy', 'soulFlightTimer', 'soulFlightDuration', 'soulFlightStartX', 'soulFlightStartY', 'soulFlightTargetX', 'soulFlightTargetY', 'soulQSlashTimer', 'soulQDashTimer', 'punchAnimTimer', 'punchHandSide', 'kickAnimTimer', 'fadingSoulTimer', 'adrenalineTimer', 'aiScanSpinAngle', 'aimAngle',
             'airborne', 'airborneDuration', 'airborneTime', 'airborneTimer', 'allSeeingActive',
             'allSeeingTimer', 'alpha', 'ammo', 'arrowCount', 'ascended', 'auraActive', 'auraX', 'auraY',
             'barrageActive', 'baseHp', 'baseMaxHp', 'baseX', 'baseY', 'basketsScored', 'beamTimer',
@@ -58243,6 +59412,7 @@
                 else if(heroType==='cole')player=new Cole(playerData.x,playerData.y,true);
             else if(heroType==='rico')player=new Rico(playerData.x,playerData.y,true);
                 else if(heroType==='mecca')player=new Mecca(playerData.x,playerData.y,true);
+                else if(heroType==='inou')player=new Inou(playerData.x,playerData.y,true);
                 else if(heroType==='everdawn')player=new Everdawn(playerData.x,playerData.y,true);
                 else player=new Paul(playerData.x,playerData.y,true);
 
@@ -58481,6 +59651,7 @@
             else if (selectedHeroType === 'cole') { if (q) q.innerText = '💥'; if (e) e.innerText = '🎯'; if (f) f.innerText = '⚡'; player = new Cole(750, 750, true); }
             else if (selectedHeroType === 'rico') { if (q) q.innerText = '📦'; if (e) e.innerText = '🔴'; if (f) f.innerText = '🟡'; player = new Rico(750, 750, true); }
             else if (selectedHeroType === 'mecca') { if (q) q.innerText = '🥊'; if (e) e.innerText = '💨'; if (f) f.innerText = '🦶'; if (g) g.innerText = '⚡'; player = new Mecca(750, 750, true); }
+            else if (selectedHeroType === 'inou') { if (q) q.innerText = '手里'; if (e) e.innerText = '⚡'; if (f) f.innerText = '🕶️'; player = new Inou(750, 750, true); }
             else if (selectedHeroType === 'everdawn') { if (q) q.innerText = '✨'; if (e) e.innerText = '🪞'; if (f) f.innerText = '⛓️'; if (g) g.innerText = '🔮'; player = new Everdawn(750, 750, true); }
             else player = new Paul(750, 750, true);
             

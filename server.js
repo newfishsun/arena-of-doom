@@ -27,8 +27,8 @@ function resolveLatestIndexHtml() {
     try {
       const rootStat = fs.statSync(rootIndex);
       const pubStat = fs.statSync(pubIndex);
-      if (rootStat.mtimeMs >= pubStat.mtimeMs || rootStat.size >= pubStat.size) {
-        if (rootStat.size !== pubStat.size || Math.abs(rootStat.mtimeMs - pubStat.mtimeMs) > 1000) {
+      if (rootStat.mtimeMs >= pubStat.mtimeMs) {
+        if (rootStat.size !== pubStat.size || Math.abs(rootStat.mtimeMs - pubStat.mtimeMs) > 500) {
           try { fs.copyFileSync(rootIndex, pubIndex); } catch (_) {}
         }
         return rootIndex;
@@ -56,10 +56,17 @@ app.get(['/', '/index.html'], (req, res) => {
   }
 });
 
+const staticNoCacheOpts = {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  }
+};
 const publicDir = path.join(__dirname, 'public');
-app.use(express.static(__dirname));
+app.use(express.static(__dirname, staticNoCacheOpts));
 if (fs.existsSync(publicDir)) {
-  app.use(express.static(publicDir));
+  app.use(express.static(publicDir, staticNoCacheOpts));
 }
 
 // Server max HP cap: 69420 for all heroes
@@ -134,6 +141,7 @@ function getHeroBaseHp(heroType) {
     cole: 5000,
     rico: 4750,
     mecca: 5200,
+  inou: 4500,
     guest: 7200,
     jimeka: 5600,
     dayum: 69420,
@@ -365,10 +373,10 @@ class GameRoom {
     this.lastBroadcastTime = Date.now();
     console.log(`🎮 Game loop started for room ${this.id}`);
 
-    // Broadcast game state at 30 Hz (~33ms) for smooth interpolation
+    // Broadcast game state at 60 Hz (~16ms) for ultra-smooth 180Hz client interpolation
     this.gameLoopInterval = setInterval(() => {
       this.broadcastGameState();
-    }, 33);
+    }, 16);
   }
 
   stopGameLoop() {
@@ -693,6 +701,9 @@ class GameRoom {
         if (typeof ds.ritualX === 'number' && Number.isFinite(ds.ritualX)) player.vivalRitualX = ds.ritualX;
         if (typeof ds.ritualY === 'number' && Number.isFinite(ds.ritualY)) player.vivalRitualY = ds.ritualY;
         if (typeof ds.hasMechArmor === 'boolean') player.hasMechArmor = ds.hasMechArmor;
+        if (typeof ds.yellowShield === 'number' && Number.isFinite(ds.yellowShield)) {
+          player.yellowShield = Math.max(0, Math.floor(ds.yellowShield));
+        }
       }
     }
     if (typeof data.angle === 'number' && Number.isFinite(data.angle)) {
@@ -1190,10 +1201,31 @@ io.on('connection', (socket) => {
     let damageToHp = 0;
 
     const victimIsMecca = String(victim.heroType || '').toLowerCase() === 'mecca';
-    const victimHasYellowShield = victimIsMecca || !!victim.hasMechArmor;
+    const victimHasYellowShield = victimIsMecca || !!victim.hasMechArmor || ((victim.yellowShield || 0) > 0);
     if (victimHasYellowShield && prevShield > 0) {
-      damageToShield = Math.min(prevShield, clampedByGlobal);
-      damageToHp = Math.min(prevHp, Math.max(0, clampedByGlobal - damageToShield));
+      let curYellow = (typeof victim.yellowShield === 'number' && victim.yellowShield > 0)
+        ? Math.min(prevShield, victim.yellowShield)
+        : prevShield;
+      let curWhite = Math.max(0, prevShield - curYellow);
+      let remTrue = Math.max(0, Math.min(clampedByGlobal, trueDamage ? clampedByGlobal : rawTrueAmt));
+      let remNormal = Math.max(0, clampedByGlobal - remTrue);
+
+      // 1. Yellow Shield absorbs hits first (blocks both True Damage and Normal Damage)
+      const absTrueByY = Math.min(curYellow, remTrue);
+      curYellow -= absTrueByY;
+      remTrue -= absTrueByY;
+      const absNormByY = Math.min(curYellow, remNormal);
+      curYellow -= absNormByY;
+      remNormal -= absNormByY;
+
+      // 2. White Shield absorbs remaining Normal Damage next (does not block True Damage)
+      const absNormByW = Math.min(curWhite, remNormal);
+      curWhite -= absNormByW;
+      remNormal -= absNormByW;
+
+      victim.yellowShield = Math.max(0, curYellow);
+      damageToShield = (absTrueByY + absNormByY + absNormByW);
+      damageToHp = Math.min(prevHp, Math.max(0, remNormal + remTrue));
     } else if (trueDamage || rawTrueAmt >= clampedByGlobal) {
       damageToHp = Math.min(clampedByGlobal, prevHp);
     } else if (rawTrueAmt > 0) {
@@ -1240,10 +1272,11 @@ io.on('connection', (socket) => {
       attacker.kills = (attacker.kills || 0) + 1;
     }
 
-    if (victim.shield <= 0) {
+    if (victim.shield <= 0 || (typeof victim.yellowShield === 'number' && victim.yellowShield <= 0)) {
+      victim.yellowShield = 0;
       victim.hasMechArmor = false;
     }
-    const mechArmorBrokenNow = !!(victimHasYellowShield && prevShield > 0 && victim.shield <= 0);
+    const mechArmorBrokenNow = !!(victimHasYellowShield && prevShield > 0 && !victim.hasMechArmor);
     io.to(roomId).emit('playerHealthUpdated', {
       socketId: data.socketId,
       hp: victim.hp,
