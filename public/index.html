@@ -6946,25 +6946,26 @@
                 const prevX = this.x, prevY = this.y;
                 this._prevX = prevX; this._prevY = prevY;
                 this.x+=this.vx*dt;this.y+=this.vy*dt;this.dist+=Math.sqrt(this.vx**2+this.vy**2)*dt;
-                // Stop & linger Inou projectiles ~110px after hitting their first enemy so they stay right near the enemy for E dashing!
-                if (this.isInouProj && !this.inouLingering && typeof this._firstEnemyHitDist === 'number' && (this.dist - this._firstEnemyHitDist) >= 110) {
+                // Stop & linger unpushed Inou projectiles ~110px after hitting their first enemy so they stay near the enemy for E dashing;
+                // if already pushed by E (_pushedByInouE), disappear immediately right after hitting or finishing the push!
+                if (this.isInouProj && !this._pushedByInouE && !this.inouLingering && typeof this._firstEnemyHitDist === 'number' && (this.dist - this._firstEnemyHitDist) >= 110) {
                     delete this._firstEnemyHitDist;
                     this._hasLingeredOnce = true;
                     this.inouLingering = true;
-                    this.inouLingerTimer = 2.0;
+                    this.inouLingerTimer = 5.0;
                     this.vx = 0;
                     this.vy = 0;
                     return;
                 }
                 if (!this.isStormBall && (this.dist>=this.range || this.dist >= this.maxDistance)) {
-                    if (this.isInouProj && !this._hasLingeredOnce) {
+                    if (this.isInouProj && !this._hasLingeredOnce && !this._pushedByInouE) {
                         if (this.isInouGammaShuriken && !this._gammaExploded && typeof this.onGammaExplode === 'function') {
                             this._gammaExploded = true;
                             this.onGammaExplode(this.x, this.y, null);
                         }
                         this._hasLingeredOnce = true;
                         this.inouLingering = true;
-                        this.inouLingerTimer = 2.0;
+                        this.inouLingerTimer = 5.0;
                         this.vx = 0;
                         this.vy = 0;
                         return;
@@ -7234,6 +7235,15 @@
                     const x = this.x - camera.x, y = this.y - camera.y;
                     ctx.save();
                     ctx.translate(x, y);
+                    if (this.inouLingering) {
+                        const remAlpha = Math.min(1, (this.inouLingerTimer || 0) / 0.8);
+                        ctx.globalAlpha = 0.35 + 0.55 * remAlpha;
+                        ctx.strokeStyle = "rgba(250, 204, 21, 0.55)";
+                        ctx.lineWidth = 1.6;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, this.isInouGammaShuriken ? 34 : 16, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
                     if (this.isInouKunai) {
                         ctx.rotate(this.angle);
                         ctx.shadowColor = '#facc15';
@@ -44683,7 +44693,7 @@
                 this.speed = this.baseSpd + this.projSpeedStacks.length * 24;
             }
 
-            // Deal 200 AoE damage in a small range (135px radius) during each E dash hop
+            // Deal 150 AoE damage in a small range (135px radius) during each E dash hop
             dealEDashSmallRangeDamage(hitSet) {
                 const dashDmgRadius = 135;
                 for (let e of entities) {
@@ -44692,7 +44702,7 @@
                     const d = Math.hypot(e.x - this.x, e.y - this.y);
                     if (d <= dashDmgRadius + (e.radius || 0)) {
                         if (hitSet) hitSet.add(e);
-                        e.takeDamage(200, this);
+                        e.takeDamage(150, this);
                         for (let i = 0; i < 6; i++) {
                             particles.push(new Particle(e.x, e.y, i % 2 === 0 ? '#facc15' : '#fef9c3', 3.5, 0.32));
                         }
@@ -44875,7 +44885,7 @@
                 if (!keys.r) this._rWas = false;
             }
 
-            // Normal Basic Attack: Kunai (125 dmg, 0.7s CD; +20% walkspeed true dmg & heal when speed bar is max)
+            // Normal Basic Attack: Kunai (105 dmg, 0.7s CD; +20% walkspeed true dmg & heal when speed bar is max)
             basicAtk() {
                 if (this.basicCD > 0) return;
                 if (this.absoluteTimer > 0) {
@@ -44888,7 +44898,7 @@
                 const spawnX = this.x + Math.cos(this.angle) * (this.radius + 8);
                 const spawnY = this.y + Math.sin(this.angle) * (this.radius + 8);
                 const kunaiSpeed = 720;
-                const kunai = new Projectile(this, spawnX, spawnY, this.angle, kunaiSpeed, 125, 560, '#facc15', 8, false, true, false, 0, 0, true);
+                const kunai = new Projectile(this, spawnX, spawnY, this.angle, kunaiSpeed, 105, 560, '#facc15', 8, false, true, false, 0, 0, true);
                 kunai.isInouProj = true;
                 kunai.isInouKunai = true;
                 kunai.inouOwner = this;
@@ -44901,6 +44911,9 @@
                     }
                     for (let i = 0; i < 6; i++) {
                         particles.push(new Particle(enemy.x, enemy.y, i % 2 === 0 ? '#facc15' : '#fef9c3', 3, 0.35));
+                    }
+                    if (kunai._pushedByInouE) {
+                        kunai.del = true;
                     }
                 };
                 projectiles.push(kunai);
@@ -44931,7 +44944,7 @@
                     const fwd = dx * cosA + dy * sinA;
                     const lat = Math.abs(-dx * sinA + dy * cosA);
                     if (fwd >= -e.radius * 0.45 && fwd <= sliceRange + e.radius && lat <= sliceHalfWidth + e.radius) {
-                        e.takeDamage(110, this);
+                        e.takeDamage(95, this);
                         if (hadMaxSpeedBar) {
                             this.applyMaxSpeedBarTrueDamageAndHeal(e);
                         }
@@ -45001,6 +45014,9 @@
                     if (shuriken._firstEnemyHitDist === undefined) shuriken._firstEnemyHitDist = shuriken.dist;
                     shuriken._gammaExploded = true;
                     triggerGammaExplosion(enemy.x, enemy.y, enemy);
+                    if (shuriken._pushedByInouE) {
+                        shuriken.del = true;
+                    }
                 };
                 projectiles.push(shuriken);
                 visualEffects.push(new InouAirSliceEffect('air_slice', this.x, this.y, this.angle, {
@@ -45034,20 +45050,22 @@
                     for (let k = 0; k < 5; k++) {
                         particles.push(new Particle(enemy.x, enemy.y, k % 2 === 0 ? '#facc15' : '#fef9c3', 3, 0.35));
                     }
+                    if (shuriken._pushedByInouE) {
+                        shuriken.del = true;
+                    }
                 };
                 projectiles.push(shuriken);
             }
 
-            // Q Ability: Throws 4 Shurikens, each deals 100% of Inou's buffed walkspeed and heals 20% of total damage (3.5s CD)
-            // - Normal Mode: tighter arc so all 4 shurikens can hit the same target at close/mid range.
-            // - Ultimate Mode: shoots the 4 shurikens consecutively and very quickly with an even smaller arc!
+            // Q Ability: Throws 4 Shurikens with a slightly wider arc (3.5s CD);
+            // when pushed with E, shurikens auto-aim to the closest enemy so damage is maximized through skill!
             abilityQ() {
                 if (this.qCD > 0) return;
                 this.qCD = 3.5;
                 this.revealTimer = 0.45;
 
                 if (this.absoluteTimer > 0) {
-                    const ultSpreads = [-0.054, -0.018, 0.018, 0.054];
+                    const ultSpreads = [-0.15, -0.05, 0.05, 0.15];
                     this.spawnSingleQShuriken(this.angle + ultSpreads[0]);
                     this.qBurstQueue.push(
                         { delay: 0.045, spreadOffset: ultSpreads[1] },
@@ -45055,21 +45073,21 @@
                         { delay: 0.135, spreadOffset: ultSpreads[3] }
                     );
                 } else {
-                    const normalSpreads = [-0.09, -0.03, 0.03, 0.09];
+                    const normalSpreads = [-0.21, -0.07, 0.07, 0.21];
                     for (let i = 0; i < 4; i++) {
                         this.spawnSingleQShuriken(this.angle + normalSpreads[i]);
                     }
                 }
             }
 
-            // Find all active projectiles owned by Inou
+            // Find all active unpushed projectiles owned by Inou
             getOwnActiveProjectiles(excludeSet) {
                 const list = [];
                 const pools = [projectiles, entities];
                 for (const pool of pools) {
                     if (!Array.isArray(pool)) continue;
                     for (const p of pool) {
-                        if (!p || p.del || !p.isInouProj || p.inouOwner !== this) continue;
+                        if (!p || p.del || !p.isInouProj || p._pushedByInouE || p.inouOwner !== this) continue;
                         if (excludeSet && excludeSet.has(p)) continue;
                         if (!list.includes(p)) list.push(p);
                     }
@@ -45145,6 +45163,20 @@
                 this.startNextEDashHop(true);
             }
 
+            findNearestEnemyFrom(px, py) {
+                let best = null, bestD = 99999;
+                for (let e of entities) {
+                    if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && e.isTargetable !== false && e.isVisibleTo(this)) {
+                        const d = Math.hypot(e.x - px, e.y - py);
+                        if (d < bestD) {
+                            bestD = d;
+                            best = e;
+                        }
+                    }
+                }
+                return best;
+            }
+
             onTouchOwnProjectile(proj, dashAngle) {
                 if (!proj || proj.del) return;
                 // 1. +24 walkspeed for 5s per projectile touched (max 5 stacks)
@@ -45155,32 +45187,35 @@
                     this.qCD = Math.max(0, this.qCD - 0.5);
                 }
 
-                // 3. Push the touched projectile faster toward nearest enemy or cursor!
+                // 3. Push the touched projectile faster, auto-aiming to the closest enemy,
+                //    and make it disappear right after getting pushed!
                 proj.inouLingering = false;
                 proj.inouLingerTimer = 0;
                 delete proj._firstEnemyHitDist;
-                proj._hasLingeredOnce = false;
+                proj._hasLingeredOnce = true; // Never linger again; disappears right after push!
+                proj._pushedByInouE = true;
                 proj._gammaExploded = false;
 
-                let pushAngle = Number.isFinite(dashAngle) ? dashAngle : this.angle;
-                const nearestEnemy = this.findTarget();
-                if (nearestEnemy && Math.hypot(nearestEnemy.x - proj.x, nearestEnemy.y - proj.y) <= 560) {
-                    pushAngle = Math.atan2(nearestEnemy.y - proj.y, nearestEnemy.x - proj.x);
-                } else if (this.isPlayer) {
-                    pushAngle = getMouseAimAngle(proj.x, proj.y);
+                let pushAngle = this.isPlayer ? getMouseAimAngle(proj.x, proj.y) : (Number.isFinite(dashAngle) ? dashAngle : this.angle);
+                const closestEnemy = this.findNearestEnemyFrom(proj.x, proj.y);
+                if (closestEnemy && Math.hypot(closestEnemy.x - proj.x, closestEnemy.y - proj.y) <= 780) {
+                    pushAngle = Math.atan2(closestEnemy.y - proj.y, closestEnemy.x - proj.x);
+                    proj.isHoming = true;
+                    proj.target = closestEnemy;
+                    proj.homingTurnRate = 0.26;
                 }
                 proj.angle = pushAngle;
-                proj.speed = Math.max(1260, (proj.baseInouSpeed || proj.speed || 680) * 1.85);
+                proj.speed = Math.max(1320, (proj.baseInouSpeed || proj.speed || 680) * 1.9);
                 proj.vx = Math.cos(pushAngle) * proj.speed;
                 proj.vy = Math.sin(pushAngle) * proj.speed;
                 proj.dist = 0;
-                proj.range = Math.max(proj.range || 560, 660);
+                proj.range = 420; // Short, fast push flight then disappears immediately!
                 proj.hit = [];
 
-                ringEffects.push({ x: proj.x, y: proj.y, life: 0.28, duration: 0.28, maxRadius: 48, color: '#facc15' });
+                ringEffects.push({ x: proj.x, y: proj.y, life: 0.24, duration: 0.24, maxRadius: 44, color: '#facc15' });
                 for (let i = 0; i < 8; i++) {
                     const a = (Math.PI * 2 * i) / 8;
-                    particles.push(new Particle(proj.x, proj.y, i % 2 === 0 ? '#facc15' : '#ffffff', 3.5, 0.32, Math.cos(a) * 160, Math.sin(a) * 160));
+                    particles.push(new Particle(proj.x, proj.y, i % 2 === 0 ? '#facc15' : '#ffffff', 3.5, 0.28, Math.cos(a) * 160, Math.sin(a) * 160));
                 }
             }
 
@@ -51000,82 +51035,70 @@
                         }
                     }
 
-                    // Inou Ultimate (Absolute Mode): Yellow Futuristic Glasses POV Camera Overlay!
+                    // Inou Ultimate (Absolute Mode): Clean, Unobstructed Yellow Futuristic Glasses POV Camera Overlay!
                     if (player && !player.dead && typeof Inou !== 'undefined' && player instanceof Inou && player.absoluteTimer > 0) {
                         CTX.save();
                         const w = CANVAS.width, h = CANVAS.height;
                         const cx = w * 0.5, cy = h * 0.5;
                         const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);
 
-                        // 1. Golden-yellow futuristic lens radial tint
-                        const lensGrad = CTX.createRadialGradient(cx, cy, Math.min(w, h) * 0.18, cx, cy, Math.max(w, h) * 0.72);
-                        lensGrad.addColorStop(0, 'rgba(254, 240, 138, 0.06)');
-                        lensGrad.addColorStop(0.65, 'rgba(250, 204, 21, 0.14)');
-                        lensGrad.addColorStop(1, 'rgba(202, 138, 4, 0.28)');
+                        // 1. Crystal-clear center playfield (0 alpha in middle) with a soft golden-yellow edge vignette
+                        const lensGrad = CTX.createRadialGradient(cx, cy, Math.min(w, h) * 0.42, cx, cy, Math.max(w, h) * 0.76);
+                        lensGrad.addColorStop(0, 'rgba(254, 240, 138, 0.0)');
+                        lensGrad.addColorStop(0.75, 'rgba(250, 204, 21, 0.045)');
+                        lensGrad.addColorStop(1, 'rgba(234, 179, 8, 0.12)');
                         CTX.fillStyle = lensGrad;
                         CTX.fillRect(0, 0, w, h);
 
-                        // 2. Subtle horizontal holographic visor scanlines
-                        CTX.fillStyle = 'rgba(254, 240, 138, 0.032)';
-                        const scanOffset = Math.floor((Date.now() * 0.06) % 6);
-                        for (let y = scanOffset; y < h; y += 6) {
-                            CTX.fillRect(0, y, w, 1.5);
-                        }
-
-                        // 3. Futuristic Yellow Glasses Frame & Nose-Bridge Silhouette around viewport perimeter
-                        CTX.strokeStyle = `rgba(250, 204, 21, ${0.72 + 0.18 * pulse})`;
-                        CTX.lineWidth = 5;
-                        CTX.shadowColor = '#facc15';
-                        CTX.shadowBlur = 18;
-
-                        // Top angular visor brow rim
-                        CTX.beginPath();
-                        CTX.moveTo(18, 56);
-                        CTX.lineTo(58, 20);
-                        CTX.lineTo(cx - 85, 20);
-                        CTX.lineTo(cx, 38);
-                        CTX.lineTo(cx + 85, 20);
-                        CTX.lineTo(w - 58, 20);
-                        CTX.lineTo(w - 18, 56);
-                        CTX.stroke();
-
-                        // Bottom dual-lens rim with center nose-bridge arch
-                        CTX.beginPath();
-                        CTX.moveTo(18, h - 56);
-                        CTX.lineTo(58, h - 22);
-                        CTX.lineTo(cx - 110, h - 22);
-                        CTX.lineTo(cx - 42, h - 72);
-                        CTX.lineTo(cx, h - 84);
-                        CTX.lineTo(cx + 42, h - 72);
-                        CTX.lineTo(cx + 110, h - 22);
-                        CTX.lineTo(w - 58, h - 22);
-                        CTX.lineTo(w - 18, h - 56);
-                        CTX.stroke();
-
-                        // Corner HUD targeting brackets inside the glasses lens
+                        // 2. Sleek perimeter-only Futuristic Yellow Glasses Frame & Nose-Bridge Silhouette
+                        CTX.strokeStyle = `rgba(250, 204, 21, ${0.38 + 0.10 * pulse})`;
                         CTX.lineWidth = 2.5;
-                        CTX.strokeStyle = 'rgba(254, 249, 195, 0.80)';
-                        const bPadX = 48, bPadY = 48, bLen = 34;
-                        // Top-left bracket
+                        CTX.shadowColor = 'rgba(250, 204, 21, 0.45)';
+                        CTX.shadowBlur = 8;
+
+                        // Top angular visor brow rim (hugged close to top edge so it never blocks vision)
+                        CTX.beginPath();
+                        CTX.moveTo(14, 34);
+                        CTX.lineTo(44, 12);
+                        CTX.lineTo(cx - 72, 12);
+                        CTX.lineTo(cx, 24);
+                        CTX.lineTo(cx + 72, 12);
+                        CTX.lineTo(w - 44, 12);
+                        CTX.lineTo(w - 14, 34);
+                        CTX.stroke();
+
+                        // Bottom dual-lens rim with subtle center nose-bridge arch (hugged close to bottom edge)
+                        CTX.beginPath();
+                        CTX.moveTo(14, h - 34);
+                        CTX.lineTo(44, h - 12);
+                        CTX.lineTo(cx - 90, h - 12);
+                        CTX.lineTo(cx - 32, h - 38);
+                        CTX.lineTo(cx, h - 44);
+                        CTX.lineTo(cx + 32, h - 38);
+                        CTX.lineTo(cx + 90, h - 12);
+                        CTX.lineTo(w - 44, h - 12);
+                        CTX.lineTo(w - 14, h - 34);
+                        CTX.stroke();
+
+                        // Light corner HUD brackets near outer edges
+                        CTX.lineWidth = 1.6;
+                        CTX.strokeStyle = 'rgba(254, 249, 195, 0.42)';
+                        const bPadX = 28, bPadY = 26, bLen = 22;
                         CTX.beginPath();
                         CTX.moveTo(bPadX, bPadY + bLen); CTX.lineTo(bPadX, bPadY); CTX.lineTo(bPadX + bLen, bPadY);
-                        // Top-right bracket
                         CTX.moveTo(w - bPadX - bLen, bPadY); CTX.lineTo(w - bPadX, bPadY); CTX.lineTo(w - bPadX, bPadY + bLen);
-                        // Bottom-left bracket
                         CTX.moveTo(bPadX, h - bPadY - bLen); CTX.lineTo(bPadX, h - bPadY); CTX.lineTo(bPadX + bLen, h - bPadY);
-                        // Bottom-right bracket
                         CTX.moveTo(w - bPadX - bLen, h - bPadY); CTX.lineTo(w - bPadX, h - bPadY); CTX.lineTo(w - bPadX, h - bPadY - bLen);
                         CTX.stroke();
 
-                        // Subtle futuristic HUD telemetry text on upper lens
-                        CTX.shadowBlur = 8;
-                        CTX.fillStyle = 'rgba(254, 240, 138, 0.88)';
-                        CTX.font = 'bold 12px monospace';
+                        // Compact visor telemetry readout in top-left corner
+                        CTX.shadowBlur = 0;
+                        CTX.fillStyle = 'rgba(254, 240, 138, 0.58)';
+                        CTX.font = 'bold 11px monospace';
                         CTX.textAlign = 'left';
                         const curSpd = Math.round(player.getEffectiveSpeed ? player.getEffectiveSpeed() : player.speed);
                         const stacks = Array.isArray(player.projSpeedStacks) ? player.projSpeedStacks.length : 0;
-                        CTX.fillText(`GAMMA VISOR // ABSOLUTE MODE [${player.absoluteTimer.toFixed(1)}s]`, bPadX + 12, bPadY + 22);
-                        CTX.fillText(`SPD: ${curSpd}  |  GAMMA STACKS: ${stacks}/5`, bPadX + 12, bPadY + 40);
+                        CTX.fillText(`GAMMA VISOR [${player.absoluteTimer.toFixed(1)}s]  SPD: ${curSpd}  STACKS: ${stacks}/5`, bPadX + 8, bPadY + 15);
 
                         CTX.restore();
                     }
