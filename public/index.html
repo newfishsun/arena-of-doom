@@ -4582,18 +4582,28 @@
         window._projIdCounter = 0;
 
         window._onlineFxIdCounter = window._onlineFxIdCounter || 0;
+        function isOnlineSyncActive() {
+            return typeof gameMode === 'string' && (gameMode.includes('online') || (gameMode === 'training' && !!window.trainingInviteCode));
+        }
+        function emitTrainingOrOnline(eventName, payload) {
+            if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) {
+                onlineSocket.emit(eventName, payload);
+            } else if (gameMode === 'training' && typeof window.broadcastLocalTrainingEvent === 'function') {
+                window.broadcastLocalTrainingEvent(eventName, payload);
+            }
+        }
         function scheduleImmediateOnlineFxFlush() {
             if (window._immediateFxFlushTimer) return;
-            if (!(typeof gameMode === 'string' && gameMode.includes('online') && gameRunning && typeof onlineSocket !== 'undefined' && onlineSocket)) return;
+            if (!(isOnlineSyncActive() && gameRunning && ((typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) || (gameMode === 'training' && !!window.trainingInviteCode)))) return;
             window._immediateFxFlushTimer = setTimeout(() => {
                 window._immediateFxFlushTimer = null;
                 try {
-                    if (!player || !gameRunning || !onlineSocket) return;
+                    if (!player || !gameRunning) return;
                     const nowMs = Date.now();
                     const recentFx = (window._pendingOnlineFxQueue || []).filter(it => it && !it._fastRelayed && (nowMs - (it.ts || nowMs)) <= 80);
                     if (recentFx.length === 0) return;
                     for (let it of recentFx) it._fastRelayed = true;
-                    onlineSocket.emit('playerAction', {
+                    emitTrainingOrOnline('playerAction', {
                         action: 'fxSync',
                         actionData: {
                             items: recentFx.slice(-28),
@@ -4641,7 +4651,7 @@
 
         function captureProjectileSpawnForOnline(proj) {
             if (!proj || proj._onlineSpawnCaptured || window._suppressOnlineFxCapture || proj.isRemote) return;
-            if (!(typeof gameMode === 'string' && gameMode.includes('online') && gameRunning)) return;
+            if (!(isOnlineSyncActive() && gameRunning)) return;
             if (!player || (proj.owner !== player && (!proj.owner || proj.owner.owner !== player))) return;
             proj._onlineSpawnCaptured = true;
             const entry = {
@@ -4670,7 +4680,7 @@
 
         function serializeVisualEffectForOnline(item, targetArray) {
             if (!item || window._suppressOnlineFxCapture) return;
-            if (!(typeof gameMode === 'string' && gameMode.includes('online') && gameRunning)) return;
+            if (!(isOnlineSyncActive() && gameRunning)) return;
             if (!window._pendingOnlineFxQueue) window._pendingOnlineFxQueue = [];
             if (Array.isArray(item)) {
                 for (let sub of item) serializeVisualEffectForOnline(sub, targetArray);
@@ -5286,7 +5296,7 @@
                         if (!it) continue;
                         if (!(it instanceof Particle)) {
                             serializeVisualEffectForOnline(it, 'particles');
-                        } else if (!window._suppressOnlineFxCapture && typeof gameMode === 'string' && gameMode.includes('online') && gameRunning) {
+                        } else if (!window._suppressOnlineFxCapture && isOnlineSyncActive() && gameRunning) {
                             const px = Math.round(it.x || 0);
                             const py = Math.round(it.y || 0);
                             const pc = it.color || '#ffffff';
@@ -6885,16 +6895,16 @@
                 this._prevX = x;
                 this._prevY = y;
                 this.projId = ++window._projIdCounter;
-                if (!window._suppressOnlineFxCapture && typeof gameMode === 'string' && gameMode.includes('online')) {
+                if (!window._suppressOnlineFxCapture && isOnlineSyncActive()) {
                     Promise.resolve().then(() => {
                         if (typeof captureProjectileSpawnForOnline === 'function') captureProjectileSpawnForOnline(this);
                     });
                 }
                 
-                // Broadcast projectile to other online players only if the local player created it (not remote proxy owners)
-                if(gameMode && gameMode.includes('online') && o && o === player && !o._isRemoteOwner && !window._suppressOnlineFxCapture && onlineSocket) {
+                // Broadcast projectile to other online/training players only if the local player created it (not remote proxy owners)
+                if(isOnlineSyncActive() && o && o === player && !o._isRemoteOwner && !window._suppressOnlineFxCapture) {
                     Promise.resolve().then(() => {
-                        if (!onlineSocket || this.isRemote) return;
+                        if (this.isRemote) return;
                         const payload = {
                             ownerName: o.name,
                             projId: this.projId,
@@ -6915,7 +6925,7 @@
                             const vf = ALL_PROJECTILE_VISUAL_FLAGS[i];
                             if (this[vf] !== undefined && this[vf] !== false) payload[vf] = this[vf];
                         }
-                        onlineSocket.emit('projectileFired', payload);
+                        emitTrainingOrOnline('projectileFired', payload);
                     });
                 }
             }
@@ -7218,7 +7228,7 @@
 
                             // If this is a remote projectile that originated from another client,
                             // don't apply local HP changes to the local player — server is authoritative.
-                            if (this.isRemote && e === player && gameMode && gameMode.includes('online')) {
+                            if (this.isRemote && e === player && isOnlineSyncActive()) {
                                 this.hit.push(e);
                                 console.log(`🎯 Remote projectile visually hit local player for ${dmgToApply} damage (server authoritative)`);
                                 try { screenShake(4); } catch(_){ }
@@ -7346,7 +7356,7 @@
             }
             explode(){
                 for(let i=0;i<20;i++)particles.push(new Particle(this.x,this.y,'#fa0',6,0.8));
-                if (this.isRemote && gameMode && gameMode.includes('online')) {
+                if (this.isRemote && isOnlineSyncActive()) {
                     if(this.owner&&this.owner.isPlayer)screenShake(8);
                     return;
                 }
@@ -9207,8 +9217,8 @@
                 // If this is a remote proxy and not a remote replay, notify server so stuns, blinds, slows, pulls, marks, and knockbacks replicate online
                 try {
                     const isLocalSource = !src || src === player || src.isPlayer || src.owner === player || src.caster === player || src.hookCaster === player || (!src._isRemoteOwner && !(src instanceof OnlinePlayerProxy));
-                    if (gameMode && gameMode.includes('online') && this instanceof OnlinePlayerProxy && !this._suppressEffectEmit && isLocalSource && typeof onlineSocket !== 'undefined' && onlineSocket) {
-                        onlineSocket.emit('playerEffect', {
+                    if (isOnlineSyncActive() && this instanceof OnlinePlayerProxy && !this._suppressEffectEmit && isLocalSource) {
+                        emitTrainingOrOnline('playerEffect', {
                             socketId: this.socketId,
                             effect: { type: type, value: value },
                             attackerSocketId: mySocketId || (onlineSocket && onlineSocket.id) || null
@@ -9887,7 +9897,7 @@
                     if (gameMode && gameMode.includes('online') && typeof onlineSocket !== 'undefined' && onlineSocket) {
                         if (typeof OnlinePlayerProxy !== 'undefined' && this instanceof OnlinePlayerProxy) {
                             try {
-                                onlineSocket.emit('playerEffect', {
+                                emitTrainingOrOnline('playerEffect', {
                                     socketId: this.socketId,
                                     effect: { type: 'posterExplode', value: this.suspectedPosters },
                                     attackerSocketId: (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId
@@ -9897,7 +9907,7 @@
                             const myId = (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId;
                             if (myId) {
                                 try {
-                                    onlineSocket.emit('playerDamaged', {
+                                    emitTrainingOrOnline('playerDamaged', {
                                         socketId: myId,
                                         damageTaken: 300,
                                         damageDealer: (jeff && jeff.name) ? jeff.name : 'Jeffrey',
@@ -50223,7 +50233,7 @@
                 }
                 
                 // Synchronize remote Projectile objects from online entity broadcasts (without spawning duplicates every 50ms)
-                if(gameMode && gameMode.includes('online') && window.onlineEntities) {
+                if(isOnlineSyncActive() && window.onlineEntities) {
                     window.remoteProjectiles = window.remoteProjectiles || {};
                     for(let socketId in window.onlineEntities) {
                         let entitiesData = window.onlineEntities[socketId];
@@ -50828,7 +50838,7 @@
                     }
                     
                     // Draw other online players
-                    if(window.onlinePlayers && gameMode && gameMode.includes('online')) {
+                    if(window.onlinePlayers && isOnlineSyncActive()) {
                         let onlinePlayerCount = Object.keys(window.onlinePlayers).length;
                         // Only throttle this log, don't spam
                         if(onlinePlayerCount > 0 && Math.random() < 0.01) { // Log 1% of frames
@@ -50875,7 +50885,7 @@
                     }
                     
                     // Draw entities from other online players (projectiles, sentries, tripmines)
-                    if(window.onlineEntities && gameMode && gameMode.includes('online')) {
+                    if(window.onlineEntities && isOnlineSyncActive()) {
                         // Smoothly advance non-Projectile onlineEntities between server packets
                         
                         for(let socketId in window.onlineEntities) {
@@ -57586,7 +57596,7 @@
 
             broadcastDamageToServer(dmgAmount, src, meta) {
                 if (!Number.isFinite(dmgAmount) || dmgAmount <= 0) return;
-                if (!(gameMode && gameMode.includes('online') && typeof onlineSocket !== 'undefined' && onlineSocket)) return;
+                if (!isOnlineSyncActive()) return;
 
                 this._lastLocalDamageAt = Date.now();
                 this.hitFlash = 0.25;
@@ -57998,7 +58008,7 @@
                     }
 
                     // Broadcast BOTH shield damage and HP damage (plus exact trueDamageAmount) to the server!
-                    if (gameMode && gameMode.includes('online') && !isRemoteSrc && finalCombinedDamage > 0) {
+                    if (isOnlineSyncActive() && !isRemoteSrc && finalCombinedDamage > 0) {
                         this._lastLocalDamageAt = Date.now();
                         const outMeta = Object.assign({}, meta || {}, {
                             trueDamageAmount: trueDamagePart,
@@ -58156,7 +58166,7 @@
             }
 
             syncDirectStatusEffectsToServer() {
-                if (!(gameMode && gameMode.includes('online') && typeof onlineSocket !== 'undefined' && onlineSocket)) return;
+                if (!isOnlineSyncActive()) return;
 
                 // 1. Detect direct position displacement (pushes/pulls/drags like Ian's F ability, Blackhole, Tornado, Hook, Gregory Q, Winston Wind, Mecca F, etc.)
                 if (typeof this._lastOwnX === 'number' && typeof this._lastOwnY === 'number') {
@@ -58252,7 +58262,7 @@
                     if (curVal > prevVal + 0.05) {
                         snap[prop] = curVal;
                         try {
-                            onlineSocket.emit('playerEffect', {
+                            emitTrainingOrOnline('playerEffect', {
                                 socketId: this.socketId,
                                 effect: { type: effType, value: Number(curVal.toFixed(2)) },
                                 attackerSocketId: (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId
@@ -58284,7 +58294,7 @@
                     this._lastKnockbackOrHitMs = Date.now();
                     this._lastLocalPushAt = Date.now();
                     try {
-                        onlineSocket.emit('playerEffect', {
+                        emitTrainingOrOnline('playerEffect', {
                             socketId: this.socketId,
                             effect: { type: 'knockback', value: { x: kx, y: ky } },
                             attackerSocketId: (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId
@@ -58540,10 +58550,13 @@
 
         function startPlayerPositionSync() {
           if (positionSyncInterval) clearInterval(positionSyncInterval);
-          if (player && !player.socketId && onlineSocket) player.socketId = onlineSocket.id;
+          const activePeerId = (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || window.mySocketId || mySocketId || window.myTrainingPeerId;
+          if (player && !player.socketId && activePeerId) player.socketId = activePeerId;
 
           positionSyncInterval = setInterval(() => {
-            if (!player || !gameRunning || !(gameMode && gameMode.includes('online')) || !onlineSocket) return;
+            if (!player || !gameRunning || !isOnlineSyncActive()) return;
+            const curPeerId = (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || window.mySocketId || mySocketId || window.myTrainingPeerId || 'local_peer';
+            if (!player.socketId) player.socketId = curPeerId;
 
             // Collect all player-owned world entities & summons to broadcast for full visual parity and smooth 60fps movement
             let entitiesToBroadcast = [];
@@ -58571,7 +58584,7 @@
               if (e instanceof Projectile && e.owner === player && !e.isRemote) {
                 const pItem = {
                   type: 'projectile',
-                  remoteId: `${onlineSocket.id}-${e.projId || 0}`,
+                  remoteId: `${curPeerId}-${e.projId || 0}`,
                   x: Math.round(e.x), y: Math.round(e.y),
                   angle: Number((e.angle || 0).toFixed(3)),
                   speed: e.speed,
@@ -59028,13 +59041,13 @@
             if (typeof player._lastSyncedHp === 'number' && player.hp > player._lastSyncedHp + 1 && !player.dead) {
               const healDelta = Math.round(player.hp - player._lastSyncedHp);
               if (healDelta > 0) {
-                onlineSocket.emit('playerHeal', { amount: healDelta });
+                emitTrainingOrOnline('playerHeal', { amount: healDelta });
               }
             }
             player._lastSyncedHp = player.hp;
 
-            onlineSocket.emit('playerUpdate', {
-              socketId: onlineSocket.id,
+            const updatePayload = {
+              socketId: curPeerId,
               x: Math.round(player.x * 10) / 10,
               y: Math.round(player.y * 10) / 10,
               heroType: selectedHeroType,
@@ -59052,7 +59065,8 @@
               abilityVisuals: abilityVisuals,
               angle: Number((player.angle || 0).toFixed(3)),
               currentSkin: player.currentSkin || 'default'
-            });
+            };
+            emitTrainingOrOnline('playerUpdate', updatePayload);
           }, 16);
         }
 
@@ -59210,7 +59224,7 @@
                   this.del = true;
                   return;
                 }
-                if (typeof gameMode !== 'string' || !gameMode.includes('online')) {
+                if (!isOnlineSyncActive()) {
                   this.dead = true;
                   this.del = true;
                   return;
@@ -59569,9 +59583,11 @@
                 prox = new OnlinePlayerProxy(pid, pd.name || 'Player', pd.x || 0, pd.y || 0, pd.maxHp);
                 entities.push(prox);
               }
-              const baseEnemyTeam = (gameMode === '5v5_online')
-                ? ((typeof pd.team === 'number' && (pd.team === 1 || pd.team === 2)) ? pd.team : ((i % 2 === 0) ? 1 : 2))
-                : ((player && (2 + i) === player.team) ? (player.team + 2 + i) : (2 + i));
+              const baseEnemyTeam = (gameMode === 'training')
+                ? ((window.trainingPanelState && window.trainingPanelState.friendlyFire) ? (2 + i) : 1)
+                : ((gameMode === '5v5_online')
+                  ? ((typeof pd.team === 'number' && (pd.team === 1 || pd.team === 2)) ? pd.team : ((i % 2 === 0) ? 1 : 2))
+                  : ((player && (2 + i) === player.team) ? (player.team + 2 + i) : (2 + i)));
               prox._karenOrigTeam = baseEnemyTeam;
               if (!(prox.mindControlledBy && !prox.mindControlledBy.dead && prox.mindControlTimer > 0 && entities.some(e => e !== prox && e !== prox.mindControlledBy && !e.dead && e instanceof Entity && e.countsAsFFAHero === true))) {
                 prox.team = baseEnemyTeam;
@@ -59582,6 +59598,13 @@
                 prox.color = pd.color;
               } else if (prox.heroType) {
                 prox.color = getHeroColor(prox.heroType, false) || '#e74c3c';
+              }
+            }
+            if (gameMode === 'training') {
+              const newCount = Math.min(4, Math.max(1, serverIds.length + 1));
+              if (window.trainingRoomPlayerCount !== newCount) {
+                window.trainingRoomPlayerCount = newCount;
+                if (typeof window.updateTrainingInviteHUD === 'function') window.updateTrainingInviteHUD();
               }
             }
 
@@ -60397,6 +60420,154 @@
             }
         };
 
+        window.myTrainingPeerId = window.myTrainingPeerId || ('tpeer_' + Math.random().toString(36).slice(2, 10));
+        window._localTrainingPeers = {};
+        window._trainingBroadcastChannel = null;
+
+        // Dispatch incoming training room events through the exact same handlers as onlineSocket
+        window.handleIncomingLocalTrainingPacket = function(pkt) {
+            if (!pkt || !pkt.ev || pkt.senderId === ((onlineSocket && onlineSocket.connected && onlineSocket.id) || window.mySocketId || window.myTrainingPeerId)) return;
+            if (pkt.inviteCode !== window.trainingInviteCode || gameMode !== 'training') return;
+            if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) return;
+
+            const myId = window.mySocketId || window.myTrainingPeerId;
+            const ev = pkt.ev;
+            const data = pkt.data || {};
+
+            if (ev === 'playerUpdate') {
+                const sid = data.socketId || pkt.senderId;
+                if (!sid || sid === myId) return;
+                window._localTrainingPeers[sid] = Object.assign({}, data, {
+                    socketId: sid,
+                    lastSeenMs: Date.now()
+                });
+                let prox = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === sid);
+                if (!prox && typeof OnlinePlayerProxy !== 'undefined') {
+                    const peerCount = Object.keys(window._localTrainingPeers).length;
+                    if (peerCount > 3) return;
+                    prox = new OnlinePlayerProxy(sid, data.name || 'Friend', data.x || 500, data.y || 1000, data.maxHp || 5000);
+                    entities.push(prox);
+                    addKillMsg(`👋 ${data.name || 'Friend'} joined Training Lab!`);
+                }
+                if (prox) {
+                    const ff = !!(window.trainingPanelState && window.trainingPanelState.friendlyFire);
+                    const peerKeys = Object.keys(window._localTrainingPeers);
+                    const pIdx = Math.max(0, peerKeys.indexOf(sid));
+                    prox.team = ff ? (2 + pIdx) : 1;
+                    prox.applyServerState(data);
+                }
+                if (Array.isArray(data.entities)) {
+                    window.onlineEntities = window.onlineEntities || {};
+                    window.onlineEntities[sid] = data.entities;
+                }
+                const totalPlayers = Math.min(4, 1 + Object.keys(window._localTrainingPeers).length);
+                if (window.trainingRoomPlayerCount !== totalPlayers) {
+                    window.trainingRoomPlayerCount = totalPlayers;
+                    window.updateTrainingInviteHUD();
+                }
+            } else if (ev === 'projectileFired') {
+                const sid = pkt.senderId;
+                const ownerProxy = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === sid);
+                if (!ownerProxy) return;
+                window.remoteProjectiles = window.remoteProjectiles || {};
+                const socketProjects = window.remoteProjectiles[sid] = window.remoteProjectiles[sid] || [];
+                const remId = data.projId ? `${sid}-${data.projId}` : `${sid}-${data.angle}-${data.speed}-${Date.now()}`;
+                if (socketProjects.some(p => p && !p.del && p.remoteId === remId)) return;
+                const projOwner = { team: ownerProxy.team, name: ownerProxy.name, isPlayer: false, _isRemoteOwner: true, dmgMult: 1 };
+                window._suppressOnlineFxCapture = true;
+                try {
+                    const proj = new Projectile(
+                        projOwner,
+                        typeof data.x === 'number' ? data.x : ownerProxy.x,
+                        typeof data.y === 'number' ? data.y : ownerProxy.y,
+                        data.angle || 0, data.speed || 900, data.damage || 0, data.range || 700,
+                        data.color || '#ffffff', data.size || 6,
+                        false, !!data.pierce, !!data.explode, 0, 0, !!data.trail, 0
+                    );
+                    proj.remoteId = remId;
+                    proj.isRemote = true;
+                    for (let i = 0; i < ALL_PROJECTILE_VISUAL_FLAGS.length; i++) {
+                        const vf = ALL_PROJECTILE_VISUAL_FLAGS[i];
+                        if (data[vf] !== undefined) proj[vf] = data[vf];
+                    }
+                    if (typeof attachRemoteProjectileImpactVisuals === 'function') attachRemoteProjectileImpactVisuals(proj);
+                    entities.push(proj);
+                    socketProjects.push(proj);
+                } finally {
+                    window._suppressOnlineFxCapture = false;
+                }
+            } else if (ev === 'playerAction') {
+                const sid = pkt.senderId;
+                const prox = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === sid);
+                if (!prox || data.action !== 'fxSync' || !data.actionData) return;
+                const ad = data.actionData;
+                if (typeof ad.angle === 'number') prox.targetAngle = ad.angle;
+                if (ad.drawState && typeof applyRemoteDrawStateToProxy === 'function') {
+                    applyRemoteDrawStateToProxy(prox, ad.drawState, true);
+                }
+                if (Array.isArray(ad.items) && typeof spawnRemoteVisualEffectItem === 'function') {
+                    for (let fx of ad.items) {
+                        if (!fx) continue;
+                        const fxKey = fx.id || `${fx.k}-${fx.x}-${fx.y}-${fx.ts || 0}`;
+                        if (prox._seenFxIds.has(fxKey)) continue;
+                        prox._seenFxIds.add(fxKey);
+                        spawnRemoteVisualEffectItem(fx, prox);
+                    }
+                }
+            } else if (ev === 'playerEffect') {
+                if (data.socketId === myId && player && !player.dead && data.effect) {
+                    const attackerProxy = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === pkt.senderId) || null;
+                    safeApplyStatus(player, data.effect.type, data.effect.value, attackerProxy);
+                }
+            } else if (ev === 'playerDamaged') {
+                if (data.socketId === myId && player && !player.dead && window.trainingPanelState && window.trainingPanelState.friendlyFire) {
+                    const dmg = Math.max(0, Number(data.damageTaken) || 0);
+                    if (dmg > 0) {
+                        const attackerProxy = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === pkt.senderId) || null;
+                        player.takeDamage(dmg, attackerProxy || { team: 99, isPlayer: false, _isRemoteOwner: true }, { isTrue: !!data.trueDamage });
+                    }
+                }
+            } else if (ev === 'setTrainingFriendlyFire') {
+                if (typeof data.friendlyFire === 'boolean') {
+                    window.applyTrainingFriendlyFireState(data.friendlyFire, false);
+                }
+            }
+        };
+
+        window.broadcastLocalTrainingEvent = function(ev, data) {
+            if (!window.trainingInviteCode || gameMode !== 'training') return;
+            const senderId = (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected && onlineSocket.id) || window.mySocketId || window.myTrainingPeerId;
+            const pkt = {
+                inviteCode: window.trainingInviteCode,
+                senderId: senderId,
+                ev: ev,
+                data: data,
+                ts: Date.now()
+            };
+            if (window._trainingBroadcastChannel) {
+                try { window._trainingBroadcastChannel.postMessage(pkt); } catch (_) {}
+            }
+            try {
+                localStorage.setItem('brawl_tlab_pkt_' + window.trainingInviteCode, JSON.stringify(pkt));
+            } catch (_) {}
+            if (ev === 'setTrainingFriendlyFire' && typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) {
+                onlineSocket.emit('setTrainingFriendlyFire', data);
+            }
+        };
+
+        if (!window._trainingStorageListenerBound) {
+            window._trainingStorageListenerBound = true;
+            window.addEventListener('storage', (e) => {
+                if (!e || !e.key || !e.newValue) return;
+                if (e.key === ('brawl_tlab_pkt_' + window.trainingInviteCode)) {
+                    try {
+                        const pkt = JSON.parse(e.newValue);
+                        window.handleIncomingLocalTrainingPacket(pkt);
+                    } catch (_) {}
+                }
+            });
+        }
+
         window.initTrainingLabInviteSession = function() {
             window.trainingPanelState = window.trainingPanelState || {};
             if (typeof window.trainingPanelState.friendlyFire !== 'boolean') {
@@ -60406,7 +60577,50 @@
             window._pendingJoinFriendsCode = null;
             window.trainingInviteCode = joiningCode || window.generateRandom8DigitInviteCode();
             window.trainingRoomPlayerCount = 1;
+            window._localTrainingPeers = {};
+
+            if (!mySocketId) {
+                mySocketId = window.mySocketId = window.myTrainingPeerId;
+            }
+            if (player && !player.socketId) {
+                player.socketId = (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || mySocketId || window.myTrainingPeerId;
+            }
+
+            if (window._trainingBroadcastChannel) {
+                try { window._trainingBroadcastChannel.close(); } catch (_) {}
+                window._trainingBroadcastChannel = null;
+            }
+            if (typeof BroadcastChannel !== 'undefined') {
+                try {
+                    window._trainingBroadcastChannel = new BroadcastChannel('brawl_training_lab_' + window.trainingInviteCode);
+                    window._trainingBroadcastChannel.onmessage = (ev) => {
+                        if (ev && ev.data) window.handleIncomingLocalTrainingPacket(ev.data);
+                    };
+                } catch (_) {}
+            }
+
+            if (window._trainingPeerPruneInterval) clearInterval(window._trainingPeerPruneInterval);
+            window._trainingPeerPruneInterval = setInterval(() => {
+                if (gameMode !== 'training') return;
+                if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) return;
+                const nowMs = Date.now();
+                let changed = false;
+                for (const pid of Object.keys(window._localTrainingPeers)) {
+                    if (nowMs - (window._localTrainingPeers[pid].lastSeenMs || 0) > 3500) {
+                        delete window._localTrainingPeers[pid];
+                        const pEnt = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === pid);
+                        if (pEnt) { pEnt.dead = true; pEnt.del = true; }
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    window.trainingRoomPlayerCount = Math.min(4, 1 + Object.keys(window._localTrainingPeers).length);
+                    window.updateTrainingInviteHUD();
+                }
+            }, 1000);
+
             window.updateTrainingInviteHUD();
+            startPlayerPositionSync();
             addKillMsg(`🔑 TRAINING ROOM CODE: ${window.trainingInviteCode} (Max 4 Players)`);
 
             try {
@@ -60415,6 +60629,10 @@
                 }
                 if (typeof onlineSocket !== 'undefined' && onlineSocket) {
                     const registerRoomOnServer = () => {
+                        if (onlineSocket.id) {
+                            mySocketId = window.mySocketId = onlineSocket.id;
+                            if (player) player.socketId = onlineSocket.id;
+                        }
                         setupOnlineListeners();
                         startPlayerPositionSync();
                         onlineSocket.off('trainingRoomState');

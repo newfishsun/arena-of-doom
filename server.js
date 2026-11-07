@@ -528,7 +528,7 @@ class GameRoom {
   }
 
   checkVictoryAfterDeath(victim) {
-    if (this.victoryDeclared) return;
+    if (this.victoryDeclared || this.mode === 'training') return;
     const remainingPlayers = Array.from(this.players.values());
     const aliveNow = remainingPlayers.filter(p => p.hp > 0);
     if (this.mode === '5v5') {
@@ -953,7 +953,28 @@ io.on('connection', (socket) => {
     if (typeof cb === 'function') cb({ ok: true, playerCount: room ? room.getPlayerCount() : 0 });
   });
 
+  function leaveAllExistingRoomsForSocket(sock) {
+    for (let [rId, rObj] of gameRooms) {
+      if (rObj.players.has(sock.id)) {
+        rObj.removePlayer(sock.id);
+        try { sock.leave(rId); } catch (_) {}
+        if (rObj.getPlayerCount() === 0) {
+          rObj.stopGameLoop();
+          gameRooms.delete(rId);
+        } else if (rObj.mode === 'training') {
+          io.to(rId).emit('trainingRoomState', {
+            inviteCode: rObj.inviteCode || '',
+            playerCount: rObj.getPlayerCount(),
+            maxPlayers: 4,
+            friendlyFire: !!rObj.friendlyFire
+          });
+        }
+      }
+    }
+  }
+
   socket.on('createTrainingInviteRoom', (data) => {
+    leaveAllExistingRoomsForSocket(socket);
     const code = (data && data.inviteCode && /^[0-9]{8}$/.test(String(data.inviteCode)))
       ? String(data.inviteCode)
       : String(Math.floor(10000000 + Math.random() * 90000000));
@@ -961,6 +982,7 @@ io.on('connection', (socket) => {
     let room = gameRooms.get(roomId);
     if (!room) {
       room = new GameRoom(roomId, 4, 'training');
+      room.worldSize = 2000;
       room.inviteCode = code;
       room.friendlyFire = !!(data && data.friendlyFire);
       room.combatReadyAt = Date.now();
@@ -978,6 +1000,7 @@ io.on('connection', (socket) => {
       assignedIndex: idx
     });
     if (!room.gameRunning) room.startGameLoop();
+    room.broadcastGameState();
     io.to(roomId).emit('trainingRoomState', {
       inviteCode: code,
       playerCount: room.getPlayerCount(),
@@ -989,10 +1012,12 @@ io.on('connection', (socket) => {
   socket.on('joinTrainingInviteRoom', (data) => {
     const code = data && data.inviteCode ? String(data.inviteCode).trim() : '';
     if (!/^[0-9]{8}$/.test(code)) return;
+    leaveAllExistingRoomsForSocket(socket);
     const roomId = `training-${code}`;
     let room = gameRooms.get(roomId);
     if (!room) {
       room = new GameRoom(roomId, 4, 'training');
+      room.worldSize = 2000;
       room.inviteCode = code;
       room.friendlyFire = false;
       room.combatReadyAt = Date.now();
@@ -1020,6 +1045,7 @@ io.on('connection', (socket) => {
       assignedIndex: idx
     });
     if (!room.gameRunning) room.startGameLoop();
+    room.broadcastGameState();
     io.to(roomId).emit('trainingRoomState', {
       inviteCode: code,
       playerCount: room.getPlayerCount(),
