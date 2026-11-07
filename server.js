@@ -142,6 +142,7 @@ function getHeroBaseHp(heroType) {
     rico: 4750,
     mecca: 5200,
   inou: 4500,
+  branson: 5400,
     guest: 7200,
     jimeka: 5600,
     dayum: 69420,
@@ -936,6 +937,111 @@ io.on('connection', (socket) => {
       playerName: (data && data.playerName) || 'Player',
       playerCount: room.getPlayerCount(),
       players: playersMap
+    });
+  });
+
+
+  // --- Training Lab 8-Digit Invite Code Rooms (Max 4 Players) & Friendly Fire ---
+  socket.on('checkTrainingInviteRoom', (data, cb) => {
+    const code = data && data.inviteCode ? String(data.inviteCode).trim() : '';
+    const roomId = `training-${code}`;
+    const room = gameRooms.get(roomId);
+    if (room && room.getPlayerCount() >= 4 && !room.players.has(socket.id)) {
+      if (typeof cb === 'function') cb({ ok: false, reason: '⚠️ Training room is full (4 / 4 players)!' });
+      return;
+    }
+    if (typeof cb === 'function') cb({ ok: true, playerCount: room ? room.getPlayerCount() : 0 });
+  });
+
+  socket.on('createTrainingInviteRoom', (data) => {
+    const code = (data && data.inviteCode && /^[0-9]{8}$/.test(String(data.inviteCode)))
+      ? String(data.inviteCode)
+      : String(Math.floor(10000000 + Math.random() * 90000000));
+    const roomId = `training-${code}`;
+    let room = gameRooms.get(roomId);
+    if (!room) {
+      room = new GameRoom(roomId, 4, 'training');
+      room.inviteCode = code;
+      room.friendlyFire = !!(data && data.friendlyFire);
+      room.combatReadyAt = Date.now();
+      gameRooms.set(roomId, room);
+    }
+    socket.join(roomId);
+    const idx = room.getPlayerCount();
+    room.addPlayer(socket.id, {
+      name: (data && data.playerName) || 'Player',
+      heroType: (data && data.heroType) || 'paul',
+      currentSkin: (data && data.currentSkin) || 'default',
+      x: 500 + (idx % 4) * 140,
+      y: 1000,
+      team: room.friendlyFire ? (idx + 1) : 1,
+      assignedIndex: idx
+    });
+    if (!room.gameRunning) room.startGameLoop();
+    io.to(roomId).emit('trainingRoomState', {
+      inviteCode: code,
+      playerCount: room.getPlayerCount(),
+      maxPlayers: 4,
+      friendlyFire: !!room.friendlyFire
+    });
+  });
+
+  socket.on('joinTrainingInviteRoom', (data) => {
+    const code = data && data.inviteCode ? String(data.inviteCode).trim() : '';
+    if (!/^[0-9]{8}$/.test(code)) return;
+    const roomId = `training-${code}`;
+    let room = gameRooms.get(roomId);
+    if (!room) {
+      room = new GameRoom(roomId, 4, 'training');
+      room.inviteCode = code;
+      room.friendlyFire = false;
+      room.combatReadyAt = Date.now();
+      gameRooms.set(roomId, room);
+    }
+    if (room.getPlayerCount() >= 4 && !room.players.has(socket.id)) {
+      socket.emit('trainingRoomState', {
+        inviteCode: code,
+        playerCount: room.getPlayerCount(),
+        maxPlayers: 4,
+        friendlyFire: !!room.friendlyFire,
+        error: 'Room is full (4/4)'
+      });
+      return;
+    }
+    socket.join(roomId);
+    const idx = room.getPlayerCount();
+    room.addPlayer(socket.id, {
+      name: (data && data.playerName) || `Friend ${idx + 1}`,
+      heroType: (data && data.heroType) || 'paul',
+      currentSkin: (data && data.currentSkin) || 'default',
+      x: 500 + (idx % 4) * 140,
+      y: 1000,
+      team: room.friendlyFire ? (idx + 1) : 1,
+      assignedIndex: idx
+    });
+    if (!room.gameRunning) room.startGameLoop();
+    io.to(roomId).emit('trainingRoomState', {
+      inviteCode: code,
+      playerCount: room.getPlayerCount(),
+      maxPlayers: 4,
+      friendlyFire: !!room.friendlyFire
+    });
+  });
+
+  socket.on('setTrainingFriendlyFire', (data) => {
+    const { roomId, room } = findPlayerRoom(socket.id);
+    if (!room || room.mode !== 'training') return;
+    room.friendlyFire = !!(data && data.friendlyFire);
+    let idx = 0;
+    for (let [, p] of room.players) {
+      idx++;
+      p.team = room.friendlyFire ? idx : 1;
+    }
+    io.to(roomId).emit('trainingRoomState', {
+      inviteCode: room.inviteCode || (data && data.inviteCode) || '',
+      playerCount: room.getPlayerCount(),
+      maxPlayers: 4,
+      friendlyFire: !!room.friendlyFire
     });
   });
 
