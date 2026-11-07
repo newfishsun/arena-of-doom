@@ -44973,9 +44973,10 @@
 
                 const triggerGammaExplosion = (cx, cy, primaryEnemy) => {
                     const expRadius = 195;
+                    const curExplodeDmg = shuriken.dmg || dmg;
                     let totalCrowdDmg = 0;
                     if (primaryEnemy && !primaryEnemy.dead) {
-                        totalCrowdDmg += dmg;
+                        totalCrowdDmg += curExplodeDmg;
                         safeApplyStatus(primaryEnemy, 'slow', 1.5, this);
                         primaryEnemy.slowTimer = Math.max(primaryEnemy.slowTimer || 0, 1.5);
                         if (hadMaxSpeedBar || this.speedBar >= 0.999) {
@@ -44987,10 +44988,10 @@
                         if (e === this || e === primaryEnemy || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
                         const d = Math.hypot(e.x - cx, e.y - cy);
                         if (d <= expRadius + (e.radius || 0)) {
-                            e.takeDamage(dmg, this);
+                            e.takeDamage(curExplodeDmg, this);
                             safeApplyStatus(e, 'slow', 1.5, this);
                             e.slowTimer = Math.max(e.slowTimer || 0, 1.5);
-                            totalCrowdDmg += dmg;
+                            totalCrowdDmg += curExplodeDmg;
                             if (!shuriken.hit.includes(e)) shuriken.hit.push(e);
                         }
                     }
@@ -45042,10 +45043,11 @@
                 shuriken.onHit = (enemy) => {
                     if (!enemy || enemy.dead) return;
                     if (shuriken._firstEnemyHitDist === undefined) shuriken._firstEnemyHitDist = shuriken.dist;
-                    const healAmt = Math.floor(dmgPerShuriken * 0.20);
+                    const actualShurikenDmg = shuriken.dmg || dmgPerShuriken;
+                    const healAmt = Math.floor(actualShurikenDmg * 0.20);
                     this.hp = Math.min(this.maxHp, this.hp + healAmt);
                     if (this.absoluteTimer > 0) {
-                        this.eCD = Math.max(0, this.eCD - 0.5);
+                        this.eCD = Math.max(0, this.eCD - 0.4);
                     }
                     for (let k = 0; k < 5; k++) {
                         particles.push(new Particle(enemy.x, enemy.y, k % 2 === 0 ? '#facc15' : '#fef9c3', 3, 0.35));
@@ -45182,13 +45184,17 @@
                 // 1. +24 walkspeed for 5s per projectile touched (max 5 stacks)
                 this.addProjectileTouchStack();
 
-                // 2. In Gamma/Absolute Mode, each projectile touched reduces Q cooldown by 0.5s
+                // 2. In Gamma/Absolute Mode, each projectile touched reduces Q cooldown by 0.4s
                 if (this.absoluteTimer > 0) {
-                    this.qCD = Math.max(0, this.qCD - 0.5);
+                    this.qCD = Math.max(0, this.qCD - 0.4);
                 }
 
-                // 3. Push the touched projectile faster, auto-aiming to the closest enemy,
-                //    and make it disappear right after getting pushed!
+                // 3. Pushed projectile deals 75% of its original projectile damage, auto-aims to the closest enemy,
+                //    and disappears right after getting pushed!
+                if (typeof proj.origInouDmg !== 'number') {
+                    proj.origInouDmg = proj.dmg;
+                }
+                proj.dmg = Math.floor(proj.origInouDmg * 0.75);
                 proj.inouLingering = false;
                 proj.inouLingerTimer = 0;
                 delete proj._firstEnemyHitDist;
