@@ -2988,15 +2988,15 @@
             <div class="leaderboard-title">LEADERBOARD</div>
             <div id="leaderboardContent"></div>
         </div>
-        <div id="joinFriendsModal" onmousedown="event.stopPropagation();" onkeydown="event.stopPropagation();" style="display: none; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.82); backdrop-filter: blur(6px); z-index: 9500; align-items: center; justify-content: center;">
-            <div style="width: min(440px, 92vw); background: linear-gradient(145deg, #0f172a, #1e293b); border: 2.5px solid #34d399; border-radius: 16px; padding: 26px 28px; color: #f8fafc; font-family: Inter, Segoe UI, Arial, sans-serif; box-shadow: 0 24px 64px rgba(0,0,0,0.85), 0 0 28px rgba(52, 211, 153, 0.32); text-align: center;">
+        <div id="joinFriendsModal" onclick="if(event.target === this) window.closeJoinFriendsModal();" onmousedown="event.stopPropagation();" onkeydown="event.stopPropagation(); if(event.key === 'Escape') window.closeJoinFriendsModal();" style="display: none; pointer-events: auto !important; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.82); backdrop-filter: blur(6px); z-index: 99999; align-items: center; justify-content: center;">
+            <div onclick="event.stopPropagation();" style="pointer-events: auto !important; width: min(440px, 92vw); background: linear-gradient(145deg, #0f172a, #1e293b); border: 2.5px solid #34d399; border-radius: 16px; padding: 26px 28px; color: #f8fafc; font-family: Inter, Segoe UI, Arial, sans-serif; box-shadow: 0 24px 64px rgba(0,0,0,0.85), 0 0 28px rgba(52, 211, 153, 0.32); text-align: center;">
                 <div style="font-size: 22px; font-weight: 900; color: #34d399; letter-spacing: 0.04em; margin-bottom: 6px;">🔑 JOIN FRIENDS TRAINING LAB</div>
                 <p style="font-size: 13px; color: #cbd5e1; margin: 0 0 18px 0; line-height: 1.5;">Enter the <b>8-digit invite code</b> from your friend's Training Lab room (up to 4 players per room):</p>
-                <input id="joinFriendsCodeInput" type="text" maxlength="8" inputmode="numeric" placeholder="12345678" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);" onkeydown="event.stopPropagation(); if(event.key === 'Enter') window.submitJoinFriendsCode();" style="width: 100%; box-sizing: border-box; padding: 12px 16px; font-family: monospace; font-size: 24px; font-weight: 900; letter-spacing: 6px; text-align: center; color: #fde047; background: #020617; border: 2px solid #38bdf8; border-radius: 10px; outline: none; margin-bottom: 12px;" />
+                <input id="joinFriendsCodeInput" type="text" maxlength="8" inputmode="numeric" placeholder="12345678" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);" onkeydown="event.stopPropagation(); if(event.key === 'Enter') window.submitJoinFriendsCode(); if(event.key === 'Escape') window.closeJoinFriendsModal();" style="pointer-events: auto !important; user-select: text !important; -webkit-user-select: text !important; width: 100%; box-sizing: border-box; padding: 12px 16px; font-family: monospace; font-size: 24px; font-weight: 900; letter-spacing: 6px; text-align: center; color: #fde047; background: #020617; border: 2px solid #38bdf8; border-radius: 10px; outline: none; margin-bottom: 12px;" />
                 <div id="joinFriendsStatusMsg" style="min-height: 20px; font-size: 12px; font-weight: 700; color: #fbbf24; margin-bottom: 14px;"></div>
-                <div style="display: flex; gap: 10px; justify-content: center;">
-                    <button onclick="window.closeJoinFriendsModal()" style="flex: 1; padding: 11px 14px; border-radius: 10px; border: 1.5px solid #64748b; background: rgba(51, 65, 85, 0.7); color: #e2e8f0; font-weight: 800; font-size: 13px; cursor: pointer;">CANCEL</button>
-                    <button onclick="window.submitJoinFriendsCode()" style="flex: 1.4; padding: 11px 16px; border-radius: 10px; border: 2px solid #34d399; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; font-weight: 900; font-size: 13px; cursor: pointer; box-shadow: 0 0 16px rgba(16, 185, 129, 0.45);">JOIN ROOM 🚀</button>
+                <div style="display: flex; gap: 10px; justify-content: center; pointer-events: auto !important;">
+                    <button type="button" onclick="event.stopPropagation(); window.closeJoinFriendsModal();" style="pointer-events: auto !important; flex: 1; padding: 11px 14px; border-radius: 10px; border: 1.5px solid #64748b; background: rgba(51, 65, 85, 0.85); color: #e2e8f0; font-weight: 800; font-size: 13px; cursor: pointer;">CANCEL</button>
+                    <button type="button" onclick="event.stopPropagation(); window.submitJoinFriendsCode();" style="pointer-events: auto !important; flex: 1.4; padding: 11px 16px; border-radius: 10px; border: 2px solid #34d399; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; font-weight: 900; font-size: 13px; cursor: pointer; box-shadow: 0 0 16px rgba(16, 185, 129, 0.45);">JOIN ROOM 🚀</button>
                 </div>
             </div>
         </div>
@@ -6989,12 +6989,20 @@
                                 if (typeof safeApplyStatus === 'function' && typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) {
                                     safeApplyStatus(e, 'heal', 150, this.owner || this);
                                 }
+                                // Heal Branson himself for 100% of the teammate heal (+150 HP)
+                                if (this.owner && !this.owner.dead) {
+                                    this.owner.hp = Math.min(this.owner.maxHp, this.owner.hp + 150);
+                                }
                                 for (let k = 0; k < 8; k++) {
                                     particles.push(new Particle(e.x, e.y, '#34d399', 3.5, 0.4));
                                 }
                             } else {
                                 if (!this.isRemote) {
                                     e.takeDamage(250, this.owner);
+                                }
+                                // Heal Branson himself for 40% of the damage dealt (+100 HP)
+                                if (this.owner && !this.owner.dead) {
+                                    this.owner.hp = Math.min(this.owner.maxHp, this.owner.hp + Math.floor(250 * 0.40));
                                 }
                                 for (let k = 0; k < 8; k++) {
                                     particles.push(new Particle(e.x, e.y, this.bransonChordColor || this.color || '#ec4899', 3.5, 0.4));
@@ -7012,7 +7020,7 @@
                         if (!e || e.dead || !(e instanceof Entity) || e === this.owner || e.isTargetable === false) continue;
                         if (e.team === this.team && !this.healedAllies.has(e)) {
                             const d = Math.hypot(e.x - this.x, e.y - this.y);
-                            if (d < (e.radius || 20) + (this.size || 34)) {
+                            if (d < (e.radius || 20) + (this.size || 68)) {
                                 this.healedAllies.add(e);
                                 e.hp = Math.min(e.maxHp, e.hp + 600);
                                 if (typeof safeApplyStatus === 'function' && typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) {
@@ -7378,7 +7386,7 @@
                     ctx.shadowColor = col;
                     ctx.shadowBlur = this.isBransonChordUlt ? 24 : 15;
 
-                    const sz = this.isBransonChordUlt ? 34 : (this.isBransonChordQ ? 20 : (this.isBransonChordE ? 14 : 11));
+                    const sz = this.isBransonChordUlt ? 68 : (this.isBransonChordQ ? 20 : (this.isBransonChordE ? 14 : 11));
                     // Glowing acoustic chord wave arcs & vibrating guitar strings
                     ctx.strokeStyle = col;
                     ctx.lineWidth = this.isBransonChordUlt ? 3.5 : 2.4;
@@ -44805,8 +44813,8 @@
                 this.fCD = 0;
                 this.rCD = 0;
 
-                // Passive Harmony Aura radius (teammates inside heal 40 HP/s and charge F 50% faster)
-                this.passiveRadius = 280;
+                // Passive Harmony Aura radius (slightly smaller: 215px; teammates inside heal 40 HP/s and charge F 50% faster)
+                this.passiveRadius = 215;
                 this._passiveHealAccum = 0;
 
                 this.gear = 'speedster';
@@ -44969,21 +44977,23 @@
                 if (this.isPlayer) addKillMsg('🎶 5-Chord Harmony!');
             }
 
-            // F Ability (Ultimate): Throws 3 slowly running chords that won't be stopped by walls or disappear on hit.
-            // Enemies take 1200 damage and teammates heal 600 health! (22s CD)
+            // F Ability (Ultimate): Throws 3 much larger, slowly running chords that won't be stopped by walls or disappear on hit.
+            // Heals Branson himself for 600 HP, heals teammates for 600 HP, and deals 1200 damage to enemies! (22s CD)
             abilityF() {
                 if (this.fCD > 0) return;
                 this.fCD = 22.0;
                 this.revealTimer = 0.5;
+                // Heal Branson himself for 600 HP
+                this.hp = Math.min(this.maxHp, this.hp + 600);
                 const spreads = [-0.18, 0, 0.18];
                 const ultColors = ['#38bdf8', '#facc15', '#ec4899'];
                 const slowSpeed = 250;
 
                 for (let i = 0; i < 3; i++) {
                     const ang = this.angle + spreads[i];
-                    const sx = this.x + Math.cos(ang) * (this.radius + 14);
-                    const sy = this.y + Math.sin(ang) * (this.radius + 14);
-                    const chord = new Projectile(this, sx, sy, ang, slowSpeed, 1200, 880, ultColors[i], 34, false, true, false, 0, 0, true);
+                    const sx = this.x + Math.cos(ang) * (this.radius + 18);
+                    const sy = this.y + Math.sin(ang) * (this.radius + 18);
+                    const chord = new Projectile(this, sx, sy, ang, slowSpeed, 1200, 880, ultColors[i], 68, false, true, false, 0, 0, true);
                     chord.isBransonChordUlt = true;
                     chord.bransonChordColor = ultColors[i];
                     chord.pierce = true;
@@ -45049,7 +45059,7 @@
                 ctx.lineWidth = 2;
                 ctx.setLineDash([10, 8]);
                 ctx.beginPath();
-                ctx.arc(sx, sy, this.passiveRadius || 280, 0, Math.PI * 2);
+                ctx.arc(sx, sy, this.passiveRadius || 215, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.setLineDash([]);
                 ctx.restore();
@@ -45565,7 +45575,7 @@
             // when pushed with E, shurikens auto-aim to the closest enemy so damage is maximized through skill!
             abilityQ() {
                 if (this.qCD > 0) return;
-                this.qCD = 4.5;
+                this.qCD = 4.0;
                 this.revealTimer = 0.45;
 
                 if (this.absoluteTimer > 0) {
@@ -49180,7 +49190,7 @@
             else if(p instanceof Cole){c1=p.qCD;m1=6;c2=p.eCD;m2=8;c3=p.fCharges>0?0:p.fCD;m3=4;c4=0;m4=1;}
             else if(p instanceof Rico){c1=p.qCD;m1=10;c2=p.eCD;m2=4;c3=p.fCD;m3=15;c4=0;m4=1;}
             else if(typeof Mecca !== 'undefined' && p instanceof Mecca){c1=p.qCD;m1=5;c2=p.eCD;m2=p.ascended?12:6;c3=p.fCD;m3=15;c4=p.ascended?0:Math.max(0,(100-(p.gCharge||0))/100);m4=1;}
-            else if(typeof Inou !== 'undefined' && p instanceof Inou){c1=p.qCD;m1=4.5;c2=p.eCD;m2=6;c3=p.fCD;m3=45;c4=0;m4=1;}
+            else if(typeof Inou !== 'undefined' && p instanceof Inou){c1=p.qCD;m1=4;c2=p.eCD;m2=6;c3=p.fCD;m3=45;c4=0;m4=1;}
             else if(typeof Branson !== 'undefined' && p instanceof Branson){c1=p.qCD;m1=3;c2=p.eCD;m2=9;c3=p.fCD;m3=22;c4=0;m4=1;}
             else{c1=0;m1=1;c2=0;m2=1;c3=0;m3=1;c4=0;m4=1;}
             if(p instanceof Melvin) {
@@ -60465,6 +60475,12 @@
         window.closeJoinFriendsModal = function() {
             const modal = document.getElementById('joinFriendsModal');
             if (modal) modal.style.display = 'none';
+            if (gameMode === 'join_friends') {
+                gameMode = 'training';
+            }
+            document.querySelectorAll('.mode-card').forEach(card => {
+                card.classList.toggle('active-mode', card.getAttribute('data-mode') === gameMode);
+            });
         };
 
         window.submitJoinFriendsCode = function() {
@@ -60480,16 +60496,16 @@
             }
             if (status) {
                 status.style.color = '#34d399';
-                status.innerText = `Connecting to Training Lab #${raw}...`;
+                status.innerText = `Joining Training Lab #${raw}...`;
             }
 
-            if (typeof initializeOnlineFFA === 'function' && !onlineSocket) {
-                initializeOnlineFFA();
-            }
-
+            let joinedAlready = false;
             const proceedJoin = () => {
+                if (joinedAlready) return;
+                joinedAlready = true;
                 window._pendingJoinFriendsCode = raw;
-                window.closeJoinFriendsModal();
+                const modal = document.getElementById('joinFriendsModal');
+                if (modal) modal.style.display = 'none';
                 gameMode = 'training';
                 if (typeof originalStartGame === 'function') {
                     originalStartGame();
@@ -60499,7 +60515,9 @@
             };
 
             if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) {
+                let ackHandled = false;
                 onlineSocket.emit('checkTrainingInviteRoom', { inviteCode: raw }, (resp) => {
+                    ackHandled = true;
                     if (resp && resp.ok === false) {
                         if (status) {
                             status.style.color = '#f87171';
@@ -60509,13 +60527,9 @@
                     }
                     proceedJoin();
                 });
-                // Fallback if server doesn't ack within 450ms (e.g. local/offline preview)
                 setTimeout(() => {
-                    const modal = document.getElementById('joinFriendsModal');
-                    if (modal && modal.style.display === 'flex' && window._pendingJoinFriendsCode !== raw) {
-                        proceedJoin();
-                    }
-                }, 450);
+                    if (!ackHandled) proceedJoin();
+                }, 250);
             } else {
                 proceedJoin();
             }
