@@ -2521,7 +2521,7 @@
                 </div>
                 <!-- Caskrice card -->
                 <div class="hero-card" id="card-caskrice" onclick="selectHero('caskrice')" aria-label="Caskrice" style="background:#2a2a2a; color:#fff; border-color:#444;">
-                    <div class="hero-icon" style="background:linear-gradient(135deg, #1c2128 0%, #0f172a 100%); color:#d7e3ed;">C</div><h3 style="color:#fff;">CASKRICE</h3><p style="color:#aaa;">Summoner</p>
+                    <div class="hero-icon" style="background:linear-gradient(135deg, #1c2128 0%, #0f172a 100%); color:#d7e3ed;">C</div><h3 style="color:#fff;">CASKRICE</h3><p style="color:#aaa;">Summoner/Tank</p>
                     <div class="hero-stats">
                         <div class="ability-row"><span>Survival</span><div class="stat-bar-bg"><div class="stat-bar-fill caskriceSurvival" style="width:15%; background:#4caf50;"></div></div></div>
                         <div class="ability-row"><span>Damage</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:80%; background:#e74c3c;"></div></div></div>
@@ -2666,9 +2666,9 @@
                         <p>A martial artist who achieved a calm mind to dodge every attack. He was once Li's chaotic student, whose raw talent clashed with his master's disciplined teachings. Through years of meditation and rigorous training, Trent mastered the art of "flow" - a state of perfect awareness that allows him to anticipate and evade attacks with supernatural precision. Now, as a wandering warrior, he seeks to pass on his wisdom while protecting the innocent from chaos.</p>
                         <h4>Abilities</h4>
                         <p><strong>Basic - Punch:</strong> Deals 100 damage in close range. <em>(0.5s cooldown)</em></p>
-                        <p><strong>Q - Autonomous Punch 👊:</strong> Throws a barrage of 100 punches, each dealing 10 damage. <em>(4s cooldown)</em></p>
+                        <p><strong>Q - Autonomous Punch 👊:</strong> Throws a barrage of 100 punches, each dealing 11 damage. <em>(4s cooldown)</em></p>
                         <p><strong>E - Deep Breath 🫁:</strong> After 1s breath, buffs for 5s: flow charges in 2s, 160-radius slow area (30% speed reduction). <em>(9s cooldown)</em></p>
-                        <p><strong>F - Chi Punch 💥:</strong> Forward energy projectile dealing 1000 damage and continuous knockback while in contact (1000 unit range). <em>(9s cooldown)</em></p>
+                        <p><strong>F - Chi Punch 💥:</strong> Forward energy projectile dealing 1000 damage and continuous knockback while in contact (1000 unit range). <em>(8s cooldown)</em></p>
                         <p><strong>G - Instinct Step 🏃:</strong> Dashes forward, dodging all attacks without consuming flow. Creates directional dodge illusions. <em>(5s cooldown)</em></p>
                         <p><strong>Passive - Flow:</strong> 3 charges that recharge every 3s (2s during Deep Breath). Dodges consume a charge; enhanced dodges during buffs counterattack with punches.</p>
                     </div>
@@ -2823,7 +2823,7 @@
                 </div>
             </div>
             <!-- Secret Hero Button (Bottom Right, Hidden) -->
-            <div class="hero-card" id="card-dayum" style="position: fixed; bottom: 8px; right: 8px; width: 44px; height: 44px; min-height: 44px; max-height: 44px; z-index: 10000; background: transparent; border: none; overflow: hidden; cursor: pointer; scrollbar-width: none;" onclick="selectHero('dayum')">
+            <div class="hero-card" id="card-dayum" style="position: fixed; bottom: 8px; right: 8px; width: 44px; height: 44px; min-height: 44px; max-height: 44px; z-index: 10000; background: transparent; border: none; overflow: hidden; cursor: pointer; scrollbar-width: none;" onclick="window.unlockAndSelectDayum ? window.unlockAndSelectDayum() : selectHero('dayum')">
                 <div class="hero-icon" style="background:#000; color:#000; font-weight: bold; font-size: 1px;">🔥</div><h3 style="color:#000; font-size:1px;">??</h3><p style="color:#000; font-size:1px;">Secret</p>
                 <div class="hero-stats">
                     <div class="ability-row"><span style="font-size:1px; color:#000;">? ? ? ? ?</span></div>
@@ -3055,7 +3055,25 @@
         var camera = { x: 0, y: 0, zoom: 1 };
         var keys = { w: false, a: false, s: false, d: false, q: false, e: false, f: false, g: false, r: false };
         var mouse = { x: 0, y: 0, down: false };
-        window.heroEnabled = { jeffrey: true, karen: true };
+        window.SECRET_HERO_KEYS = new Set(['dayum', 'mecca', 'inou', 'branson']);
+        window.secretHeroesUnlocked = { dayum: false, mecca: false, inou: false, branson: false };
+        window.heroEnabled = { jeffrey: true, karen: true, dayum: false, mecca: false, inou: false, branson: false };
+        window.isSecretHeroSelectable = function(heroKey) {
+            const k = String(heroKey || '').toLowerCase().trim();
+            if (!window.SECRET_HERO_KEYS || !window.SECRET_HERO_KEYS.has(k)) return true;
+            return !!(window.secretHeroesUnlocked && window.secretHeroesUnlocked[k]);
+        };
+        window.unlockAndSelectDayum = function() {
+            window.secretHeroesUnlocked = window.secretHeroesUnlocked || {};
+            window.secretHeroesUnlocked['dayum'] = true;
+            window.heroEnabled = window.heroEnabled || {};
+            window.heroEnabled['dayum'] = true;
+            if (typeof window.selectHero === 'function') window.selectHero('dayum');
+            if (typeof window.populateJoinFriendsHeroSelect === 'function') window.populateJoinFriendsHeroSelect();
+            if (typeof window.renderTrainingPanelUI === 'function' && window.trainingPanelState && window.trainingPanelState.open) {
+                window.renderTrainingPanelUI();
+            }
+        };
 
         function updateMouseFromClient(clientX, clientY) {
             if (CANVAS) {
@@ -35234,6 +35252,11 @@
         window.selectHero = function(h) {
             console.log('➡️ selectHero() called with:', h);
             
+            // Check if secret hero has been unlocked at least once via key combo or hidden box click
+            if (typeof window.isSecretHeroSelectable === 'function' && !window.isSecretHeroSelectable(h)) {
+                console.log('   Secret hero', h, 'is locked until triggered via key combo or hidden box');
+                return;
+            }
             // Check if hero is enabled for selection
             if (window.heroEnabled[h] === false) {
                 console.log('   Hero', h, 'is disabled for development');
@@ -35354,6 +35377,10 @@
         window.updateHeroCardStates = function() {
             document.querySelectorAll('.hero-card').forEach(card => {
                 const heroName = card.id.replace('card-', '');
+                if (heroName === 'dayum') {
+                    card.classList.remove('disabled');
+                    return;
+                }
                 if (window.heroEnabled[heroName] === false) {
                     card.classList.add('disabled');
                 } else {
@@ -36631,9 +36658,9 @@
                 trent: [
                     '<strong>Passive - Flow:</strong> Holds up to 3 dodge charges; each recharge cycle (every 3s, or every 2s during Deep Breath) refills 1 charge. Dodging during Deep Breath fires a counter wave.',
                     '<strong>Basic - Punch:</strong> Deals 100 melee damage. <em>(0.5s cooldown)</em>',
-                    '<strong>Q - Autonomous Punch 👊:</strong> Unleashes a 100-punch barrage dealing 10 damage per punch (1,000 total) against a visible enemy (cannot target enemies hidden inside bushes unless Trent is in the same bush). <em>(4s cooldown)</em>',
+                    '<strong>Q - Autonomous Punch 👊:</strong> Unleashes a 100-punch barrage dealing 11 damage per punch (1,100 total) against a visible enemy (cannot target enemies hidden inside bushes unless Trent is in the same bush). <em>(4s cooldown)</em>',
                     '<strong>E - Deep Breath 🫁:</strong> Channels for 1s, then grants a 5s buff: Flow refills every 2s and surrounds Trent with a 160-radius aura that slows enemies by 30%. <em>(9s cooldown)</em>',
-                    '<strong>F - Chi Punch 💥:</strong> Fires a 1,000-range energy wave dealing 1,000 damage and continuous knockback on contact. <em>(14s cooldown)</em>',
+                    '<strong>F - Chi Punch 💥:</strong> Fires a 1,000-range energy wave dealing 1,000 damage and continuous knockback on contact. <em>(8s cooldown)</em>',
                     '<strong>G - Instinct Step 🏃:</strong> Dashes forward while dodging all incoming attacks without consuming Flow charges. <em>(8s cooldown)</em>'
                 ],
                 cole: [
@@ -37710,7 +37737,7 @@
         ];
 
         window.createTrainingDummy = function(mode, customSpawnX, customSpawnY) {
-            const heroEntries = TRAINING_HERO_CATALOG.filter(h => h.key !== 'random');
+            const heroEntries = TRAINING_HERO_CATALOG.filter(h => h.key !== 'random' && (!window.isSecretHeroSelectable || window.isSecretHeroSelectable(h.key)));
             const chosenKey = (window.trainingPanelState && window.trainingPanelState.dummyHero) ? window.trainingPanelState.dummyHero : 'random';
             let targetEntry = null;
             if (chosenKey === 'random') {
@@ -37788,6 +37815,7 @@
 
         window.switchLocalTrainingHero = function(heroKey) {
             if (!heroKey || heroKey === 'random') return;
+            if (typeof window.isSecretHeroSelectable === 'function' && !window.isSecretHeroSelectable(heroKey)) return;
             if (gameMode !== 'training' || !player) {
                 selectedHeroType = heroKey;
                 return;
@@ -37823,9 +37851,10 @@
 
         window.selectTrainingDummyHero = function(heroKey) {
             if (!window.trainingPanelState) return;
+            if (heroKey !== 'random' && typeof window.isSecretHeroSelectable === 'function' && !window.isSecretHeroSelectable(heroKey)) return;
             if (window.trainingPanelState.gridTargetMode === 'player') {
                 if (heroKey === 'random') {
-                    const pool = TRAINING_HERO_CATALOG.filter(h => h.key !== 'random');
+                    const pool = TRAINING_HERO_CATALOG.filter(h => h.key !== 'random' && (!window.isSecretHeroSelectable || window.isSecretHeroSelectable(h.key)));
                     const pick = pool[Math.floor(Math.random() * pool.length)];
                     if (pick) window.switchLocalTrainingHero(pick.key);
                 } else {
@@ -37945,6 +37974,7 @@
             let html = '';
             for (let i = 0; i < TRAINING_HERO_CATALOG.length; i++) {
                 const item = TRAINING_HERO_CATALOG[i];
+                if (item.key !== 'random' && typeof window.isSecretHeroSelectable === 'function' && !window.isSecretHeroSelectable(item.key)) continue;
                 if (q && item.key !== 'random' && !item.name.toLowerCase().includes(q) && !item.key.includes(q)) continue;
                 const isSel = (tps.dummyHero || 'random') === item.key;
                 const col = item.key === 'random' ? '#38bdf8' : (typeof getHeroColor === 'function' ? getHeroColor(item.key) : '#64748b');
@@ -38981,11 +39011,15 @@
         class EnergyBlast {
             constructor(x, y, angle, speed, color, size = 30, duration = 2.5) {
                 this.x = x; this.y = y; this.angle = angle;
+                this.speed = speed;
                 this.vx = Math.cos(angle) * speed;
                 this.vy = Math.sin(angle) * speed;
                 this.color = color; this.size = size;
                 this.duration = duration; this.age = 0; this.del = false;
                 this.trail = [];
+                this.owner = null;
+                this.canDealMattenQ = false;
+                this.hitEnemies = new Set();
             }
             update(dt) {
                 this.age += dt;
@@ -38997,6 +39031,25 @@
                 
                 this.x += this.vx * dt;
                 this.y += this.vy * dt;
+
+                // Twins Fused (Matten) Q projectile hit detection: deals Matten Q damage (300 + 200 true = 500), 0.5s stun, and 12s injure!
+                if (this.canDealMattenQ && this.owner && !this.owner.dead) {
+                    const hitRadius = (this.size || 50) * 1.15;
+                    for (let e of entities) {
+                        if (!e || e.dead || !(e instanceof Entity) || e === this.owner || e.team === this.owner.team || e.isTargetable === false) continue;
+                        if (this.hitEnemies && this.hitEnemies.has(e)) continue;
+                        const d = Math.hypot(e.x - this.x, e.y - this.y);
+                        if (d <= hitRadius + (e.radius || 20)) {
+                            if (this.hitEnemies) this.hitEnemies.add(e);
+                            e.takeDamage(500, this.owner, { trueDamageRatio: 200 / 500 });
+                            safeApplyStatus(e, 'stun', 0.5, this.owner);
+                            safeApplyStatus(e, 'injure', 12, this.owner);
+                            for (let i = 0; i < 8; i++) {
+                                particles.push(new Particle(e.x + Math.cos(i * Math.PI / 4) * 40, e.y + Math.sin(i * Math.PI / 4) * 40, '#FFD700', 7, 1.2));
+                            }
+                        }
+                    }
+                }
             }
             draw(ctx) {
                 let screenX = this.x - camera.x;
@@ -39294,9 +39347,12 @@
                 if (this.twinState === 'ken' || this.fusionActive) {
                     // KEN Q: Football Shot 1000 damage, injure 10s
                     if (this.fusionActive) {
-                        // Matten Q: 300 + 200 true damage, stun 0.5s, injure 12s
-                        // Add massive golden energy blast and shockwave
-                        visualEffects.push(new EnergyBlast(this.x, this.y, this.angle, 1000, '#FFD700', 50, 3.0));
+                        // Matten Q: 300 + 200 true damage, stun 0.5s, injure 12s (both shockwave and flying EnergyBlast projectile deal Q damage & stun!)
+                        const mattenQBlast = new EnergyBlast(this.x, this.y, this.angle, 1000, '#FFD700', 50, 3.0);
+                        mattenQBlast.owner = this;
+                        mattenQBlast.canDealMattenQ = true;
+                        mattenQBlast.hitEnemies = new Set();
+                        visualEffects.push(mattenQBlast);
                         visualEffects.push(new ShockwaveRing(this.x, this.y, '#FFD700', 500, 1.5, 20));
                         for (let e of entities) {
                             if (e instanceof Entity && e !== this && !e.dead && e.team !== this.team) {
@@ -40071,7 +40127,7 @@
                                 }
                             }
                             if (target) {
-                                target.takeDamage(10, this);
+                                target.takeDamage(11, this);
                                 // Enhanced hit effects
                                 particles.push(new Particle(target.x + (Math.random()-0.5)*30, target.y + (Math.random()-0.5)*30, '#00008B', 3, 0.8));
                                 particles.push(new Particle(target.x + (Math.random()-0.5)*20, target.y + (Math.random()-0.5)*20, '#C0C0C0', 2, 1.2));
@@ -40278,7 +40334,7 @@
                 };
                 if (!window.projectiles) window.projectiles = [];
                 window.projectiles.push(projectile);
-                this.fCD = 9;
+                this.fCD = 8;
             }
             
             abilityG() {
@@ -54731,8 +54787,12 @@
                 const nowMs = Date.now();
                 if (window._lastMeccaUnlockAt && (nowMs - window._lastMeccaUnlockAt) < 800) return;
                 window._lastMeccaUnlockAt = nowMs;
+                window.secretHeroesUnlocked = window.secretHeroesUnlocked || {};
+                window.secretHeroesUnlocked['mecca'] = true;
                 window.heroEnabled = window.heroEnabled || {};
                 window.heroEnabled['mecca'] = true;
+                if (typeof window.populateJoinFriendsHeroSelect === 'function') window.populateJoinFriendsHeroSelect();
+                if (typeof window.renderTrainingPanelUI === 'function' && window.trainingPanelState && window.trainingPanelState.open) window.renderTrainingPanelUI();
                 if (typeof window.selectHero === 'function') {
                     window.selectHero('mecca');
                 } else {
@@ -54766,8 +54826,12 @@
                 const nowMs = Date.now();
                 if (window._lastInouUnlockAt && (nowMs - window._lastInouUnlockAt) < 800) return;
                 window._lastInouUnlockAt = nowMs;
+                window.secretHeroesUnlocked = window.secretHeroesUnlocked || {};
+                window.secretHeroesUnlocked['inou'] = true;
                 window.heroEnabled = window.heroEnabled || {};
                 window.heroEnabled['inou'] = true;
+                if (typeof window.populateJoinFriendsHeroSelect === 'function') window.populateJoinFriendsHeroSelect();
+                if (typeof window.renderTrainingPanelUI === 'function' && window.trainingPanelState && window.trainingPanelState.open) window.renderTrainingPanelUI();
                 if (typeof window.selectHero === 'function') {
                     window.selectHero('inou');
                 } else {
@@ -54802,8 +54866,12 @@
                 const nowMs = Date.now();
                 if (window._lastBransonUnlockAt && (nowMs - window._lastBransonUnlockAt) < 800) return;
                 window._lastBransonUnlockAt = nowMs;
+                window.secretHeroesUnlocked = window.secretHeroesUnlocked || {};
+                window.secretHeroesUnlocked['branson'] = true;
                 window.heroEnabled = window.heroEnabled || {};
                 window.heroEnabled['branson'] = true;
+                if (typeof window.populateJoinFriendsHeroSelect === 'function') window.populateJoinFriendsHeroSelect();
+                if (typeof window.renderTrainingPanelUI === 'function' && window.trainingPanelState && window.trainingPanelState.open) window.renderTrainingPanelUI();
                 if (typeof window.selectHero === 'function') {
                     window.selectHero('branson');
                 } else {
@@ -60938,7 +61006,7 @@
             const sel = document.getElementById('joinFriendsHeroSelect');
             if (!sel) return;
             const currentHero = selectedHeroType || 'paul';
-            const heroes = TRAINING_HERO_CATALOG.filter(h => h.key !== 'random');
+            const heroes = TRAINING_HERO_CATALOG.filter(h => h.key !== 'random' && (!window.isSecretHeroSelectable || window.isSecretHeroSelectable(h.key)));
             let html = '';
             for (const h of heroes) {
                 const isSel = h.key === currentHero ? 'selected' : '';
