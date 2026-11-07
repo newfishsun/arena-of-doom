@@ -2951,10 +2951,14 @@
                 <div style="background: rgba(15, 23, 42, 0.88); border: 1.5px solid rgba(52, 211, 153, 0.45); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
                     <div>
                         <div style="font-size: 12px; font-weight: 800; color: #34d399; letter-spacing: 0.06em;">🔑 TRAINING LAB INVITE CODE (MAX 4 PEOPLE)</div>
-                        <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px; flex-wrap: wrap;">
                             <span id="tpInviteCodeValue" style="font-family: monospace; font-size: 22px; font-weight: 900; color: #fde047; letter-spacing: 3px; background: rgba(30, 41, 59, 0.95); padding: 4px 12px; border-radius: 8px; border: 1px solid rgba(250, 204, 21, 0.45);">--------</span>
-                            <button onclick="copyTrainingInviteCode()" style="padding: 7px 12px; border-radius: 8px; border: 1.5px solid #38bdf8; background: rgba(37, 99, 235, 0.35); color: #fff; font-weight: 800; font-size: 12px; cursor: pointer;">📋 COPY CODE</button>
+                            <button onclick="copyTrainingInviteCode()" style="padding: 7px 11px; border-radius: 8px; border: 1.5px solid #38bdf8; background: rgba(37, 99, 235, 0.35); color: #fff; font-weight: 800; font-size: 12px; cursor: pointer;">📋 COPY</button>
                             <span id="tpRoomPlayersBadge" style="font-size: 12px; font-weight: 800; color: #93c5fd; background: rgba(30, 58, 138, 0.45); padding: 5px 10px; border-radius: 999px; border: 1px solid rgba(147, 197, 253, 0.35);">👥 1 / 4 Players</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px;">
+                            <input id="tpJoinCodeInput" type="text" maxlength="8" inputmode="numeric" placeholder="Enter friend's 8-digit code..." oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);" onkeydown="event.stopPropagation(); if(event.key === 'Enter') window.joinTrainingRoomFromPanel();" style="padding: 6px 10px; font-family: monospace; font-size: 14px; font-weight: 800; letter-spacing: 2px; width: 195px; border-radius: 8px; border: 1.5px solid #34d399; background: #020617; color: #fde047;" />
+                            <button onclick="window.joinTrainingRoomFromPanel()" style="padding: 6px 12px; border-radius: 8px; border: 1.5px solid #34d399; background: linear-gradient(135deg, #059669, #10b981); color: #fff; font-weight: 800; font-size: 12px; cursor: pointer;">🤝 JOIN ROOM</button>
                         </div>
                     </div>
                     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
@@ -2969,7 +2973,10 @@
                     <button id="tpBtnInfiniteCD" onclick="toggleTrainingOption('infiniteCooldown')" style="padding: 12px 10px; border-radius: 10px; border: 2px solid #475569; background: rgba(30, 41, 59, 0.9); color: #e2e8f0; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.15s;">♾️ Infinite Cooldown: OFF</button>
                 </div>
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
-                    <div style="font-size: 14px; font-weight: 800; color: #fbbf24;">🎯 PICK TRAINING DUMMY HERO (<span id="tpSelectedDummyLabel" style="color: #38bdf8;">RANDOM</span>)</div>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <button id="tpGridTargetModeBtn" onclick="window.toggleTrainingGridTargetMode()" style="padding: 7px 12px; border-radius: 8px; border: 1.5px solid #38bdf8; background: rgba(56, 189, 248, 0.18); color: #38bdf8; font-weight: 800; font-size: 12px; cursor: pointer;">🎯 Click Hero To Change: DUMMY</button>
+                        <div style="font-size: 13px; font-weight: 800; color: #fbbf24;">Dummy: <span id="tpSelectedDummyLabel" style="color: #38bdf8;">RANDOM</span> | You: <span id="tpSelectedPlayerHeroLabel" style="color: #34d399;">PAUL</span></div>
+                    </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <button id="tpDummyBehaviorBtn" onclick="switchTrainingDummy(); renderTrainingPanelUI();" style="padding: 7px 12px; border-radius: 8px; border: 1.5px solid #f59e0b; background: rgba(245, 158, 11, 0.18); color: #fde047; font-weight: 700; font-size: 12px; cursor: pointer;">Dummy Type: Practice (Stationary)</button>
                         <input id="tpHeroSearchInput" type="text" placeholder="Search hero..." oninput="filterTrainingHeroGrid(this.value)" onkeydown="event.stopPropagation();" style="padding: 7px 11px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 12px; width: 150px;" />
@@ -2989,14 +2996,19 @@
             <div id="leaderboardContent"></div>
         </div>
         <div id="joinFriendsModal" onclick="if(event.target === this) window.closeJoinFriendsModal();" onmousedown="event.stopPropagation();" onkeydown="event.stopPropagation(); if(event.key === 'Escape') window.closeJoinFriendsModal();" style="display: none; pointer-events: auto !important; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.82); backdrop-filter: blur(6px); z-index: 99999; align-items: center; justify-content: center;">
-            <div onclick="event.stopPropagation();" style="pointer-events: auto !important; width: min(440px, 92vw); background: linear-gradient(145deg, #0f172a, #1e293b); border: 2.5px solid #34d399; border-radius: 16px; padding: 26px 28px; color: #f8fafc; font-family: Inter, Segoe UI, Arial, sans-serif; box-shadow: 0 24px 64px rgba(0,0,0,0.85), 0 0 28px rgba(52, 211, 153, 0.32); text-align: center;">
+            <div onclick="event.stopPropagation();" style="pointer-events: auto !important; width: min(460px, 92vw); background: linear-gradient(145deg, #0f172a, #1e293b); border: 2.5px solid #34d399; border-radius: 16px; padding: 24px 26px; color: #f8fafc; font-family: Inter, Segoe UI, Arial, sans-serif; box-shadow: 0 24px 64px rgba(0,0,0,0.85), 0 0 28px rgba(52, 211, 153, 0.32); text-align: center;">
                 <div style="font-size: 22px; font-weight: 900; color: #34d399; letter-spacing: 0.04em; margin-bottom: 6px;">🔑 JOIN FRIENDS TRAINING LAB</div>
-                <p style="font-size: 13px; color: #cbd5e1; margin: 0 0 18px 0; line-height: 1.5;">Enter the <b>8-digit invite code</b> from your friend's Training Lab room (up to 4 players per room):</p>
-                <input id="joinFriendsCodeInput" type="text" maxlength="8" inputmode="numeric" placeholder="12345678" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);" onkeydown="event.stopPropagation(); if(event.key === 'Enter') window.submitJoinFriendsCode(); if(event.key === 'Escape') window.closeJoinFriendsModal();" style="pointer-events: auto !important; user-select: text !important; -webkit-user-select: text !important; width: 100%; box-sizing: border-box; padding: 12px 16px; font-family: monospace; font-size: 24px; font-weight: 900; letter-spacing: 6px; text-align: center; color: #fde047; background: #020617; border: 2px solid #38bdf8; border-radius: 10px; outline: none; margin-bottom: 12px;" />
-                <div id="joinFriendsStatusMsg" style="min-height: 20px; font-size: 12px; font-weight: 700; color: #fbbf24; margin-bottom: 14px;"></div>
-                <div style="display: flex; gap: 10px; justify-content: center; pointer-events: auto !important;">
-                    <button type="button" onclick="event.stopPropagation(); window.closeJoinFriendsModal();" style="pointer-events: auto !important; flex: 1; padding: 11px 14px; border-radius: 10px; border: 1.5px solid #64748b; background: rgba(51, 65, 85, 0.85); color: #e2e8f0; font-weight: 800; font-size: 13px; cursor: pointer;">CANCEL</button>
-                    <button type="button" onclick="event.stopPropagation(); window.submitJoinFriendsCode();" style="pointer-events: auto !important; flex: 1.4; padding: 11px 16px; border-radius: 10px; border: 2px solid #34d399; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; font-weight: 900; font-size: 13px; cursor: pointer; box-shadow: 0 0 16px rgba(16, 185, 129, 0.45);">JOIN ROOM 🚀</button>
+                <p style="font-size: 13px; color: #cbd5e1; margin: 0 0 14px 0; line-height: 1.45;">Enter the <b>8-digit invite code</b> from your friend's Training Lab room (up to 4 players per room):</p>
+                <input id="joinFriendsCodeInput" type="text" maxlength="8" inputmode="numeric" placeholder="12345678" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);" onkeydown="event.stopPropagation(); if(event.key === 'Enter') window.submitJoinFriendsCode(false); if(event.key === 'Escape') window.closeJoinFriendsModal();" style="pointer-events: auto !important; user-select: text !important; -webkit-user-select: text !important; width: 100%; box-sizing: border-box; padding: 11px 16px; font-family: monospace; font-size: 24px; font-weight: 900; letter-spacing: 6px; text-align: center; color: #fde047; background: #020617; border: 2px solid #38bdf8; border-radius: 10px; outline: none; margin-bottom: 12px;" />
+                <div style="text-align: left; margin-bottom: 12px;">
+                    <label for="joinFriendsHeroSelect" style="display: block; font-size: 11px; font-weight: 800; color: #93c5fd; letter-spacing: 0.05em; margin-bottom: 4px;">🦸 YOUR HERO FOR THIS ROOM (Or press I+N+O+U / B+R+A+N+S / M+E+C+C+A):</label>
+                    <select id="joinFriendsHeroSelect" onchange="if(this.value) selectHero(this.value);" onkeydown="event.stopPropagation();" style="pointer-events: auto !important; width: 100%; padding: 9px 12px; border-radius: 8px; border: 1.5px solid #475569; background: #0f172a; color: #f8fafc; font-weight: 800; font-size: 13px; cursor: pointer;"></select>
+                </div>
+                <div id="joinFriendsStatusMsg" style="min-height: 18px; font-size: 12px; font-weight: 700; color: #fbbf24; margin-bottom: 12px;"></div>
+                <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; pointer-events: auto !important;">
+                    <button type="button" onclick="event.stopPropagation(); window.closeJoinFriendsModal();" style="pointer-events: auto !important; flex: 0.8; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #64748b; background: rgba(51, 65, 85, 0.85); color: #e2e8f0; font-weight: 800; font-size: 12px; cursor: pointer;">CANCEL</button>
+                    <button type="button" onclick="event.stopPropagation(); window.submitJoinFriendsCode(true);" style="pointer-events: auto !important; flex: 1.1; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #38bdf8; background: rgba(37, 99, 235, 0.35); color: #bae6fd; font-weight: 800; font-size: 12px; cursor: pointer;">PICK HERO ON MENU</button>
+                    <button type="button" onclick="event.stopPropagation(); window.submitJoinFriendsCode(false);" style="pointer-events: auto !important; flex: 1.3; padding: 10px 14px; border-radius: 10px; border: 2px solid #34d399; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; font-weight: 900; font-size: 13px; cursor: pointer; box-shadow: 0 0 16px rgba(16, 185, 129, 0.45);">JOIN ROOM 🚀</button>
                 </div>
             </div>
         </div>
@@ -4587,9 +4599,10 @@
         }
         function emitTrainingOrOnline(eventName, payload) {
             if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) {
-                onlineSocket.emit(eventName, payload);
-            } else if (gameMode === 'training' && typeof window.broadcastLocalTrainingEvent === 'function') {
-                window.broadcastLocalTrainingEvent(eventName, payload);
+                try { onlineSocket.emit(eventName, payload); } catch (_) {}
+            }
+            if (gameMode === 'training' && typeof window.broadcastLocalTrainingEvent === 'function') {
+                try { window.broadcastLocalTrainingEvent(eventName, payload); } catch (_) {}
             }
         }
         function scheduleImmediateOnlineFxFlush() {
@@ -4646,7 +4659,7 @@
             'isBrick','isPizza','isArrow','isSword','isSquare','isFallingSquare','isHexagon','isWheel','isTire','isRifle',
             'isInsaneShot','isBasketball','isProSniper','isStormBall','isLightningSphere','isStormBolt','austinVisualType',
             'invisible','isLunarCrescent','isSolarLance','isSunballUlt','isColeBullet','isColeHeadshot',
-            'isColeFlashbang','isColeLightBullet','isMicrophone','isRicoBall','isRicoUltBall','isRicoBoxProj','noobRocketSlow','isDivineSinSword','isInouProj','isInouKunai','isInouShuriken','isInouGammaShuriken','isBransonBasic','isBransonChordQ','isBransonChordE','isBransonChordUlt','bransonChordColor','canBounce','bouncesLeft','hasBounced','bounceCount','bonusRangeOnBounce','maxDistance','ignoreWalls','isHoming','isReflected','pierce'
+            'isColeFlashbang','isColeLightBullet','isMicrophone','isRicoBall','isRicoUltBall','isRicoBoxProj','noobRocketSlow','isDivineSinSword','isInouProj','isInouKunai','isInouShuriken','isInouGammaShuriken','isBransonBasic','isBransonChordQ','isBransonChordE','isBransonChordUlt','bransonChordColor','bransonUltCastId','hoverTimer','hoverBaseAngle','hoverLateralOffset','inouLingering','inouLingerTimer','_pushedByInouE','canBounce','bouncesLeft','hasBounced','bounceCount','bonusRangeOnBounce','maxDistance','ignoreWalls','isHoming','isReflected','pierce'
         ];
 
         function captureProjectileSpawnForOnline(proj) {
@@ -5024,6 +5037,77 @@
                 proj.onExplode = function() {
                     spawnRemoteRicoBox(this.x, this.y);
                 };
+            } else if (proj.isInouGammaShuriken) {
+                const triggerRemoteGammaExplode = (cx, cy) => {
+                    if (proj._gammaExploded) return;
+                    proj._gammaExploded = true;
+                    const expRadius = 195;
+                    window._suppressOnlineFxCapture = true;
+                    try {
+                        effectsAdd(new WaveShockwave(cx, cy, expRadius, 0.55, '#facc15', '#fef08a'));
+                        ringEffects.push({ x: cx, y: cy, life: 0.45, duration: 0.45, maxRadius: expRadius, color: '#facc15' });
+                        for (let i = 0; i < 24; i++) {
+                            const a = (Math.PI * 2 * i) / 24;
+                            particles.push(new Particle(cx, cy, i % 2 === 0 ? '#facc15' : '#ffffff', 5, 0.5, Math.cos(a) * 260, Math.sin(a) * 260));
+                        }
+                    } catch (_) {}
+                    window._suppressOnlineFxCapture = false;
+                };
+                proj.onGammaExplode = triggerRemoteGammaExplode;
+                proj.onHit = function(target) {
+                    if (this._firstEnemyHitDist === undefined) this._firstEnemyHitDist = this.dist;
+                    triggerRemoteGammaExplode(target ? target.x : this.x, target ? target.y : this.y);
+                    if (this._pushedByInouE) this.del = true;
+                };
+            } else if (proj.isInouKunai || proj.isInouShuriken) {
+                proj.onHit = function(target) {
+                    if (this._firstEnemyHitDist === undefined) this._firstEnemyHitDist = this.dist;
+                    window._suppressOnlineFxCapture = true;
+                    try {
+                        const bx = target ? target.x : this.x;
+                        const by = target ? target.y : this.y;
+                        for (let i = 0; i < 5; i++) {
+                            particles.push(new Particle(bx, by, i % 2 === 0 ? '#facc15' : '#fef9c3', 3, 0.35));
+                        }
+                    } catch (_) {}
+                    window._suppressOnlineFxCapture = false;
+                    if (this._pushedByInouE) this.del = true;
+                };
+            } else if (proj.isBransonChordQ) {
+                proj.onHit = function(target) {
+                    if (!target) return;
+                    window._suppressOnlineFxCapture = true;
+                    try {
+                        ringEffects.push({ x: target.x, y: target.y, life: 0.35, duration: 0.35, maxRadius: 44, color: '#f43f5e' });
+                        for (let i = 0; i < 8; i++) {
+                            particles.push(new Particle(target.x, target.y, i % 2 === 0 ? '#f43f5e' : '#fda4af', 3.5, 0.38));
+                        }
+                    } catch (_) {}
+                    window._suppressOnlineFxCapture = false;
+                };
+            } else if (proj.isBransonChordUlt) {
+                if (proj.bransonUltCastId) {
+                    window._remoteBransonUltGroups = window._remoteBransonUltGroups || {};
+                    let grp = window._remoteBransonUltGroups[proj.bransonUltCastId];
+                    if (!grp) {
+                        grp = { hit: [], healedAllies: new Set(), ts: Date.now() };
+                        window._remoteBransonUltGroups[proj.bransonUltCastId] = grp;
+                    }
+                    proj.hit = grp.hit;
+                    proj.healedAllies = grp.healedAllies;
+                }
+                proj.onHit = function(target) {
+                    if (!target) return;
+                    window._suppressOnlineFxCapture = true;
+                    try {
+                        const col = this.bransonChordColor || this.color || '#ec4899';
+                        ringEffects.push({ x: target.x, y: target.y, life: 0.45, duration: 0.45, maxRadius: 56, color: col });
+                        for (let k = 0; k < 10; k++) {
+                            particles.push(new Particle(target.x, target.y, col, 4, 0.45));
+                        }
+                    } catch (_) {}
+                    window._suppressOnlineFxCapture = false;
+                };
             }
         }
 
@@ -5051,7 +5135,7 @@
                     const socketProjects = window.remoteProjectiles[sid] = window.remoteProjectiles[sid] || [];
                     const remId = `${sid}-${fx.projId || 0}`;
                     if (socketProjects.some(p => p && !p.del && p.remoteId === remId)) return;
-                    const projOwner = { team: ownerProxy.team, name: ownerProxy.name, isPlayer: false, _isRemoteOwner: true, dmgMult: 1 };
+                    const projOwner = { team: ownerProxy.team, name: ownerProxy.name, isPlayer: false, _isRemoteOwner: true, dmgMult: 1, proxyRef: ownerProxy };
                     const proj = new Projectile(
                         projOwner,
                         fxX, fxY,
@@ -6939,15 +7023,16 @@
             update(dt){
                 // Branson E: 5 horizontally lined chords hover in front of Branson for 0.5s, then fly to nearest teammate or enemy!
                 if (this.isBransonChordE) {
+                    const liveOwner = (this.owner && this.owner.proxyRef) ? this.owner.proxyRef : this.owner;
                     if (this.hoverTimer && this.hoverTimer > 0) {
                         this.hoverTimer -= dt;
-                        if (this.owner && !this.owner.dead) {
-                            const baseAng = typeof this.hoverBaseAngle === 'number' ? this.hoverBaseAngle : (this.owner.angle || 0);
+                        if (liveOwner && !liveOwner.dead && typeof liveOwner.x === 'number' && typeof liveOwner.y === 'number') {
+                            const baseAng = typeof this.hoverBaseAngle === 'number' ? this.hoverBaseAngle : (liveOwner.angle || 0);
                             const perpAng = baseAng + Math.PI / 2;
                             const fwd = 62;
                             const lat = this.hoverLateralOffset || 0;
-                            this.x = this.owner.x + Math.cos(baseAng) * fwd + Math.cos(perpAng) * lat;
-                            this.y = this.owner.y + Math.sin(baseAng) * fwd + Math.sin(perpAng) * lat;
+                            this.x = liveOwner.x + Math.cos(baseAng) * fwd + Math.cos(perpAng) * lat;
+                            this.y = liveOwner.y + Math.sin(baseAng) * fwd + Math.sin(perpAng) * lat;
                             this.angle = baseAng;
                         }
                         if (this.hoverTimer <= 0) {
@@ -6956,7 +7041,7 @@
                             let bestTarget = null;
                             let bestDist = 99999;
                             for (let e of entities) {
-                                if (!e || e.dead || !(e instanceof Entity) || e === this.owner || e.isTargetable === false) continue;
+                                if (!e || e.dead || !(e instanceof Entity) || e === liveOwner || e === this.owner || e.isTargetable === false) continue;
                                 // Skip full-HP teammates if an enemy or injured teammate is available
                                 const isAlly = e.team === this.team;
                                 if (isAlly && e.hp >= e.maxHp) continue;
@@ -6968,7 +7053,7 @@
                             }
                             if (!bestTarget) {
                                 for (let e of entities) {
-                                    if (!e || e.dead || !(e instanceof Entity) || e === this.owner || e.isTargetable === false) continue;
+                                    if (!e || e.dead || !(e instanceof Entity) || e === liveOwner || e === this.owner || e.isTargetable === false) continue;
                                     const d = Math.hypot(e.x - this.x, e.y - this.y);
                                     if (d < bestDist) {
                                         bestDist = d;
@@ -6989,31 +7074,30 @@
                             return;
                         }
                     }
-                    // Check collision with both teammates (heal 150) and enemies (deal 250)
+                    // Check collision with both teammates (heal 150 + heal Branson 150) and enemies (deal 250, NO self-heal on enemy hit!)
                     for (let e of entities) {
-                        if (!e || e.dead || !(e instanceof Entity) || e === this.owner || e.isTargetable === false) continue;
+                        if (!e || e.dead || !(e instanceof Entity) || e === liveOwner || e === this.owner || e.isTargetable === false) continue;
                         const d = Math.hypot(e.x - this.x, e.y - this.y);
                         if (d < (e.radius || 20) + (this.size || 12)) {
                             if (e.team === this.team) {
-                                e.hp = Math.min(e.maxHp, e.hp + 150);
-                                if (typeof safeApplyStatus === 'function' && typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) {
-                                    safeApplyStatus(e, 'heal', 150, this.owner || this);
-                                }
-                                // Heal Branson himself for 100% of the teammate heal (+150 HP)
-                                if (this.owner && !this.owner.dead) {
-                                    this.owner.hp = Math.min(this.owner.maxHp, this.owner.hp + 150);
+                                if (!this.isRemote) {
+                                    e.hp = Math.min(e.maxHp, e.hp + 150);
+                                    if (typeof safeApplyStatus === 'function' && typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) {
+                                        safeApplyStatus(e, 'heal', 150, liveOwner || this.owner || this);
+                                    }
+                                    // Heal Branson himself for 100% of the teammate heal (+150 HP) ONLY when hitting a teammate
+                                    if (liveOwner && !liveOwner.dead) {
+                                        liveOwner.hp = Math.min(liveOwner.maxHp, liveOwner.hp + 150);
+                                    }
                                 }
                                 for (let k = 0; k < 8; k++) {
                                     particles.push(new Particle(e.x, e.y, '#34d399', 3.5, 0.4));
                                 }
                             } else {
                                 if (!this.isRemote) {
-                                    e.takeDamage(250, this.owner);
+                                    e.takeDamage(250, liveOwner || this.owner);
                                 }
-                                // Heal Branson himself for 40% of the damage dealt (+100 HP)
-                                if (this.owner && !this.owner.dead) {
-                                    this.owner.hp = Math.min(this.owner.maxHp, this.owner.hp + Math.floor(250 * 0.40));
-                                }
+                                // Note: Branson E does NOT heal himself when hitting an enemy!
                                 for (let k = 0; k < 8; k++) {
                                     particles.push(new Particle(e.x, e.y, this.bransonChordColor || this.color || '#ec4899', 3.5, 0.4));
                                 }
@@ -7023,18 +7107,21 @@
                         }
                     }
                 }
-                // Branson F Ultimate: 3 slowly running chords that heal teammates for 600 and deal 1200 damage to enemies without disappearing!
+                // Branson F Ultimate: 3 slowly running chords that count as ONE shared wave (600 heal to teammates, 1200 total damage to enemies)
                 if (this.isBransonChordUlt) {
+                    const liveOwner = (this.owner && this.owner.proxyRef) ? this.owner.proxyRef : this.owner;
                     this.healedAllies = this.healedAllies || new Set();
                     for (let e of entities) {
-                        if (!e || e.dead || !(e instanceof Entity) || e === this.owner || e.isTargetable === false) continue;
+                        if (!e || e.dead || !(e instanceof Entity) || e === liveOwner || e === this.owner || e.isTargetable === false) continue;
                         if (e.team === this.team && !this.healedAllies.has(e)) {
                             const d = Math.hypot(e.x - this.x, e.y - this.y);
                             if (d < (e.radius || 20) + (this.size || 68)) {
                                 this.healedAllies.add(e);
-                                e.hp = Math.min(e.maxHp, e.hp + 600);
-                                if (typeof safeApplyStatus === 'function' && typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) {
-                                    safeApplyStatus(e, 'heal', 600, this.owner || this);
+                                if (!this.isRemote) {
+                                    e.hp = Math.min(e.maxHp, e.hp + 600);
+                                    if (typeof safeApplyStatus === 'function' && typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) {
+                                        safeApplyStatus(e, 'heal', 600, liveOwner || this.owner || this);
+                                    }
                                 }
                                 ringEffects.push({ x: e.x, y: e.y, life: 0.45, duration: 0.45, maxRadius: 54, color: '#34d399' });
                                 for (let k = 0; k < 12; k++) {
@@ -35168,6 +35255,11 @@
             let c=document.getElementById('card-'+h);
             console.log('   Card element found?', !!c);
             if(c)c.classList.add('selected');
+            const jfSel = document.getElementById('joinFriendsHeroSelect');
+            if (jfSel) {
+                if (typeof window.populateJoinFriendsHeroSelect === 'function') window.populateJoinFriendsHeroSelect();
+                jfSel.value = selectedHeroType;
+            }
             if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) {
                 onlineSocket.emit('playerQueueUpdate', {
                     heroType: selectedHeroType,
@@ -37613,7 +37705,8 @@
             { key: 'steven', name: 'Steven' }, { key: 'cornelius', name: 'Cornelius' }, { key: 'twins', name: 'Twins' },
             { key: 'trent', name: 'Trent' }, { key: 'guest', name: 'Guest' }, { key: 'jimeka', name: 'Jimeka' },
             { key: 'zeus', name: 'Zeus' }, { key: 'kujou', name: 'Kujou' }, { key: 'caskrice', name: 'Caskrice' },
-            { key: 'karen', name: 'Karen' }, { key: 'jeffrey', name: 'Jeffrey' }, { key: 'cole', name: 'Cole' }, { key: 'rico', name: 'Rico' }
+            { key: 'karen', name: 'Karen' }, { key: 'jeffrey', name: 'Jeffrey' }, { key: 'cole', name: 'Cole' }, { key: 'rico', name: 'Rico' },
+            { key: 'mecca', name: '🔥 Mecca' }, { key: 'inou', name: '⚡ Inou' }, { key: 'branson', name: '🎸 Branson' }
         ];
 
         window.createTrainingDummy = function(mode, customSpawnX, customSpawnY) {
@@ -37687,8 +37780,59 @@
             }
         };
 
+        window.toggleTrainingGridTargetMode = function() {
+            if (!window.trainingPanelState) window.trainingPanelState = {};
+            window.trainingPanelState.gridTargetMode = (window.trainingPanelState.gridTargetMode === 'player') ? 'dummy' : 'player';
+            window.renderTrainingPanelUI();
+        };
+
+        window.switchLocalTrainingHero = function(heroKey) {
+            if (!heroKey || heroKey === 'random') return;
+            if (gameMode !== 'training' || !player) {
+                selectedHeroType = heroKey;
+                return;
+            }
+            const HeroCtor = (typeof getHeroClassByType === 'function' && getHeroClassByType(heroKey)) || Paul;
+            const px = player.x, py = player.y, pGear = player.gear || selectedGear || 'speedster';
+            const prevSocketId = player.socketId || (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || window.mySocketId || mySocketId || window.myTrainingPeerId;
+            const prevTeam = player.team || 1;
+            const idx = entities.indexOf(player);
+            cleanupEntityVisualsAndEffects(player);
+            selectedHeroType = heroKey;
+            player = new HeroCtor(px, py, true);
+            player.heroType = heroKey;
+            player.socketId = prevSocketId;
+            player.team = prevTeam;
+            player.gear = pGear;
+            player.currentSkin = (typeof selectedSkins !== 'undefined' && selectedSkins[heroKey]) ? selectedSkins[heroKey] : 'default';
+            if (idx !== -1) entities[idx] = player;
+            else entities.push(player);
+            if (typeof setHeroAbilityIcons === 'function') {
+                try { setHeroAbilityIcons(player); } catch (_) {}
+            }
+            if (typeof updateHUD === 'function') updateHUD(player);
+            if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) {
+                onlineSocket.emit('playerQueueUpdate', {
+                    heroType: selectedHeroType,
+                    currentSkin: player.currentSkin || 'default'
+                });
+            }
+            window.renderTrainingPanelUI();
+            addKillMsg(`🦸 SWITCHED YOUR HERO TO: ${heroKey.toUpperCase()}!`);
+        };
+
         window.selectTrainingDummyHero = function(heroKey) {
             if (!window.trainingPanelState) return;
+            if (window.trainingPanelState.gridTargetMode === 'player') {
+                if (heroKey === 'random') {
+                    const pool = TRAINING_HERO_CATALOG.filter(h => h.key !== 'random');
+                    const pick = pool[Math.floor(Math.random() * pool.length)];
+                    if (pick) window.switchLocalTrainingHero(pick.key);
+                } else {
+                    window.switchLocalTrainingHero(heroKey);
+                }
+                return;
+            }
             window.trainingPanelState.dummyHero = heroKey || 'random';
             window.respawnTrainingDummyFromPanel(true);
             window.renderTrainingPanelUI();
@@ -37784,6 +37928,16 @@
             const selEntry = TRAINING_HERO_CATALOG.find(h => h.key === (tps.dummyHero || 'random'));
             const selLabel = document.getElementById('tpSelectedDummyLabel');
             if (selLabel) selLabel.innerText = selEntry ? selEntry.name.toUpperCase() : 'RANDOM';
+            const pLabel = document.getElementById('tpSelectedPlayerHeroLabel');
+            if (pLabel) pLabel.innerText = String(selectedHeroType || 'paul').toUpperCase();
+            const modeBtn = document.getElementById('tpGridTargetModeBtn');
+            if (modeBtn) {
+                const isPlayerMode = tps.gridTargetMode === 'player';
+                modeBtn.innerText = isPlayerMode ? '🦸 Click Hero To Change: YOUR HERO' : '🎯 Click Hero To Change: DUMMY';
+                modeBtn.style.borderColor = isPlayerMode ? '#34d399' : '#38bdf8';
+                modeBtn.style.color = isPlayerMode ? '#34d399' : '#38bdf8';
+                modeBtn.style.background = isPlayerMode ? 'rgba(16, 185, 129, 0.22)' : 'rgba(56, 189, 248, 0.18)';
+            }
 
             const grid = document.getElementById('tpHeroGrid');
             if (!grid) return;
@@ -44925,7 +45079,7 @@
                 const note = new Projectile(this, sx, sy, this.angle, 720, 100, 560, '#38bdf8', 10, false, false, false, 0, 0, true);
                 note.isBransonBasic = true;
                 note.bransonChordColor = '#38bdf8';
-                projectiles.push(note);
+                entities.push(note);
             }
 
             // Q Ability: Throws a Guitar Chord that deals 600 damage, slows enemies by 90% for 1s (3s CD).
@@ -44953,12 +45107,12 @@
                         particles.push(new Particle(enemy.x, enemy.y, i % 2 === 0 ? '#f43f5e' : '#fda4af', 3.5, 0.38));
                     }
                 };
-                projectiles.push(chord);
+                entities.push(chord);
                 if (this.isPlayer) addKillMsg('🎸 Power Chord!');
             }
 
             // E Ability: Throws 5 horizontally lined chords in front of Branson, each with a different color.
-            // After 0.5s, each chord flies to the nearest teammate (healing 150 HP) or enemy (dealing 250 damage). (9s CD)
+            // After 0.5s, each chord flies to the nearest teammate (healing 150 HP + 150 self-heal) or enemy (dealing 250 damage, no self-heal). (9s CD)
             abilityE() {
                 if (this.eCD > 0) return;
                 this.eCD = 9.0;
@@ -44982,13 +45136,13 @@
                     chord.hoverTimer = 0.5;
                     chord.hoverBaseAngle = baseAng;
                     chord.hoverLateralOffset = lat;
-                    projectiles.push(chord);
+                    entities.push(chord);
                 }
                 if (this.isPlayer) addKillMsg('🎶 5-Chord Harmony!');
             }
 
             // F Ability (Ultimate): Throws 3 much larger, slowly running chords that won't be stopped by walls or disappear on hit.
-            // Heals Branson himself for 600 HP, heals teammates for 600 HP, and deals 1200 damage to enemies! (22s CD)
+            // All 3 projectiles count as ONE shared wave so enemies take only 1200 damage total (never 1200x3) and teammates heal 600 HP total! (22s CD)
             abilityF() {
                 if (this.fCD > 0) return;
                 this.fCD = 22.0;
@@ -44998,6 +45152,9 @@
                 const spreads = [-0.18, 0, 0.18];
                 const ultColors = ['#38bdf8', '#facc15', '#ec4899'];
                 const slowSpeed = 250;
+                const sharedUltHitEnemies = [];
+                const sharedUltHealedAllies = new Set();
+                const ultCastId = 'bult_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 
                 for (let i = 0; i < 3; i++) {
                     const ang = this.angle + spreads[i];
@@ -45006,9 +45163,11 @@
                     const chord = new Projectile(this, sx, sy, ang, slowSpeed, 1200, 880, ultColors[i], 68, false, true, false, 0, 0, true);
                     chord.isBransonChordUlt = true;
                     chord.bransonChordColor = ultColors[i];
+                    chord.bransonUltCastId = ultCastId;
                     chord.pierce = true;
                     chord.ignoreWalls = true;
-                    chord.healedAllies = new Set();
+                    chord.hit = sharedUltHitEnemies;
+                    chord.healedAllies = sharedUltHealedAllies;
                     chord.onHit = (enemy) => {
                         if (!enemy || enemy.dead) return;
                         ringEffects.push({ x: enemy.x, y: enemy.y, life: 0.45, duration: 0.45, maxRadius: 56, color: ultColors[i] });
@@ -45016,7 +45175,7 @@
                             particles.push(new Particle(enemy.x, enemy.y, ultColors[i], 4, 0.45));
                         }
                     };
-                    projectiles.push(chord);
+                    entities.push(chord);
                 }
                 ringEffects.push({ x: this.x, y: this.y, life: 0.6, duration: 0.6, maxRadius: 130, color: '#ec4899' });
                 if (this.isPlayer) addKillMsg('🎼 GRAND ENCORE SYMPHONY!');
@@ -45215,7 +45374,7 @@
                 this.speed = this.baseSpd + this.projSpeedStacks.length * 24;
             }
 
-            // Deal 150 AoE damage in a small range (135px radius) during each E dash hop
+            // Deal 50 AoE damage in a small range (135px radius) during each E dash hop
             dealEDashSmallRangeDamage(hitSet) {
                 const dashDmgRadius = 135;
                 for (let e of entities) {
@@ -45224,7 +45383,7 @@
                     const d = Math.hypot(e.x - this.x, e.y - this.y);
                     if (d <= dashDmgRadius + (e.radius || 0)) {
                         if (hitSet) hitSet.add(e);
-                        e.takeDamage(150, this);
+                        e.takeDamage(50, this);
                         for (let i = 0; i < 6; i++) {
                             particles.push(new Particle(e.x, e.y, i % 2 === 0 ? '#facc15' : '#fef9c3', 3.5, 0.32));
                         }
@@ -45438,10 +45597,10 @@
                         kunai.del = true;
                     }
                 };
-                projectiles.push(kunai);
+                entities.push(kunai);
             }
 
-            // Absolute Mode Uncharged Basic: Fast Horizontal Melee Air-Slice (110 dmg, 0.15s CD, slightly bigger horizontal range, NO circular arcs!)
+            // Absolute Mode Uncharged Basic: Fast Horizontal Melee Air-Slice (90 dmg, 0.15s CD, slightly bigger horizontal range, NO circular arcs!)
             performAbsoluteMeleeSlice() {
                 if (this.basicCD > 0) return;
                 this.basicCD = 0.15;
@@ -45466,7 +45625,7 @@
                     const fwd = dx * cosA + dy * sinA;
                     const lat = Math.abs(-dx * sinA + dy * cosA);
                     if (fwd >= -e.radius * 0.45 && fwd <= sliceRange + e.radius && lat <= sliceHalfWidth + e.radius) {
-                        e.takeDamage(95, this);
+                        e.takeDamage(90, this);
                         if (hadMaxSpeedBar) {
                             this.applyMaxSpeedBarTrueDamageAndHeal(e);
                         }
@@ -45541,7 +45700,7 @@
                         shuriken.del = true;
                     }
                 };
-                projectiles.push(shuriken);
+                entities.push(shuriken);
                 visualEffects.push(new InouAirSliceEffect('air_slice', this.x, this.y, this.angle, {
                     length: 185,
                     width: 190,
@@ -45578,7 +45737,7 @@
                         shuriken.del = true;
                     }
                 };
-                projectiles.push(shuriken);
+                entities.push(shuriken);
             }
 
             // Q Ability: Throws 4 Shurikens with a slightly wider arc (3.5s CD);
@@ -45680,7 +45839,7 @@
             // and chains dashes if another projectile is nearby until all nearby projectiles are touched in that brief moment!
             abilityE() {
                 if (this.eCD > 0) return;
-                this.eCD = 4.0;
+                this.eCD = 6.0;
                 this.eDashing = true;
                 this.inouDashDRTimer = 0.45;
                 this._eTouchedProjectiles = new Set();
@@ -45739,6 +45898,30 @@
                 proj.dist = 0;
                 proj.range = 420; // Short, fast push flight then disappears immediately!
                 proj.hit = [];
+                if (this.isPlayer && isOnlineSyncActive()) {
+                    proj.projId = ++window._projIdCounter;
+                    const pushPayload = {
+                        projId: proj.projId,
+                        x: Math.round(proj.x),
+                        y: Math.round(proj.y),
+                        angle: Number((proj.angle || 0).toFixed(3)),
+                        speed: Math.round(proj.speed),
+                        damage: Math.round(proj.dmg || 0),
+                        range: 420,
+                        color: proj.color || '#facc15',
+                        size: proj.size || 11,
+                        pierce: !!proj.pierce,
+                        explode: !!proj.explo,
+                        trail: true,
+                        isInouProj: true,
+                        isInouKunai: !!proj.isInouKunai,
+                        isInouShuriken: !!proj.isInouShuriken,
+                        isInouGammaShuriken: !!proj.isInouGammaShuriken,
+                        _pushedByInouE: true,
+                        isHoming: !!proj.isHoming
+                    };
+                    emitTrainingOrOnline('projectileFired', pushPayload);
+                }
 
                 ringEffects.push({ x: proj.x, y: proj.y, life: 0.24, duration: 0.24, maxRadius: 44, color: '#facc15' });
                 for (let i = 0; i < 8; i++) {
@@ -50249,6 +50432,18 @@
                             
                             let existingProj = socketProjects.find(p => p && !p.del && p.remoteId === remId);
                             if (existingProj) {
+                                if (entityData._pushedByInouE && !existingProj._pushedByInouE) {
+                                    existingProj._pushedByInouE = true;
+                                    existingProj.inouLingering = false;
+                                    existingProj.inouLingerTimer = 0;
+                                    existingProj.speed = entityData.speed || 1320;
+                                    existingProj.angle = entityData.angle || existingProj.angle;
+                                    existingProj.vx = Math.cos(existingProj.angle) * existingProj.speed;
+                                    existingProj.vy = Math.sin(existingProj.angle) * existingProj.speed;
+                                    existingProj.dist = 0;
+                                    existingProj.range = 420;
+                                    existingProj.hit = [];
+                                }
                                 // Only adjust trajectory if homing/curving projectile changed angle significantly; never pull straight projectiles backward to stale server coords!
                                 if (typeof entityData.angle === 'number' && Math.abs(entityData.angle - existingProj.angle) > 0.04) {
                                     existingProj.angle = entityData.angle;
@@ -50263,7 +50458,7 @@
                                 let ownerProxy = entities.find(e => e instanceof OnlinePlayerProxy && e.socketId === socketId);
                                 if(!ownerProxy) continue;
                                 
-                                let projOwner = { team: ownerProxy.team, name: ownerProxy.name, isPlayer: false, _isRemoteOwner: true, dmgMult: 1 };
+                                let projOwner = { team: ownerProxy.team, name: ownerProxy.name, isPlayer: false, _isRemoteOwner: true, dmgMult: 1, proxyRef: ownerProxy };
                                 window._suppressOnlineFxCapture = true;
                                 let proj;
                                 try {
@@ -54562,15 +54757,9 @@
                     if (toast) toast.style.opacity = '0';
                 }, 3200);
                 if (typeof gameRunning !== 'undefined' && gameRunning && gameMode === 'training' && player && !(player instanceof Mecca)) {
-                    const px = player.x, py = player.y, pGear = player.gear;
-                    const idx = entities.indexOf(player);
-                    player = new Mecca(px, py, true);
-                    player.team = 1;
-                    player.gear = pGear || selectedGear || 'speedster';
-                    if (idx !== -1) entities[idx] = player;
-                    else entities.push(player);
-                    updateHUD(player);
-                    addKillMsg('🔥 Switched to Secret Hero: MECCA!');
+                    if (typeof window.switchLocalTrainingHero === 'function') {
+                        window.switchLocalTrainingHero('mecca');
+                    }
                 }
             };
             window.unlockAndSelectInou = function() {
@@ -54604,15 +54793,9 @@
                     if (toast) toast.style.opacity = '0';
                 }, 3200);
                 if (typeof gameRunning !== 'undefined' && gameRunning && gameMode === 'training' && player && !(player instanceof Inou)) {
-                    const px = player.x, py = player.y, pGear = player.gear;
-                    const idx = entities.indexOf(player);
-                    player = new Inou(px, py, true);
-                    player.team = 1;
-                    player.gear = pGear || selectedGear || 'speedster';
-                    if (idx !== -1) entities[idx] = player;
-                    else entities.push(player);
-                    updateHUD(player);
-                    addKillMsg('⚡ Switched to Secret Hero: INOU!');
+                    if (typeof window.switchLocalTrainingHero === 'function') {
+                        window.switchLocalTrainingHero('inou');
+                    }
                 }
             };
             window.unlockAndSelectBranson = function() {
@@ -54646,15 +54829,9 @@
                     if (toast) toast.style.opacity = '0';
                 }, 3200);
                 if (typeof gameRunning !== 'undefined' && gameRunning && gameMode === 'training' && player && !(player instanceof Branson)) {
-                    const px = player.x, py = player.y, pGear = player.gear;
-                    const idx = entities.indexOf(player);
-                    player = new Branson(px, py, true);
-                    player.team = 1;
-                    player.gear = pGear || selectedGear || 'speedster';
-                    if (idx !== -1) entities[idx] = player;
-                    else entities.push(player);
-                    updateHUD(player);
-                    addKillMsg('🎸 Switched to Secret Hero: BRANSON!');
+                    if (typeof window.switchLocalTrainingHero === 'function') {
+                        window.switchLocalTrainingHero('branson');
+                    }
                 }
             };
             window.addEventListener('keydown',e=>{if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;const key=e.key.toLowerCase();window._secretHeldKeys.add(key);if(window._secretHeldKeys.has('m')&&window._secretHeldKeys.has('e')&&window._secretHeldKeys.has('c')&&window._secretHeldKeys.has('a')){window.unlockAndSelectMecca();}if(window._secretHeldKeys.has('i')&&window._secretHeldKeys.has('n')&&window._secretHeldKeys.has('o')&&window._secretHeldKeys.has('u')){window.unlockAndSelectInou();}if(window._secretHeldKeys.has('b')&&window._secretHeldKeys.has('r')&&window._secretHeldKeys.has('a')&&window._secretHeldKeys.has('n')&&window._secretHeldKeys.has('s')){window.unlockAndSelectBranson();}if(window._secretHeldKeys.has('b')&&window._secretHeldKeys.has('o')&&window._secretHeldKeys.has('s')){window.unlockSoloLevellingMode();}if(keys.hasOwnProperty(key))keys[key]=true;if(key==='r')activateUniversalGear(player);if(key==='t'&&typeof gameMode!=='undefined'&&gameMode==='training'){e.preventDefault();toggleTrainingPanel();}if(key==='l'&&typeof gameMode!=='undefined'&&gameMode==='training')switchTrainingDummy();if(key==='p'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCounter();if(key==='o'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCooldowns();if(e.key===' ')showLeaderboard();});
@@ -57643,13 +57820,13 @@
                     this._pendingBurstProSniper = false;
                     this._pendingBurstTrueDamage = false;
                     this._lastEmitMs = Date.now();
-                    if (totalBurst > 0 && typeof onlineSocket !== 'undefined' && onlineSocket) {
-                        onlineSocket.emit('playerDamaged', {
+                    if (totalBurst > 0) {
+                        emitTrainingOrOnline('playerDamaged', {
                             socketId: this.socketId,
                             damageTaken: totalBurst,
                             trueDamageAmount: totalTrueAmt,
                             damageDealer: (player && player.name) ? player.name : 'Player',
-                            attackerSocketId: (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId,
+                            attackerSocketId: (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId || window.myTrainingPeerId,
                             isProSniper: isPro,
                             trueDamage: isTrue
                         });
@@ -57706,7 +57883,7 @@
                     'walls', 'ricochets', 'activeZones', 'fProjectiles', 'qProjectiles',
                     'eProjectiles', 'gProjectiles', 'hackZones', 'trailPath', 'pedals',
                     'slowPedals', 'vibrateTrails', 'doodles', 'northernLights', 'orbitProjectiles',
-                    'bananaPeels', 'carEffects', 'darkCircles', 'buildings', 'sectors', 'stormTraps', 'inkZones'
+                    'bananaPeels', 'carEffects', 'darkCircles', 'buildings', 'sectors', 'stormTraps', 'inkZones', 'projSpeedStacks', 'qBurstQueue'
                 ];
                 for (let i = 0; i < arrayProps.length; i++) {
                     const ap = arrayProps[i];
@@ -57811,6 +57988,7 @@
                     let baseAmt = amt;
                     if (!isFullTrue) {
                         if (ht === 'ian' && this.underwater) baseAmt *= 0.80;
+                        if (ht === 'inou' && (this.eDashing || this.inouDashDRTimer > 0)) baseAmt *= 0.75;
                         if (ht === 'wesley') {
                             if (this.specialShield) {
                                 baseAmt = baseAmt > 500 ? Math.max(0, baseAmt - 550) : (baseAmt * 0.12);
@@ -58205,7 +58383,7 @@
                                 this._pendingPushDy = (this._pendingPushDy || 0) - sendDy;
                                 this._lastPushEmitMs = Date.now();
                                 try {
-                                    onlineSocket.emit('playerEffect', {
+                                    emitTrainingOrOnline('playerEffect', {
                                         socketId: this.socketId,
                                         effect: {
                                             type: 'push',
@@ -58216,7 +58394,7 @@
                                                 dy: sendDy
                                             }
                                         },
-                                        attackerSocketId: (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId
+                                        attackerSocketId: (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId || window.myTrainingPeerId
                                     });
                                 } catch (_) {}
                             };
@@ -58252,7 +58430,8 @@
                     ['defenseShredTimer', 'defenseShredTimer'],
                     ['austinMarkTimer', 'austinMarkTimer'],
                     ['terrifedTimer', 'terrifedTimer'],
-                    ['fadingSoulTimer', 'fadingSoul']
+                    ['fadingSoulTimer', 'fadingSoul'],
+                    ['bransonSlowTimer', 'bransonSlow']
                 ];
                 for (let i = 0; i < statusKeys.length; i++) {
                     const prop = statusKeys[i][0];
@@ -58473,6 +58652,19 @@
                 }
                 this.remoteParticles = this.remoteParticles.filter(p => p.lifetime > 0);
 
+                // If this remote proxy is an ally Branson, apply Branson's Harmony Aura (+40 HP/s & +50% F charge) to local player within 215px!
+                if (String(this.heroType || '').toLowerCase() === 'branson' && !this.dead && player && !player.dead && this.team === player.team) {
+                    const distToLocal = Math.hypot(player.x - this.x, player.y - this.y);
+                    if (distToLocal <= (this.passiveRadius || 215)) {
+                        player.hp = Math.min(player.maxHp, player.hp + 40 * dt);
+                        if (typeof player.fCD === 'number' && player.fCD > 0) {
+                            player.fCD = Math.max(0, player.fCD - 0.5 * dt);
+                        }
+                    }
+                }
+                if (this.bransonSlowTimer > 0) this.bransonSlowTimer = Math.max(0, this.bransonSlowTimer - dt);
+                if (this.inouDashDRTimer > 0) this.inouDashDRTimer = Math.max(0, this.inouDashDRTimer - dt);
+
                 if (this._hp <= 0 && !this.dead) {
                     this.dead = true;
                 } else if (this._hp > 0 && this.dead) {
@@ -58597,9 +58789,8 @@
                   trail: !!e.trail,
                   distTraveled: Math.round(e.dist || 0)
                 };
-                const visualFlags = ['isScythe','isEverdawnBolt','isChickenWing','isChickenLeg','isBrick','isPizza','isArrow','isSword','isSquare','isHexagon','isWheel','isRifle','isInsaneShot','isBasketball','isProSniper','isStormBall','isStormBolt','austinVisualType','invisible','isLunarCrescent','isSolarLance','isSunballUlt','isColeBullet','isColeHeadshot','isColeFlashbang','isColeLightBullet'];
-                for (let vf of visualFlags) {
-                  if (e[vf] !== undefined) pItem[vf] = e[vf];
+                for (let vf of ALL_PROJECTILE_VISUAL_FLAGS) {
+                  if (e[vf] !== undefined && e[vf] !== false) pItem[vf] = e[vf];
                 }
                 entitiesToBroadcast.push(pItem);
               }
@@ -59037,14 +59228,18 @@
               }
             }
 
-            // If local player healed locally (lifesteal, bandage, ability heal), report positive heal delta to server
-            if (typeof player._lastSyncedHp === 'number' && player.hp > player._lastSyncedHp + 1 && !player.dead) {
+            // If local player healed locally (lifesteal, bandage, ability heal, or continuous passive heal), report positive heal delta to server
+            if (typeof player._lastSyncedHp !== 'number' || player.dead) {
+              player._lastSyncedHp = player.hp;
+            } else if (player.hp < player._lastSyncedHp) {
+              player._lastSyncedHp = player.hp;
+            } else if (player.hp >= player._lastSyncedHp + 2 && !player.dead) {
               const healDelta = Math.round(player.hp - player._lastSyncedHp);
               if (healDelta > 0) {
                 emitTrainingOrOnline('playerHeal', { amount: healDelta });
+                player._lastSyncedHp = player.hp;
               }
             }
-            player._lastSyncedHp = player.hp;
 
             const updatePayload = {
               socketId: curPeerId,
@@ -59436,7 +59631,7 @@
               const remId = data.projId ? `${sid}-${data.projId}` : `${sid}-${data.angle}-${data.speed}-${Date.now()}`;
               if (socketProjects.some(p => p && !p.del && p.remoteId === remId)) return;
 
-              const projOwner = { team: ownerProxy.team, name: ownerProxy.name, isPlayer: false, _isRemoteOwner: true, dmgMult: 1 };
+              const projOwner = { team: ownerProxy.team, name: ownerProxy.name, isPlayer: false, _isRemoteOwner: true, dmgMult: 1, proxyRef: ownerProxy };
               window._suppressOnlineFxCapture = true;
               try {
                 const proj = new Projectile(
@@ -59610,8 +59805,11 @@
 
             for (let i = entities.length - 1; i >= 0; i--) {
               let e = entities[i];
-              if (e instanceof OnlinePlayerProxy && (!serverIds.includes(e.socketId) || e.socketId === myId)) {
-                entities.splice(i, 1);
+              if (e instanceof OnlinePlayerProxy) {
+                const isLocalPeerActive = (gameMode === 'training' && window._localTrainingPeers && window._localTrainingPeers[e.socketId] && (Date.now() - (window._localTrainingPeers[e.socketId].lastSeenMs || 0)) < 3500);
+                if (e.socketId === myId || e.socketId === window.myTrainingPeerId || (!serverIds.includes(e.socketId) && !isLocalPeerActive)) {
+                  entities.splice(i, 1);
+                }
               }
             }
 
@@ -60327,6 +60525,9 @@
                         document.getElementById('modeTitle').innerText = 'SELECT YOUR HERO (Join Friends Training Lab)';
                         return;
                     }
+                    window._pendingJoinFriendsCode = null;
+                    const jfPill = document.getElementById('card-playing-join_friends');
+                    if (jfPill) jfPill.innerText = '🔑 Enter Code';
                     if (mode === 'ffa_online') {
                         initializeOnlineFFA();
                         gameMode = 'ffa_online';
@@ -60425,18 +60626,31 @@
         window._trainingBroadcastChannel = null;
 
         // Dispatch incoming training room events through the exact same handlers as onlineSocket
+        // Works simultaneously alongside Socket.IO so movement & combat sync in real time across tabs AND across servers!
         window.handleIncomingLocalTrainingPacket = function(pkt) {
-            if (!pkt || !pkt.ev || pkt.senderId === ((onlineSocket && onlineSocket.connected && onlineSocket.id) || window.mySocketId || window.myTrainingPeerId)) return;
+            if (!pkt || !pkt.ev) return;
+            const myCurrentIds = new Set([
+                (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || null,
+                window.mySocketId || null,
+                mySocketId || null,
+                window.myTrainingPeerId || null
+            ].filter(Boolean));
+            if (myCurrentIds.has(pkt.senderId) || (pkt.data && myCurrentIds.has(pkt.data.socketId))) return;
             if (pkt.inviteCode !== window.trainingInviteCode || gameMode !== 'training') return;
-            if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) return;
 
-            const myId = window.mySocketId || window.myTrainingPeerId;
+            const myId = (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || window.mySocketId || mySocketId || window.myTrainingPeerId;
             const ev = pkt.ev;
             const data = pkt.data || {};
 
             if (ev === 'playerUpdate') {
                 const sid = data.socketId || pkt.senderId;
-                if (!sid || sid === myId) return;
+                if (!sid || myCurrentIds.has(sid)) return;
+                // Deduplicate if peer changed from tpeer_ to socket.id
+                if (pkt.peerAlias && pkt.peerAlias !== sid && window._localTrainingPeers[pkt.peerAlias]) {
+                    delete window._localTrainingPeers[pkt.peerAlias];
+                    const oldProx = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === pkt.peerAlias);
+                    if (oldProx) oldProx.socketId = sid;
+                }
                 window._localTrainingPeers[sid] = Object.assign({}, data, {
                     socketId: sid,
                     lastSeenMs: Date.now()
@@ -60460,20 +60674,21 @@
                     window.onlineEntities = window.onlineEntities || {};
                     window.onlineEntities[sid] = data.entities;
                 }
-                const totalPlayers = Math.min(4, 1 + Object.keys(window._localTrainingPeers).length);
+                const activeProxies = entities.filter(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && !e.del).length;
+                const totalPlayers = Math.min(4, Math.max(1 + Object.keys(window._localTrainingPeers).length, 1 + activeProxies));
                 if (window.trainingRoomPlayerCount !== totalPlayers) {
                     window.trainingRoomPlayerCount = totalPlayers;
                     window.updateTrainingInviteHUD();
                 }
             } else if (ev === 'projectileFired') {
                 const sid = pkt.senderId;
-                const ownerProxy = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === sid);
+                const ownerProxy = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && (e.socketId === sid || e.socketId === pkt.peerAlias));
                 if (!ownerProxy) return;
                 window.remoteProjectiles = window.remoteProjectiles || {};
-                const socketProjects = window.remoteProjectiles[sid] = window.remoteProjectiles[sid] || [];
-                const remId = data.projId ? `${sid}-${data.projId}` : `${sid}-${data.angle}-${data.speed}-${Date.now()}`;
+                const socketProjects = window.remoteProjectiles[ownerProxy.socketId] = window.remoteProjectiles[ownerProxy.socketId] || [];
+                const remId = data.projId ? `${ownerProxy.socketId}-${data.projId}` : `${ownerProxy.socketId}-${data.angle}-${data.speed}-${Date.now()}`;
                 if (socketProjects.some(p => p && !p.del && p.remoteId === remId)) return;
-                const projOwner = { team: ownerProxy.team, name: ownerProxy.name, isPlayer: false, _isRemoteOwner: true, dmgMult: 1 };
+                const projOwner = { team: ownerProxy.team, name: ownerProxy.name, isPlayer: false, _isRemoteOwner: true, dmgMult: 1, proxyRef: ownerProxy };
                 window._suppressOnlineFxCapture = true;
                 try {
                     const proj = new Projectile(
@@ -60498,7 +60713,7 @@
                 }
             } else if (ev === 'playerAction') {
                 const sid = pkt.senderId;
-                const prox = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === sid);
+                const prox = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && (e.socketId === sid || e.socketId === pkt.peerAlias));
                 if (!prox || data.action !== 'fxSync' || !data.actionData) return;
                 const ad = data.actionData;
                 if (typeof ad.angle === 'number') prox.targetAngle = ad.angle;
@@ -60515,15 +60730,21 @@
                     }
                 }
             } else if (ev === 'playerEffect') {
-                if (data.socketId === myId && player && !player.dead && data.effect) {
-                    const attackerProxy = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === pkt.senderId) || null;
+                if (myCurrentIds.has(data.socketId) && player && !player.dead && data.effect) {
+                    const effKey = `${pkt.senderId}-${data.effect.type}-${Math.floor((pkt.ts || Date.now()) / 80)}`;
+                    window._seenLocalTrainingEffects = window._seenLocalTrainingEffects || new Set();
+                    if (window._seenLocalTrainingEffects.has(effKey)) return;
+                    window._seenLocalTrainingEffects.add(effKey);
+                    const attackerProxy = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && (e.socketId === pkt.senderId || e.socketId === pkt.peerAlias)) || null;
                     safeApplyStatus(player, data.effect.type, data.effect.value, attackerProxy);
                 }
             } else if (ev === 'playerDamaged') {
-                if (data.socketId === myId && player && !player.dead && window.trainingPanelState && window.trainingPanelState.friendlyFire) {
+                if (myCurrentIds.has(data.socketId) && player && !player.dead && window.trainingPanelState && window.trainingPanelState.friendlyFire) {
+                    // Skip if onlineSocket is connected to server and server already handles playerDamaged authoritatively
+                    if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected && window._trainingServerRoomConfirmed) return;
                     const dmg = Math.max(0, Number(data.damageTaken) || 0);
                     if (dmg > 0) {
-                        const attackerProxy = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === pkt.senderId) || null;
+                        const attackerProxy = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && (e.socketId === pkt.senderId || e.socketId === pkt.peerAlias)) || null;
                         player.takeDamage(dmg, attackerProxy || { team: 99, isPlayer: false, _isRemoteOwner: true }, { isTrue: !!data.trueDamage });
                     }
                 }
@@ -60540,6 +60761,7 @@
             const pkt = {
                 inviteCode: window.trainingInviteCode,
                 senderId: senderId,
+                peerAlias: window.myTrainingPeerId,
                 ev: ev,
                 data: data,
                 ts: Date.now()
@@ -60568,6 +60790,40 @@
             });
         }
 
+        window.joinTrainingRoomFromPanel = function() {
+            const inp = document.getElementById('tpJoinCodeInput');
+            const raw = inp ? String(inp.value || '').trim() : '';
+            if (!/^[0-9]{8}$/.test(raw)) {
+                addKillMsg('⚠️ Enter a valid 8-digit room code!');
+                return;
+            }
+            window.joinTrainingRoomByCode(raw);
+            if (inp) inp.value = '';
+        };
+
+        window.joinTrainingRoomByCode = function(code) {
+            const cleanCode = String(code || '').trim();
+            if (!/^[0-9]{8}$/.test(cleanCode)) return;
+            window._pendingJoinFriendsCode = cleanCode;
+            // Remove old remote proxies before switching rooms
+            for (let i = entities.length - 1; i >= 0; i--) {
+                if (typeof OnlinePlayerProxy !== 'undefined' && entities[i] instanceof OnlinePlayerProxy) {
+                    entities.splice(i, 1);
+                }
+            }
+            window.onlinePlayers = {};
+            window.onlineEntities = {};
+            window.remoteProjectiles = {};
+            // If onlineSocket was already in an older room, reconnect cleanly so even legacy server.js leaves the old room
+            if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) {
+                try {
+                    onlineSocket.disconnect();
+                    onlineSocket.connect();
+                } catch (_) {}
+            }
+            window.initTrainingLabInviteSession();
+        };
+
         window.initTrainingLabInviteSession = function() {
             window.trainingPanelState = window.trainingPanelState || {};
             if (typeof window.trainingPanelState.friendlyFire !== 'boolean') {
@@ -60578,11 +60834,12 @@
             window.trainingInviteCode = joiningCode || window.generateRandom8DigitInviteCode();
             window.trainingRoomPlayerCount = 1;
             window._localTrainingPeers = {};
+            window._trainingServerRoomConfirmed = false;
 
             if (!mySocketId) {
                 mySocketId = window.mySocketId = window.myTrainingPeerId;
             }
-            if (player && !player.socketId) {
+            if (player) {
                 player.socketId = (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || mySocketId || window.myTrainingPeerId;
             }
 
@@ -60602,19 +60859,21 @@
             if (window._trainingPeerPruneInterval) clearInterval(window._trainingPeerPruneInterval);
             window._trainingPeerPruneInterval = setInterval(() => {
                 if (gameMode !== 'training') return;
-                if (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) return;
                 const nowMs = Date.now();
                 let changed = false;
                 for (const pid of Object.keys(window._localTrainingPeers)) {
                     if (nowMs - (window._localTrainingPeers[pid].lastSeenMs || 0) > 3500) {
                         delete window._localTrainingPeers[pid];
-                        const pEnt = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === pid);
-                        if (pEnt) { pEnt.dead = true; pEnt.del = true; }
+                        if (!(window.onlinePlayers && window.onlinePlayers[pid])) {
+                            const pEnt = entities.find(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && e.socketId === pid);
+                            if (pEnt) { pEnt.dead = true; pEnt.del = true; }
+                        }
                         changed = true;
                     }
                 }
                 if (changed) {
-                    window.trainingRoomPlayerCount = Math.min(4, 1 + Object.keys(window._localTrainingPeers).length);
+                    const activeProxies = entities.filter(e => typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy && !e.del).length;
+                    window.trainingRoomPlayerCount = Math.min(4, Math.max(1, 1 + activeProxies));
                     window.updateTrainingInviteHUD();
                 }
             }, 1000);
@@ -60638,6 +60897,7 @@
                         onlineSocket.off('trainingRoomState');
                         onlineSocket.on('trainingRoomState', (data) => {
                             if (!data) return;
+                            window._trainingServerRoomConfirmed = true;
                             if (data.inviteCode) window.trainingInviteCode = String(data.inviteCode);
                             if (typeof data.playerCount === 'number') window.trainingRoomPlayerCount = data.playerCount;
                             if (typeof data.friendlyFire === 'boolean') {
@@ -60646,22 +60906,22 @@
                                 window.updateTrainingInviteHUD();
                             }
                         });
+                        const roomPayload = {
+                            inviteCode: window.trainingInviteCode,
+                            roomId: 'training-' + window.trainingInviteCode,
+                            heroType: selectedHeroType || 'paul',
+                            currentSkin: (player && player.currentSkin) || 'default',
+                            playerName: (player && player.name) || 'Player',
+                            gameMode: 'training',
+                            friendlyFire: !!(window.trainingPanelState && window.trainingPanelState.friendlyFire)
+                        };
                         if (joiningCode) {
-                            onlineSocket.emit('joinTrainingInviteRoom', {
-                                inviteCode: joiningCode,
-                                heroType: selectedHeroType || 'paul',
-                                currentSkin: (player && player.currentSkin) || 'default',
-                                playerName: (player && player.name) || 'Player'
-                            });
+                            onlineSocket.emit('joinTrainingInviteRoom', roomPayload);
                         } else {
-                            onlineSocket.emit('createTrainingInviteRoom', {
-                                inviteCode: window.trainingInviteCode,
-                                heroType: selectedHeroType || 'paul',
-                                currentSkin: (player && player.currentSkin) || 'default',
-                                playerName: (player && player.name) || 'Player',
-                                friendlyFire: !!(window.trainingPanelState && window.trainingPanelState.friendlyFire)
-                            });
+                            onlineSocket.emit('createTrainingInviteRoom', roomPayload);
                         }
+                        // Also emit universal joinGame so even an un-restarted server.js puts all players into room 'training-<code>' and runs 60Hz gameStateUpdate!
+                        onlineSocket.emit('joinGame', roomPayload);
                     };
                     if (onlineSocket.connected) {
                         registerRoomOnServer();
@@ -60674,17 +60934,32 @@
             }
         };
 
+        window.populateJoinFriendsHeroSelect = function() {
+            const sel = document.getElementById('joinFriendsHeroSelect');
+            if (!sel) return;
+            const currentHero = selectedHeroType || 'paul';
+            const heroes = TRAINING_HERO_CATALOG.filter(h => h.key !== 'random');
+            let html = '';
+            for (const h of heroes) {
+                const isSel = h.key === currentHero ? 'selected' : '';
+                html += `<option value="${h.key}" ${isSel}>${h.name.toUpperCase()} (${h.key})</option>`;
+            }
+            sel.innerHTML = html;
+            sel.value = currentHero;
+        };
+
         window.openJoinFriendsModal = function() {
             const modal = document.getElementById('joinFriendsModal');
             const input = document.getElementById('joinFriendsCodeInput');
             const status = document.getElementById('joinFriendsStatusMsg');
             if (!modal) return;
+            window.populateJoinFriendsHeroSelect();
             if (status) {
                 status.style.color = '#fbbf24';
                 status.innerText = 'Enter your friend\'s 8-digit Training Lab invite code';
             }
             if (input) {
-                input.value = '';
+                input.value = window._pendingJoinFriendsCode || '';
                 setTimeout(() => input.focus(), 40);
             }
             modal.style.display = 'flex';
@@ -60693,16 +60968,17 @@
         window.closeJoinFriendsModal = function() {
             const modal = document.getElementById('joinFriendsModal');
             if (modal) modal.style.display = 'none';
-            if (gameMode === 'join_friends') {
+            if (gameMode === 'join_friends' && !window._pendingJoinFriendsCode) {
                 gameMode = 'training';
             }
             document.querySelectorAll('.mode-card').forEach(card => {
-                card.classList.toggle('active-mode', card.getAttribute('data-mode') === gameMode);
+                card.classList.toggle('active-mode', card.getAttribute('data-mode') === (window._pendingJoinFriendsCode ? 'join_friends' : gameMode));
             });
         };
 
-        window.submitJoinFriendsCode = function() {
+        window.submitJoinFriendsCode = function(pickHeroOnMenuOnly) {
             const input = document.getElementById('joinFriendsCodeInput');
+            const heroSel = document.getElementById('joinFriendsHeroSelect');
             const status = document.getElementById('joinFriendsStatusMsg');
             const raw = input ? String(input.value || '').trim() : '';
             if (!/^[0-9]{8}$/.test(raw)) {
@@ -60712,9 +60988,29 @@
                 }
                 return;
             }
+            if (heroSel && heroSel.value) {
+                if (typeof window.selectHero === 'function') window.selectHero(heroSel.value);
+                else selectedHeroType = heroSel.value;
+            }
+            window._pendingJoinFriendsCode = raw;
+            const pill = document.getElementById('card-playing-join_friends');
+            if (pill) pill.innerText = `🔑 #${raw}`;
+
+            if (pickHeroOnMenuOnly) {
+                const modal = document.getElementById('joinFriendsModal');
+                if (modal) modal.style.display = 'none';
+                gameMode = 'training';
+                document.querySelectorAll('.mode-card').forEach(card => {
+                    card.classList.toggle('active-mode', card.getAttribute('data-mode') === 'join_friends');
+                });
+                const mt = document.getElementById('modeTitle');
+                if (mt) mt.innerHTML = `🤝 JOINING ROOM <span style="color:#34d399;">#${raw}</span> — SELECT YOUR HERO & CLICK BATTLE!`;
+                return;
+            }
+
             if (status) {
                 status.style.color = '#34d399';
-                status.innerText = `Joining Training Lab #${raw}...`;
+                status.innerText = `Joining Training Lab #${raw} as ${(selectedHeroType || 'paul').toUpperCase()}...`;
             }
 
             let joinedAlready = false;
@@ -60724,6 +61020,10 @@
                 window._pendingJoinFriendsCode = raw;
                 const modal = document.getElementById('joinFriendsModal');
                 if (modal) modal.style.display = 'none';
+                if (typeof gameRunning !== 'undefined' && gameRunning && gameMode === 'training') {
+                    window.joinTrainingRoomByCode(raw);
+                    return;
+                }
                 gameMode = 'training';
                 if (typeof originalStartGame === 'function') {
                     originalStartGame();
@@ -60747,7 +61047,7 @@
                 });
                 setTimeout(() => {
                     if (!ackHandled) proceedJoin();
-                }, 250);
+                }, 220);
             } else {
                 proceedJoin();
             }

@@ -640,7 +640,14 @@ class GameRoom {
     player.lastUpdate = now;
 
     if (typeof data.heroType === 'string' && data.heroType && String(data.heroType).toLowerCase() !== 'dayum') {
+      const prevHero = player.heroType;
       player.heroType = data.heroType;
+      if (this.mode === 'training' && prevHero !== data.heroType) {
+        const newBaseHp = getHeroBaseHp(data.heroType);
+        player.maxHp = Math.min(SERVER_MAX_HP, newBaseHp);
+        player.hp = player.maxHp;
+        player.lastClientReportedHp = player.maxHp;
+      }
     }
     if (typeof data.color === 'string' && data.color) {
       player.color = data.color;
@@ -904,28 +911,48 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Legacy/direct room join support (used by MultiplayerManager.joinGame)
+  // Legacy/direct room join support (used by MultiplayerManager.joinGame and Training Lab fallback)
   socket.on('joinGame', (data) => {
     const roomId = (data && data.roomId) || `ffa-${Date.now()}`;
-    const mode = ((data && data.gameMode) || 'ffa').replace('_online', '');
+    const isTrainingRoom = String(roomId).startsWith('training-') || (data && data.gameMode === 'training');
+    const mode = isTrainingRoom ? 'training' : ((data && data.gameMode) || 'ffa').replace('_online', '');
+    let existingRoom = gameRooms.get(roomId);
+    if (isTrainingRoom && existingRoom && existingRoom.players.has(socket.id)) {
+      // Already registered by createTrainingInviteRoom / joinTrainingInviteRoom
+      return;
+    }
+    if (isTrainingRoom) {
+      leaveAllExistingRoomsForSocket(socket);
+    }
     let room = gameRooms.get(roomId);
     if (!room) {
-      room = new GameRoom(roomId, 10, mode);
+      room = new GameRoom(roomId, isTrainingRoom ? 4 : 10, mode);
+      if (isTrainingRoom) {
+        room.worldSize = 2000;
+        room.inviteCode = (data && data.inviteCode) || String(roomId).replace(/^training-/, '');
+        room.friendlyFire = !!(data && data.friendlyFire);
+      }
       room.combatReadyAt = Date.now();
       gameRooms.set(roomId, room);
     }
+    if (isTrainingRoom && room.getPlayerCount() >= 4 && !room.players.has(socket.id)) {
+      return;
+    }
     socket.join(roomId);
     const idx = room.getPlayerCount();
-    const spawnX = 500 + (idx % 5) * 800;
-    const spawnY = 500 + Math.floor(idx / 5) * 800;
+    const spawnX = isTrainingRoom ? (500 + (idx % 4) * 140) : (500 + (idx % 5) * 800);
+    const spawnY = isTrainingRoom ? 1000 : (500 + Math.floor(idx / 5) * 800);
     room.addPlayer(socket.id, {
       name: (data && data.playerName) || 'Player',
       heroType: (data && data.heroType) || 'paul',
+      currentSkin: (data && data.currentSkin) || 'default',
       x: spawnX,
       y: spawnY,
+      team: isTrainingRoom ? (room.friendlyFire ? (idx + 1) : 1) : undefined,
       assignedIndex: idx
     });
     if (!room.gameRunning) room.startGameLoop();
+    room.broadcastGameState();
 
     const playersMap = {};
     for (let [sid, p] of room.players) {
@@ -938,6 +965,14 @@ io.on('connection', (socket) => {
       playerCount: room.getPlayerCount(),
       players: playersMap
     });
+    if (isTrainingRoom) {
+      io.to(roomId).emit('trainingRoomState', {
+        inviteCode: room.inviteCode || String(roomId).replace(/^training-/, ''),
+        playerCount: room.getPlayerCount(),
+        maxPlayers: 4,
+        friendlyFire: !!room.friendlyFire
+      });
+    }
   });
 
 
@@ -1152,11 +1187,11 @@ io.on('connection', (socket) => {
     const { room } = findPlayerRoom(socket.id);
     if (room && room.players.has(socket.id)) {
       const rp = room.players.get(socket.id);
-      if (data.heroType && (!room.gameRunning || !rp.lastDamagedAt)) {
+      if (data.heroType && (room.mode === 'training' || !room.gameRunning || !rp.lastDamagedAt)) {
         rp.heroType = data.heroType;
         const baseHp = getHeroBaseHp(data.heroType);
         rp.maxHp = baseHp;
-        if (!room.gameRunning && !rp.lastDamagedAt) {
+        if (room.mode === 'training' || (!room.gameRunning && !rp.lastDamagedAt)) {
           rp.hp = baseHp;
           rp.lastClientReportedHp = baseHp;
         }
@@ -1429,7 +1464,22 @@ io.on('connection', (socket) => {
     });
 
     if (victim.hp <= 0 && prevHp > 0 && !vivalRevivedNow) {
-      playerRoom.checkVictoryAfterDeath(victim);
+      if (playerRoom.mode === 'training') {
+        victim.hp = victim.maxHp;
+        victim.lastClientReportedHp = victim.maxHp;
+        io.to(roomId).emit('playerRespawned', {
+          playerId: victim.socketId,
+          socketId: victim.socketId,
+          hp: victim.hp,
+          maxHp: victim.maxHp,
+          shield: victim.shield || 0,
+          maxShield: victim.maxShield || 0,
+          x: victim.x,
+          y: victim.y
+        });
+      } else {
+        playerRoom.checkVictoryAfterDeath(victim);
+      }
     }
   });
 
@@ -1483,11 +1533,18 @@ io.on('connection', (socket) => {
         forcedPush: true
       });
     }
+    if (eff.type === 'heal') {
+      const healAmt = Math.min(victim.maxHp, Math.max(0, Math.round(Number(eff.value) || 0)));
+      if (healAmt > 0 && victim.hp > 0) {
+        victim.hp = Math.min(victim.maxHp, victim.hp + healAmt);
+        victim.lastClientReportedHp = victim.hp;
+      }
+    }
     if (victim.isBot) {
       if (eff.type === 'stun' || eff.type === 'freeze' || eff.type === 'fightingTimer' || eff.type === 'movementLockdownTimer') {
         const durMs = Math.max(0, (Number(eff.value) || 0) * 1000);
         victim.stunUntil = Math.max(victim.stunUntil || 0, now + durMs);
-      } else if (eff.type === 'slow') {
+      } else if (eff.type === 'slow' || eff.type === 'bransonSlow') {
         const durMs = Math.max(0, (Number(eff.value) || 0) * 1000);
         victim.slowUntil = Math.max(victim.slowUntil || 0, now + durMs);
       }
@@ -1570,6 +1627,13 @@ io.on('connection', (socket) => {
           room.stopGameLoop();
           gameRooms.delete(roomId);
           console.log(`🗑️ Deleted room ${roomId} (no human players remaining)`);
+        } else if (room.mode === 'training') {
+          io.to(roomId).emit('trainingRoomState', {
+            inviteCode: room.inviteCode || String(roomId).replace(/^training-/, ''),
+            playerCount: room.getPlayerCount(),
+            maxPlayers: 4,
+            friendlyFire: !!room.friendlyFire
+          });
         } else if (aliveNow.length === 1) {
           const winner = aliveNow[0];
           console.log(`🏆 Winner in room ${roomId} due to disconnect: ${winner.name} (${winner.socketId})`);
