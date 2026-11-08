@@ -62878,13 +62878,13 @@ if (typeof module !== 'undefined' && module.exports) {
             {
                 id: 'masked_fools', name: 'Masked Fools', category: 'ATTACK', icon: '🎭', cost: 650,
                 statsText: 'x1.15 Damage, +150 Health',
-                passiveText: 'Using abilities hallucinates enemies hit (4s CD); deal +10% extra damage to hallucinated enemies.',
+                passiveText: 'Using abilities hallucinates enemies hit (5s CD); deal +8% extra damage to hallucinated enemies.',
                 stats: { dmgMult: 1.15, hp: 150 }
             },
             {
                 id: 'death_knife', name: 'Death Knife', category: 'ATTACK', icon: '🗡️', cost: 600,
                 statsText: '+5% Damage, +20% Basic Attack Speed',
-                passiveText: 'Basic attacks deal +20% bonus damage to low-health targets (<40% HP).',
+                passiveText: 'Basic attacks deal +15% bonus damage to low-health targets (<35% HP).',
                 stats: { dmgPct: 0.05, atkSpd: 0.20 }
             },
             {
@@ -62902,7 +62902,7 @@ if (typeof module !== 'undefined' && module.exports) {
             {
                 id: 'the_lost_wanderer', name: 'The Lost Wanderer', category: 'ATTACK', icon: '🧥', cost: 680,
                 statsText: '+10% Attack Speed, x1.05 Damage, +200 Health',
-                passiveText: 'Out of combat for 5s grants x1.2 movement speed and invisibility until you take damage or use an attack.',
+                passiveText: 'Out of combat for 6s grants x1.1 movement speed and invisibility until you take damage or use an attack.',
                 stats: { atkSpd: 0.10, dmgMult: 1.05, hp: 200 }
             },
             {
@@ -62914,7 +62914,7 @@ if (typeof module !== 'undefined' && module.exports) {
             {
                 id: 'neon_saber', name: 'NEON Saber', category: 'ATTACK', icon: '⚡', cost: 720,
                 statsText: 'x1.1 Damage, x1.1 Movement Speed',
-                passiveText: 'Hitting an enemy triggers Electro, dealing +50% of the attack damage (Basic: 3s CD, Abilities: 6.5s CD).',
+                passiveText: 'Hitting an enemy triggers Electro, dealing +35% of the attack damage (Basic: 3s CD, Abilities: 7s CD).',
                 stats: { dmgMult: 1.10, spdMult: 1.10 }
             },
             {
@@ -62926,7 +62926,7 @@ if (typeof module !== 'undefined' && module.exports) {
             {
                 id: 'a_legend_reborn', name: 'A Legend Reborn', category: 'ATTACK', icon: '🦅', cost: 800,
                 statsText: '+300 Health, +5% Cooldown Speed, +10% Attack Speed',
-                passiveText: 'When your HP drops to 1, you do not die and stay invincible for 1.5s (40s CD).',
+                passiveText: 'When your HP drops to 1, you do not die and stay invincible for 1s (55s CD).',
                 stats: { hp: 300, cdr: 0.05, atkSpd: 0.10 }
             },
             {
@@ -62938,7 +62938,7 @@ if (typeof module !== 'undefined' && module.exports) {
             {
                 id: 'doomscroller', name: 'Doomscroller', category: 'ATTACK', icon: '📱', cost: 700,
                 statsText: '+8% Damage, +8% Attack Speed',
-                passiveText: 'Basic attacks build "doom stacks" on enemies (max 10). At 10 stacks, target suffers a 3s "doomscroll"—taking 2% max HP true damage/s and distorting their health bar (12s CD/target).',
+                passiveText: 'Basic attacks build "doom stacks" on enemies (max 10). At 10 stacks, target suffers a 3s "doomscroll"—taking 1.5% max HP true damage/s and distorting their health bar (12s CD/target).',
                 stats: { dmgPct: 0.08, atkSpd: 0.08 }
             },
             {
@@ -62950,7 +62950,7 @@ if (typeof module !== 'undefined' && module.exports) {
             {
                 id: 'lag_switch', name: 'Lag Switch', category: 'ATTACK', icon: '📡', cost: 660,
                 statsText: '+12% Attack Speed, +4% Damage',
-                passiveText: 'Hitting the same enemy 3 times in a row rubberbands their next ability/basic attack—delayed by 0.8s and dealing 30% reduced damage (7s CD).',
+                passiveText: 'Hitting the same enemy 3 times in a row rubberbands their next ability/basic attack—delayed by 0.5s and dealing 20% reduced damage (8s CD).',
                 stats: { atkSpd: 0.12, dmgPct: 0.04 }
             },
             {
@@ -62970,7 +62970,7 @@ if (typeof module !== 'undefined' && module.exports) {
             {
                 id: 'titans_downfall', name: "Titan's Downfall", category: 'DEFENSE', icon: '🛡️', cost: 720,
                 statsText: '+500 Health, +10% Defense',
-                passiveText: 'When HP drops below 20%, grants a shield wave worth 30% of max HP that decays after 3s (30s CD).',
+                passiveText: 'When HP drops below 20%, grants a shield wave worth 20% of max HP that decays after 3s (40s CD).',
                 stats: { hp: 500, def: 0.10 }
             },
             {
@@ -63006,7 +63006,7 @@ if (typeof module !== 'undefined' && module.exports) {
             {
                 id: 'crash_test_dummy', name: 'Crash Test Dummy', category: 'DEFENSE', icon: '🤖', cost: 820,
                 statsText: '+500 Health, +5% Cooldown Speed',
-                passiveText: 'Upon taking fatal damage, survive at 1 HP, become untargetable for 1s, and gain +40% movement speed for 2s (50s CD).',
+                passiveText: 'Upon taking fatal damage, survive at 1 HP, become untargetable for 0.75s, and gain +25% movement speed for 2s (65s CD).',
                 stats: { hp: 500, cdr: 0.05 }
             },
             {
@@ -63018,7 +63018,7 @@ if (typeof module !== 'undefined' && module.exports) {
             {
                 id: 'the_sponge', name: 'The Sponge', category: 'DEFENSE', icon: '🧽', cost: 650,
                 statsText: '+550 Health',
-                passiveText: '10% of all damage taken is stored as "absorbed mass" (max 200); your next basic attack consumes it to heal you for that amount.',
+                passiveText: '10% of all damage taken is stored as "absorbed mass" (max 150); your next basic attack consumes it to heal you for that amount.',
                 stats: { hp: 550 }
             },
             {
@@ -63042,7 +63042,7 @@ if (typeof module !== 'undefined' && module.exports) {
             {
                 id: 'backup_drive', name: 'Backup Drive', category: 'DEFENSE', icon: '💾', cost: 780,
                 statsText: '+450 Health, +6% Cooldown Speed',
-                passiveText: 'On death, deploys a "backup" marker for 8s; if an ally stands on it for 2s (or self-restores in solo modes), revive with 40% HP (90s CD, once per game).',
+                passiveText: 'On death, deploys a "backup" marker for 8s; if an ally stands on it for 2s (or self-restores in solo modes), revive with 30% HP (100s CD, once per game).',
                 stats: { hp: 450, cdr: 0.06 }
             },
             {
@@ -63095,7 +63095,7 @@ if (typeof module !== 'undefined' && module.exports) {
         function isEconomyModeActive() {
             if (typeof gameRunning !== 'undefined' && !gameRunning) return false;
             const gm = (typeof gameMode !== 'undefined' && gameMode) ? String(gameMode) : '';
-            return gm === 'equipment_ffa';
+            return gm === 'equipment_ffa' || gm === '5v5' || gm === '5v5_online';
         }
 
         window._equipmentFFAUnlocked = !!window._equipmentFFAUnlocked;
@@ -63285,13 +63285,13 @@ if (typeof module !== 'undefined' && module.exports) {
                 res.cdr += 0.05;
             }
             if (hasEquip(ent, 'the_lost_wanderer') && st.wandererStealth) {
-                res.spdMult *= 1.20;
+                res.spdMult *= 1.10;
             }
             if (st.racingSpeedTimer > 0) {
                 res.spdMult *= 1.20;
             }
             if (st.crashDummySpeedTimer > 0) {
-                res.spdPct += 0.40;
+                res.spdPct += 0.25;
             }
             if (st.ggwpBuffTimer > 0) {
                 res.atkSpd += 0.10;
@@ -63358,11 +63358,11 @@ if (typeof module !== 'undefined' && module.exports) {
 
             // Lag Switch rubberband penalty on ability cast
             if (st.rubberbandBasicLock > 0) {
-                if (slot === 'q') ent.qCD = (ent.qCD || 0) + 0.8;
-                if (slot === 'e') ent.eCD = (ent.eCD || 0) + 0.8;
-                if (slot === 'f') ent.fCD = (ent.fCD || 0) + 0.8;
+                if (slot === 'q') ent.qCD = (ent.qCD || 0) + 0.5;
+                if (slot === 'e') ent.eCD = (ent.eCD || 0) + 0.5;
+                if (slot === 'f') ent.fCD = (ent.fCD || 0) + 0.5;
                 st.rubberbandBasicLock = 0;
-                if (ent.isPlayer) addKillMsg('📡 Rubberbanded! Ability delayed +0.8s');
+                if (ent.isPlayer) addKillMsg('📡 Rubberbanded! Ability delayed +0.5s');
             }
 
             // 3. Eternal Hell: burn own health (2s, 50/s, stackable) & heal 6% of lost health
@@ -63478,7 +63478,7 @@ if (typeof module !== 'undefined' && module.exports) {
                         m *= 1.25;
                     }
                     if (st.rubberbandWeakNextTimer > 0) {
-                        m *= 0.70;
+                        m *= 0.80;
                     }
                 }
                 return m;
@@ -63573,7 +63573,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     st.lastCombatAt = Date.now();
                     st.wandererStealth = false;
                     if (st.rubberbandBasicLock > 0) {
-                        this.basicCD += 0.8;
+                        this.basicCD += 0.5;
                         st.rubberbandBasicLock = 0;
                     }
                     // The Sponge: next basic attack consumes absorbed mass to heal
@@ -63633,7 +63633,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
                 // The Lost Wanderer: out of combat for 5s -> x1.2 speed & invisibility
                 if (hasEquip(this, 'the_lost_wanderer')) {
-                    if ((Date.now() - st.lastCombatAt) >= 5000 && (Date.now() - st.lastDamageTakenAt) >= 5000) {
+                    if ((Date.now() - st.lastCombatAt) >= 6000 && (Date.now() - st.lastDamageTakenAt) >= 6000) {
                         st.wandererStealth = true;
                     } else {
                         st.wandererStealth = false;
@@ -63726,7 +63726,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     if (st.doomscrollTickAccum >= 0.25) {
                         const ticks = Math.floor(st.doomscrollTickAccum / 0.25);
                         st.doomscrollTickAccum -= ticks * 0.25;
-                        const trueTick = Math.max(1, (this.maxHp || 1000) * 0.02 * 0.25 * ticks);
+                        const trueTick = Math.max(1, (this.maxHp || 1000) * 0.015 * 0.25 * ticks);
                         this.takeDamage(trueTick, st.doomscrollAttacker || null, { isTrue: true, ignoreKnockback: true, fromEquipmentPassive: true });
                     }
                 }
@@ -63801,21 +63801,21 @@ if (typeof module !== 'undefined' && module.exports) {
 
                 // --- OFFENSIVE EQUIPMENT PASSIVES ON HIT ---
                 if (attackerHero && attackerHero instanceof Entity && attackerHero !== this && attackerHero.team !== this.team && atkSt) {
-                    // 1. Masked Fools: abilities hallucinate enemies hit (4s CD); +10% damage to hallucinated enemies
+                    // 1. Masked Fools: abilities hallucinate enemies hit (5s CD); +8% damage to hallucinated enemies
                     if (hasEquip(attackerHero, 'masked_fools')) {
                         if (this.hallucinationTimer > 0) {
-                            modifiedAmt *= 1.10;
+                            modifiedAmt *= 1.08;
                         }
                         if (isAbilityHit && getEquipCD(attackerHero, 'masked_fools') <= 0) {
-                            safeApplyStatus(this, 'hallucinationTimer', 2.5, attackerHero);
-                            setEquipCD(attackerHero, 'masked_fools', 4.0);
+                            safeApplyStatus(this, 'hallucinationTimer', 2.2, attackerHero);
+                            setEquipCD(attackerHero, 'masked_fools', 5.0);
                         }
                     }
 
-                    // 2. Death Knife: basic attacks deal +20% bonus damage to targets below 40% HP
+                    // 2. Death Knife: basic attacks deal +15% bonus damage to targets below 35% HP
                     if (hasEquip(attackerHero, 'death_knife') && isBasicHit) {
-                        if ((this.hp / Math.max(1, this.maxHp || 1)) < 0.40) {
-                            modifiedAmt *= 1.20;
+                        if ((this.hp / Math.max(1, this.maxHp || 1)) < 0.35) {
+                            modifiedAmt *= 1.15;
                         }
                     }
 
@@ -63825,13 +63825,13 @@ if (typeof module !== 'undefined' && module.exports) {
                         setEquipCD(attackerHero, 'steel_breaker', 6.0);
                     }
 
-                    // 7. NEON Saber: Electro deals +50% of attack's damage (Basic: 3s CD, Abilities: 6.5s CD)
+                    // 7. NEON Saber: Electro deals +35% of attack's damage (Basic: 3s CD, Abilities: 7s CD)
                     if (hasEquip(attackerHero, 'neon_saber')) {
                         const cdKey = isAbilityHit ? 'neon_saber_ability' : 'neon_saber_basic';
-                        const cdDur = isAbilityHit ? 6.5 : 3.0;
+                        const cdDur = isAbilityHit ? 7.0 : 3.0;
                         if (getEquipCD(attackerHero, cdKey) <= 0) {
                             setEquipCD(attackerHero, cdKey, cdDur);
-                            const electroBonus = modifiedAmt * 0.50;
+                            const electroBonus = modifiedAmt * 0.35;
                             modifiedAmt += electroBonus;
                             effectsAdd(new ImpactFlash(this.x, this.y, 0, 75, 0.22, '#38bdf8'));
                         }
@@ -63900,7 +63900,7 @@ if (typeof module !== 'undefined' && module.exports) {
                             atkSt.consecutiveHits = 0;
                             defSt.rubberbandBasicLock = 3.0;
                             defSt.rubberbandWeakNextTimer = 3.0;
-                            setEquipCD(attackerHero, 'lag_switch', 7.0);
+                            setEquipCD(attackerHero, 'lag_switch', 8.0);
                             if (attackerHero.isPlayer) addKillMsg(`📡 Lag Switch rubberbanded ${this.name || 'Enemy'}!`);
                         }
                     }
@@ -64001,7 +64001,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
                     // 9. The Sponge: 10% of all damage taken is stored as absorbed mass (max 200)
                     if (hasEquip(this, 'the_sponge')) {
-                        defSt.absorbedMass = Math.min(200, (defSt.absorbedMass || 0) + modifiedAmt * 0.10);
+                        defSt.absorbedMass = Math.min(150, (defSt.absorbedMass || 0) + modifiedAmt * 0.10);
                     }
 
                     // 6. Lag Armor: 20% of damage taken is delayed over 2s
@@ -64032,29 +64032,29 @@ if (typeof module !== 'undefined' && module.exports) {
                     if (this.hp <= 1.5 && (legendReady || crashReady)) {
                         if (crashReady) {
                             this.hp = 1;
-                            this.invulnerableTimer = Math.max(this.invulnerableTimer || 0, 1.0);
-                            this.invincibleTimer = Math.max(this.invincibleTimer || 0, 1.0);
+                            this.invulnerableTimer = Math.max(this.invulnerableTimer || 0, 0.75);
+                            this.invincibleTimer = Math.max(this.invincibleTimer || 0, 0.75);
                             defSt.crashDummySpeedTimer = 2.0;
-                            setEquipCD(this, 'crash_test_dummy', 50.0);
-                            if (this.isPlayer) addKillMsg('🤖 CRASH TEST DUMMY: Survived at 1 HP + Untargetable!');
+                            setEquipCD(this, 'crash_test_dummy', 65.0);
+                            if (this.isPlayer) addKillMsg('🤖 CRASH TEST DUMMY: Survived at 1 HP + Untargetable (0.75s)!');
                         } else if (legendReady) {
                             this.hp = 1;
-                            this.invincibleTimer = Math.max(this.invincibleTimer || 0, 1.5);
-                            this.invincibleLockTimer = Math.max(this.invincibleLockTimer || 0, 1.5);
-                            setEquipCD(this, 'a_legend_reborn', 40.0);
-                            if (this.isPlayer) addKillMsg('🦅 A LEGEND REBORN: Invincible for 1.5s!');
+                            this.invincibleTimer = Math.max(this.invincibleTimer || 0, 1.0);
+                            this.invincibleLockTimer = Math.max(this.invincibleLockTimer || 0, 1.0);
+                            setEquipCD(this, 'a_legend_reborn', 55.0);
+                            if (this.isPlayer) addKillMsg('🦅 A LEGEND REBORN: Invincible for 1s!');
                         }
                     }
 
-                    // 1. Titan's Downfall: when HP < 20%, grant 30% max HP shield wave that decays after 3s (30s CD)
+                    // 1. Titan's Downfall: when HP < 20%, grant 20% max HP shield wave that decays after 3s (40s CD)
                     if (hasEquip(this, 'titans_downfall') && hpRatioAfter > 0 && hpRatioAfter < 0.20 && getEquipCD(this, 'titans_downfall') <= 0) {
-                        const shieldWave = Math.round((this.maxHp || 1000) * 0.30);
+                        const shieldWave = Math.round((this.maxHp || 1000) * 0.20);
                         this.shield = (this.shield || 0) + shieldWave;
                         defSt.titanShieldRemaining = shieldWave;
                         defSt.titanShieldDelayTimer = 3.0;
-                        setEquipCD(this, 'titans_downfall', 30.0);
+                        setEquipCD(this, 'titans_downfall', 40.0);
                         effectsAdd(new WaveShockwave(this.x, this.y, 180, 0.45, '#38bdf8', '#facc15'));
-                        if (this.isPlayer) addKillMsg("🛡️ TITAN'S DOWNFALL: +30% Max HP Shield!");
+                        if (this.isPlayer) addKillMsg("🛡️ TITAN'S DOWNFALL: +20% Max HP Shield!");
                     }
 
                     // 10. Debug Barrier: when HP < 30%, gain 200 shield + 40 HP/s for 3s (25s CD)
@@ -64068,7 +64068,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
                 // Active Combat Cash Reward for dealing damage to enemy heroes/dummies
                 const actualDealt = Math.max(0, (hpBefore - Math.max(0, this.hp)) + (shieldBefore - Math.max(0, this.shield || 0)));
-                if (actualDealt > 0 && attackerHero && attackerHero instanceof Entity && attackerHero !== this && attackerHero.team !== this.team && (this.countsAsFFAHero || this.isTrainingDummy)) {
+                if (actualDealt > 0 && attackerHero && attackerHero instanceof Entity && attackerHero !== this && attackerHero.team !== this.team && (this.countsAsFFAHero || this.isTrainingDummy || this instanceof DefenseTower || this instanceof MainTower || (typeof LaneMinion !== 'undefined' && this instanceof LaneMinion))) {
                     const dmgCash = Math.max(2, Math.min(45, Math.round(actualDealt / 18)));
                     awardBattleCash(attackerHero, dmgCash, '');
                 }
@@ -64091,7 +64091,13 @@ if (typeof module !== 'undefined' && module.exports) {
                     if (killerHero && killerHero instanceof Entity && killerHero !== this && killerHero.team !== this.team) {
                         const kSt = ensureEntityEquipState(killerHero);
                         // Kill Bounty Cash
-                        awardBattleCash(killerHero, 220, 'Kill Bounty');
+                        if (this.countsAsFFAHero || this.isTrainingDummy) {
+                            awardBattleCash(killerHero, 220, 'Hero Elimination');
+                        } else if (this instanceof DefenseTower || this instanceof MainTower) {
+                            awardBattleCash(killerHero, 350, 'Tower Destroyed');
+                        } else if (typeof LaneMinion !== 'undefined' && this instanceof LaneMinion) {
+                            awardBattleCash(killerHero, 45, 'Minion Kill');
+                        }
 
                         // Lag Armor: killing an enemy cancels all remaining delayed damage
                         if (kSt && hasEquip(killerHero, 'lag_armor')) {
@@ -64140,7 +64146,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     // 13. Backup Drive: leaves a backup marker for 8s; if an ally stands on it for 2s (or self-backup in solo/FFA modes), revive with 40% HP (once per game, 90s CD)
                     if (mySt && hasEquip(this, 'backup_drive') && !mySt.backupUsedThisGame && getEquipCD(this, 'backup_drive') <= 0) {
                         mySt.backupUsedThisGame = true;
-                        setEquipCD(this, 'backup_drive', 90.0);
+                        setEquipCD(this, 'backup_drive', 100.0);
                         if (!window._backupDriveMarkers) window._backupDriveMarkers = [];
                         window._backupDriveMarkers.push({
                             owner: this,
@@ -64246,7 +64252,8 @@ if (typeof module !== 'undefined' && module.exports) {
             }
 
             // 0. Scattered Ground Coins in Equipment FFA (spawn after a short while; collect by wandering or fighting)
-            if (!window._equipmentFFACoins) window._equipmentFFACoins = [];
+            if (typeof gameMode !== 'undefined' && gameMode === 'equipment_ffa') {
+                if (!window._equipmentFFACoins) window._equipmentFFACoins = [];
             if (typeof window._equipFFACoinTimer !== 'number') window._equipFFACoinTimer = -3.0; // wait 3s after match start before scattering coins
             window._equipFFACoinTimer += dt;
             if (window._equipFFACoinTimer >= 1.4) {
@@ -64345,6 +64352,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     }
                 }
             }
+            }
 
             // 2. Backup Drive Markers
             if (window._backupDriveMarkers && window._backupDriveMarkers.length > 0) {
@@ -64372,12 +64380,12 @@ if (typeof module !== 'undefined' && module.exports) {
                     if (m.channelProgress >= 2.0) {
                         const u = m.owner;
                         u.dead = false;
-                        u.hp = Math.round((u.maxHp || 1000) * 0.40);
+                        u.hp = Math.round((u.maxHp || 1000) * 0.30);
                         u.x = m.x;
                         u.y = m.y;
                         if (!entities.includes(u)) entities.push(u);
                         effectsAdd(new WaveShockwave(u.x, u.y, 180, 0.5, '#22c55e', '#38bdf8'));
-                        if (u.isPlayer) addKillMsg('💾 BACKUP RESTORED! Revived at 40% HP!');
+                        if (u.isPlayer) addKillMsg('💾 BACKUP RESTORED! Revived at 30% HP!');
                         window._backupDriveMarkers.splice(i, 1);
                         continue;
                     }
