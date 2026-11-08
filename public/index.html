@@ -63078,9 +63078,7 @@ if (typeof module !== 'undefined' && module.exports) {
         function isEconomyModeActive() {
             if (typeof gameRunning !== 'undefined' && !gameRunning) return false;
             const gm = (typeof gameMode !== 'undefined' && gameMode) ? String(gameMode) : '';
-            if (!gm) return false;
-            if (gm === '1v1' || gm === 'duel_online' || gm === 'solo_levelling') return false;
-            return true;
+            return gm === 'training';
         }
         window.isEconomyModeActive = isEconomyModeActive;
 
@@ -63089,7 +63087,7 @@ if (typeof module !== 'undefined' && module.exports) {
             if (!ent._equipState) {
                 ent._equipState = {
                     items: [], // max 6 equipment IDs
-                    cash: ent.isPlayer ? 600 : 600,
+                    cash: ent.isPlayer ? 300 : 300,
                     appliedMaxHpBonus: 0,
                     cooldowns: {}, // item.id -> remaining cooldown
                     targetCDs: {}, // item_id + target_id -> timestamp
@@ -64258,37 +64256,39 @@ if (typeof module !== 'undefined' && module.exports) {
             styleEl.textContent = `
                 #shopBtnInGame {
                     position: fixed;
-                    top: 18px;
-                    right: 20px;
-                    height: 44px;
-                    padding: 0 16px;
+                    left: 14px;
+                    top: calc(50% - 34px);
+                    transform: translateY(-50%);
+                    height: 42px;
+                    padding: 0 14px;
                     border-radius: 12px;
                     background: linear-gradient(135deg, rgba(15, 23, 42, 0.94) 0%, rgba(30, 41, 59, 0.94) 100%);
                     color: #f8fafc;
                     border: 1.5px solid rgba(250, 204, 21, 0.65);
-                    font-size: 14px;
+                    font-size: 13px;
                     font-weight: 800;
                     cursor: pointer;
                     z-index: 1205;
                     display: none;
                     align-items: center;
-                    gap: 10px;
+                    gap: 9px;
                     box-shadow: 0 8px 24px rgba(2, 6, 23, 0.6), 0 0 14px rgba(250, 204, 21, 0.22);
                     backdrop-filter: blur(8px);
                     transition: transform 0.15s ease, border-color 0.15s ease;
                 }
                 #shopBtnInGame:hover {
-                    transform: translateY(-2px);
+                    transform: translateY(calc(-50% - 2px));
                     border-color: #facc15;
                 }
                 #hudEquipBar {
                     position: fixed;
-                    top: 70px;
-                    right: 20px;
+                    left: 14px;
+                    top: calc(50% + 20px);
+                    transform: translateY(-50%);
                     display: none;
-                    gap: 6px;
+                    gap: 5px;
                     z-index: 1200;
-                    background: rgba(15, 23, 42, 0.78);
+                    background: rgba(15, 23, 42, 0.82);
                     padding: 6px 8px;
                     border-radius: 10px;
                     border: 1px solid rgba(148, 163, 184, 0.28);
@@ -64404,7 +64404,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
             const btn = document.createElement('button');
             btn.id = 'shopBtnInGame';
-            btn.innerHTML = '<span>🛒 SHOP [B]</span><span id="shopBtnCashText" style="color:#fde047;">💰 600</span>';
+            btn.innerHTML = '<span>🛒 SHOP [B]</span><span id="shopBtnCashText" style="color:#fde047;">💰 300</span>';
             btn.onclick = (e) => {
                 e.stopPropagation();
                 toggleEquipmentShopModal();
@@ -64432,7 +64432,7 @@ if (typeof module !== 'undefined' && module.exports) {
                             <div style="font-size:12px;color:#94a3b8;margin-top:2px;">Earn Cash by dealing combat damage, getting kills (+220), and assists (+110)!</div>
                         </div>
                         <div style="display:flex;align-items:center;gap:14px;">
-                            <div id="shopModalCashDisplay" style="font-size:18px;font-weight:900;color:#fde047;background:rgba(250,204,21,0.12);padding:6px 14px;border-radius:10px;border:1px solid rgba(250,204,21,0.4);">💰 600</div>
+                            <div id="shopModalCashDisplay" style="font-size:18px;font-weight:900;color:#fde047;background:rgba(250,204,21,0.12);padding:6px 14px;border-radius:10px;border:1px solid rgba(250,204,21,0.4);">💰 300</div>
                             <button id="shopTrainingGrantBtn" style="display:none;padding:7px 12px;border-radius:8px;background:#0ea5e9;color:#fff;font-weight:800;border:none;cursor:pointer;" onclick="grantTrainingTestCash()">+2000 Cash (Lab)</button>
                             <button style="padding:7px 14px;border-radius:8px;background:#ef4444;color:#fff;font-weight:800;border:none;cursor:pointer;" onclick="toggleEquipmentShopModal(false)">✕ CLOSE</button>
                         </div>
