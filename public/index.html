@@ -1209,6 +1209,13 @@
                         <span class="mode-stat-pill" id="card-playing-solo_levelling">⏳ Coming Soon</span>
                     </div>
                 </div>
+                <div class="mode-card" id="modeCardEquipmentFFA" data-mode="equipment_ffa" onclick="selectGameMode('equipment_ffa')" style="opacity: 0.65; cursor: not-allowed; border-color: #64748b;">
+                    <div class="mode-card-title"><span>EQUIPMENT FFA</span><span class="mode-tag" style="background: rgba(245, 158, 11, 0.22); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.45);">COMING SOON</span></div>
+                    <p class="mode-card-sub" id="modeSubEquipmentFFA">COMING SOON</p>
+                    <div class="mode-card-live-stats">
+                        <span class="mode-stat-pill" id="card-playing-equipment_ffa">⏳ Coming Soon</span>
+                    </div>
+                </div>
             </div>
             <div class="map-selection">
                 <h2>SELECT MAP</h2>
@@ -5519,12 +5526,12 @@
         window._lastDestroyedMainTower = null;
 
         function isTeamSpectateMode() {
-            return gameMode === 'squad' || gameMode === '5v5' || gameMode === '5v5_online' || gameMode === 'ffa' || gameMode === 'ffa_online';
+            return gameMode === 'squad' || gameMode === '5v5' || gameMode === '5v5_online' || gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online';
         }
 
         function getAliveSquadTeammates() {
             if (!player) return [];
-            if (gameMode === 'ffa' || gameMode === 'ffa_online') {
+            if (gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online') {
                 return entities.filter(e =>
                     e &&
                     e instanceof Entity &&
@@ -5598,7 +5605,7 @@
                 }
                 return Math.max(2, proxyAlive + 1);
             }
-            if (gameMode === 'ffa') {
+            if (gameMode === 'ffa' || gameMode === 'equipment_ffa') {
                 const botsAlive = entities.filter(e => isCountedAsHero(e) && !e.isPlayer && !e.dead).length;
                 return Math.max(2, botsAlive + 1);
             }
@@ -9861,7 +9868,7 @@
                 }
                 
                 // Track death for FFA team modes (not in FFA/FFA_Online)
-                let isFFA = gameMode === 'ffa' || gameMode === 'ffa_online';
+                let isFFA = gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online';
                 if(!isFFA && this instanceof Entity) {
                     this.deaths++;
                 }
@@ -9966,7 +9973,7 @@
                     if (this.isPlayer && gameMode !== '5v5' && gameMode !== '5v5_online' && gameMode !== 'training') {
                         lockPlayerPlacementOnDeath();
                     }
-                    if(this.isPlayer && (gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'ffa_online')) {
+                    if(this.isPlayer && (gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online')) {
                         const aliveTargets = getAliveSquadTeammates();
                         if(aliveTargets.length > 0) {
                             window.spectateIndex = 0;
@@ -9976,9 +9983,9 @@
                         } else {
                             endGame(false);
                         }
-                    } else if(!this.isPlayer && (gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'ffa_online') && player && player.dead) {
+                    } else if(!this.isPlayer && (gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online') && player && player.dead) {
                         const aliveTargets = getAliveSquadTeammates();
-                        if ((gameMode === 'ffa' || gameMode === 'ffa_online') && aliveTargets.length <= 1) {
+                        if ((gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online') && aliveTargets.length <= 1) {
                             endGame(false);
                         } else if (gameMode === 'squad' && aliveTargets.length === 0) {
                             endGame(false);
@@ -37156,6 +37163,7 @@
             else if(selectedHeroType==='branson'){if(q)q.innerText='🎸';if(e)e.innerText='🎶';if(f)f.innerText='🎼';player=new Branson(WORLD_SIZE/2,WORLD_SIZE/2,true);}
             else player=new Paul(WORLD_SIZE/2,WORLD_SIZE/2,true);
             entities.push(player);
+            window._equipmentFFACoins=[]; window._equipFFACoinTimer=-3.0; window._trendingZones=[]; window._backupDriveMarkers=[];
             player.gear = selectedGear;
             // Apply selected skin for all heroes, including ones without a predeclared currentSkin property
             player.currentSkin = selectedSkins[selectedHeroType] || 'default';
@@ -37800,6 +37808,10 @@
                 if (!window._soloLevellingUnlocked) return;
                 gameMode = 'solo_levelling';
                 document.getElementById('modeTitle').innerText = 'SELECT YOUR HERO (Solo Levelling - COMING SOON)';
+            }else if(mode === 'equipment_ffa'){
+                if (!window._equipmentFFAUnlocked) return;
+                gameMode = 'equipment_ffa';
+                document.getElementById('modeTitle').innerText = 'SELECT YOUR HERO (Equipment FFA - COMING SOON)';
             }else{
                 gameMode = mode;
                 document.getElementById('modeTitle').innerText = mode === 'squad' ? 'SELECT YOUR HERO (Squad Mode)' : (mode === '5v5' ? 'SELECT YOUR HERO (5v5 Mode)' : (mode === 'training' ? 'SELECT YOUR HERO (Training)' : 'SELECT YOUR HERO'));
@@ -44101,7 +44113,7 @@
             let content = document.getElementById('leaderboardContent');
             if(!content) return;
             
-            let isFFA = gameMode === 'ffa' || gameMode === 'ffa_online';
+            let isFFA = gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online';
             let stats = [];
             
             // Collect all alive and dead entities that are heroes
@@ -48977,7 +48989,7 @@
                 return;
             }
             if(!player || player.dead) {
-                if (gameMode === 'ffa') {
+                if (gameMode === 'ffa' || gameMode === 'equipment_ffa') {
                     let remainingBots = entities.filter(e => isCountedAsHero(e) && !e.isPlayer && !e.dead).length;
                     if (remainingBots <= 1) endGame(false);
                 }
@@ -49001,6 +49013,8 @@
                 const sm = document.getElementById('equipmentShopModal'); if (sm) sm.style.display = 'none';
                 window._trendingZones = [];
                 window._backupDriveMarkers = [];
+                window._equipmentFFACoins = [];
+                window._equipFFACoinTimer = -3.0;
             } catch (_) {}
             if (opts && opts.immediateQuit) {
                 window.quitMatchImmediately();
@@ -51021,10 +51035,10 @@
                     let warning = document.getElementById('safeZoneWarning');
                     if((distToCenter > safeZoneRadius) && !gameMode.includes('online') && gameMode !== '1v1' && gameMode !== 'duel_online') warning.style.display = 'block';
                     else warning.style.display = 'none';
-                } else if (player && player.dead && (gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'ffa_online')) {
+                } else if (player && player.dead && (gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online')) {
                     const aliveTeammates = getAliveSquadTeammates();
-                    if (aliveTeammates.length === 0 || ((gameMode === 'ffa' || gameMode === 'ffa_online') && aliveTeammates.length <= 1 && !window._winSequence)) {
-                        if ((gameMode === 'ffa' || gameMode === 'ffa_online') && aliveTeammates.length === 1 && !window._ffaSpectateLastDelay) {
+                    if (aliveTeammates.length === 0 || ((gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online') && aliveTeammates.length <= 1 && !window._winSequence)) {
+                        if ((gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online') && aliveTeammates.length === 1 && !window._ffaSpectateLastDelay) {
                             window._ffaSpectateLastDelay = Date.now();
                         }
                         if (gameMode === 'squad' || aliveTeammates.length === 0 || (Date.now() - (window._ffaSpectateLastDelay || Date.now())) > 1200) {
@@ -52061,7 +52075,7 @@
                     if (quitBtnEl) {
                         const showQuit = gameRunning && !window._winSequence && (
                             gameMode === 'squad' ||
-                            ((gameMode === 'ffa' || gameMode === 'ffa_online') && player && player.dead)
+                            ((gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online') && player && player.dead)
                         );
                         quitBtnEl.style.display = showQuit ? 'block' : 'none';
                     }
@@ -52070,7 +52084,7 @@
                     if (gameMode === 'squad') {
                         drawTeammateHUD(CTX);
                     }
-                    if ((gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'ffa_online') && player && player.dead && !window._winSequence) {
+                    if ((gameMode === 'squad' || gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online') && player && player.dead && !window._winSequence) {
                         const aliveTeammates = getAliveSquadTeammates();
                         const spec = window.spectatedTeammate;
                         if (spec && !spec.dead && aliveTeammates.length > 0) {
@@ -55048,7 +55062,7 @@
                     }
                 }
             };
-            window.addEventListener('keydown',e=>{if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;const key=e.key.toLowerCase();window._secretHeldKeys.add(key);if(window._secretHeldKeys.has('m')&&window._secretHeldKeys.has('e')&&window._secretHeldKeys.has('c')&&window._secretHeldKeys.has('a')){window.unlockAndSelectMecca();}if(window._secretHeldKeys.has('i')&&window._secretHeldKeys.has('n')&&window._secretHeldKeys.has('o')&&window._secretHeldKeys.has('u')){window.unlockAndSelectInou();}if(window._secretHeldKeys.has('b')&&window._secretHeldKeys.has('r')&&window._secretHeldKeys.has('a')&&window._secretHeldKeys.has('n')&&window._secretHeldKeys.has('s')){window.unlockAndSelectBranson();}if(window._secretHeldKeys.has('b')&&window._secretHeldKeys.has('o')&&window._secretHeldKeys.has('s')){window.unlockSoloLevellingMode();}if(keys.hasOwnProperty(key))keys[key]=true;if(key==='r')activateUniversalGear(player);if(key==='t'&&typeof gameMode!=='undefined'&&gameMode==='training'){e.preventDefault();toggleTrainingPanel();}if(key==='l'&&typeof gameMode!=='undefined'&&gameMode==='training')switchTrainingDummy();if(key==='p'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCounter();if(key==='o'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCooldowns();if(e.key===' ')showLeaderboard();});
+            window.addEventListener('keydown',e=>{if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;const key=e.key.toLowerCase();window._secretHeldKeys.add(key);if(window._secretHeldKeys.has('m')&&window._secretHeldKeys.has('e')&&window._secretHeldKeys.has('c')&&window._secretHeldKeys.has('a')){window.unlockAndSelectMecca();}if(window._secretHeldKeys.has('i')&&window._secretHeldKeys.has('n')&&window._secretHeldKeys.has('o')&&window._secretHeldKeys.has('u')){window.unlockAndSelectInou();}if(window._secretHeldKeys.has('b')&&window._secretHeldKeys.has('r')&&window._secretHeldKeys.has('a')&&window._secretHeldKeys.has('n')&&window._secretHeldKeys.has('s')){window.unlockAndSelectBranson();}if(window._secretHeldKeys.has('b')&&window._secretHeldKeys.has('o')&&window._secretHeldKeys.has('s')){window.unlockSoloLevellingMode();}if(window._secretHeldKeys.has('f')&&window._secretHeldKeys.has('a')&&window._secretHeldKeys.has('5')&&window._secretHeldKeys.has('0')){window.unlockEquipmentFFAMode();}if(keys.hasOwnProperty(key))keys[key]=true;if(key==='r')activateUniversalGear(player);if(key==='t'&&typeof gameMode!=='undefined'&&gameMode==='training'){e.preventDefault();toggleTrainingPanel();}if(key==='l'&&typeof gameMode!=='undefined'&&gameMode==='training')switchTrainingDummy();if(key==='p'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCounter();if(key==='o'&&typeof gameMode!=='undefined'&&gameMode==='training')resetTrainingCooldowns();if(e.key===' ')showLeaderboard();});
             window.addEventListener('keyup',e=>{const k=e.key.toLowerCase();if(window._secretHeldKeys)window._secretHeldKeys.delete(k);if(keys.hasOwnProperty(k))keys[k]=false;if(e.key===' ')hideLeaderboard();});
             window.addEventListener('blur',()=>{if(window._secretHeldKeys)window._secretHeldKeys.clear();});
             const universalGearButton = document.getElementById('skillRBox');
@@ -60728,6 +60742,9 @@
                     if (mode === 'solo_levelling' && !window._soloLevellingUnlocked) {
                         return;
                     }
+                    if (mode === 'equipment_ffa' && !window._equipmentFFAUnlocked) {
+                        return;
+                    }
                     document.querySelectorAll('.mode-card').forEach(card => {
                         card.classList.toggle('active-mode', card.getAttribute('data-mode') === mode);
                     });
@@ -63078,8 +63095,46 @@ if (typeof module !== 'undefined' && module.exports) {
         function isEconomyModeActive() {
             if (typeof gameRunning !== 'undefined' && !gameRunning) return false;
             const gm = (typeof gameMode !== 'undefined' && gameMode) ? String(gameMode) : '';
-            return gm === 'training';
+            return gm === 'equipment_ffa';
         }
+
+        window._equipmentFFAUnlocked = !!window._equipmentFFAUnlocked;
+        window.unlockEquipmentFFAMode = function() {
+            const nowMs = Date.now();
+            if (window._lastEquipmentFFAUnlockAt && (nowMs - window._lastEquipmentFFAUnlockAt) < 800) return;
+            window._lastEquipmentFFAUnlockAt = nowMs;
+            window._equipmentFFAUnlocked = true;
+            const card = document.getElementById('modeCardEquipmentFFA');
+            if (card) {
+                card.style.opacity = '1';
+                card.style.cursor = 'pointer';
+                card.style.borderColor = '#eab308';
+                card.style.boxShadow = '0 0 18px rgba(234, 179, 8, 0.45)';
+            }
+            const sub = document.getElementById('modeSubEquipmentFFA');
+            if (sub) sub.textContent = 'Coins + 29 Equipments';
+            const pill = document.getElementById('card-playing-equipment_ffa');
+            if (pill) pill.textContent = '💰 Unlocked!';
+            if (typeof window.selectGameMode === 'function') {
+                window.selectGameMode('equipment_ffa');
+            } else {
+                gameMode = 'equipment_ffa';
+            }
+            let toast = document.getElementById('meccaSecretToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'meccaSecretToast';
+                toast.style.cssText = 'position:fixed;top:22px;left:50%;transform:translateX(-50%);z-index:999999;background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #eab308;box-shadow:0 0 24px rgba(234,179,8,0.55);color:#fff;padding:12px 24px;border-radius:10px;font-family:Inter,Arial,sans-serif;font-weight:800;font-size:15px;letter-spacing:0.6px;pointer-events:none;transition:opacity 0.35s;';
+                document.body.appendChild(toast);
+            }
+            toast.style.borderColor = '#eab308';
+            toast.innerHTML = '💰 <span style="color:#fde047;">EQUIPMENT FFA UNLOCKED:</span> <span style="color:#38bdf8;">SCATTERED COINS & 29 EQUIPMENTS</span> READY! ⚔️';
+            toast.style.opacity = '1';
+            clearTimeout(window._meccaToastTimer);
+            window._meccaToastTimer = setTimeout(() => {
+                if (toast) toast.style.opacity = '0';
+            }, 3400);
+        };
         window.isEconomyModeActive = isEconomyModeActive;
 
         function ensureEntityEquipState(ent) {
@@ -64186,6 +64241,107 @@ if (typeof module !== 'undefined' && module.exports) {
                         ctx.textAlign = 'center';
                         ctx.fillText('📸 #TRENDING (-20% SPD)', sx, sy - z.radius + 22);
                         ctx.restore();
+                    }
+                }
+            }
+
+            // 0. Scattered Ground Coins in Equipment FFA (spawn after a short while; collect by wandering or fighting)
+            if (!window._equipmentFFACoins) window._equipmentFFACoins = [];
+            if (typeof window._equipFFACoinTimer !== 'number') window._equipFFACoinTimer = -3.0; // wait 3s after match start before scattering coins
+            window._equipFFACoinTimer += dt;
+            if (window._equipFFACoinTimer >= 1.4) {
+                window._equipFFACoinTimer = 0;
+                const maxCoins = 48;
+                const spawnBatch = window._equipmentFFACoins.length < 18 ? 6 : 2;
+                for (let b = 0; b < spawnBatch && window._equipmentFFACoins.length < maxCoins; b++) {
+                    const center = (typeof WORLD_SIZE === 'number' ? WORLD_SIZE : 5000) / 2;
+                    const maxR = Math.max(400, Math.min((typeof safeZoneRadius === 'number' ? safeZoneRadius : 2400) * 0.92, center - 120));
+                    const ang = Math.random() * Math.PI * 2;
+                    const dist = Math.sqrt(Math.random()) * maxR;
+                    const cx = Math.max(80, Math.min((typeof WORLD_SIZE === 'number' ? WORLD_SIZE : 5000) - 80, center + Math.cos(ang) * dist));
+                    const cy = Math.max(80, Math.min((typeof WORLD_SIZE === 'number' ? WORLD_SIZE : 5000) - 80, center + Math.sin(ang) * dist));
+                    const isMega = Math.random() < 0.16;
+                    window._equipmentFFACoins.push({
+                        x: cx,
+                        y: cy,
+                        value: isMega ? 120 : 55,
+                        radius: isMega ? 20 : 14,
+                        isMega: isMega,
+                        phase: Math.random() * Math.PI * 2
+                    });
+                }
+            }
+
+            if (window._equipmentFFACoins && window._equipmentFFACoins.length > 0) {
+                const camXVal = (typeof camera !== 'undefined' ? camera.x : 0);
+                const camYVal = (typeof camera !== 'undefined' ? camera.y : 0);
+                for (let i = window._equipmentFFACoins.length - 1; i >= 0; i--) {
+                    const coin = window._equipmentFFACoins[i];
+                    coin.phase += dt * 4.2;
+
+                    // Check nearest living hero for magnetic pull & collection
+                    let collector = null;
+                    let bestDist = 999999;
+                    for (const e of entities) {
+                        if (!e || e.dead || e.del || !(e instanceof Entity) || !e.countsAsFFAHero) continue;
+                        const d = Math.hypot(e.x - coin.x, e.y - coin.y);
+                        if (d < bestDist) {
+                            bestDist = d;
+                            collector = e;
+                        }
+                    }
+
+                    // Magnetic pull when a wandering hero gets within 120px
+                    if (collector && bestDist <= 125 && bestDist > 1) {
+                        const pullSpd = 340 * (1 - bestDist / 140);
+                        coin.x += ((collector.x - coin.x) / bestDist) * pullSpd * dt;
+                        coin.y += ((collector.y - coin.y) / bestDist) * pullSpd * dt;
+                    }
+
+                    if (collector && bestDist <= (collector.radius || 18) + coin.radius + 10) {
+                        awardBattleCash(collector, coin.value, coin.isMega ? 'Mega Coin Cache' : 'Ground Coin');
+                        for (let p = 0; p < (coin.isMega ? 12 : 6); p++) {
+                            const pa = (Math.PI * 2 * p) / (coin.isMega ? 12 : 6);
+                            particles.push(new Particle(coin.x, coin.y, p % 2 === 0 ? '#fde047' : '#f59e0b', coin.isMega ? 4.5 : 3.5, 0.45, Math.cos(pa) * 140, Math.sin(pa) * 140));
+                        }
+                        window._equipmentFFACoins.splice(i, 1);
+                        continue;
+                    }
+
+                    // Draw coin if within camera view
+                    if (ctx) {
+                        const sx = coin.x - camXVal;
+                        const sy = coin.y - camYVal;
+                        if (sx >= -60 && sx <= (CANVAS ? CANVAS.width + 60 : 2000) && sy >= -60 && sy <= (CANVAS ? CANVAS.height + 60 : 1400)) {
+                            const bobY = Math.sin(coin.phase) * 3.5;
+                            const r = coin.radius;
+                            ctx.save();
+                            ctx.translate(sx, sy + bobY);
+
+                            // Outer golden glow ring
+                            ctx.strokeStyle = coin.isMega ? 'rgba(250, 204, 21, 0.78)' : 'rgba(253, 224, 71, 0.48)';
+                            ctx.lineWidth = coin.isMega ? 2.5 : 1.5;
+                            ctx.beginPath();
+                            ctx.arc(0, 0, r + 4 + Math.sin(coin.phase * 1.5) * 2, 0, Math.PI * 2);
+                            ctx.stroke();
+
+                            // Coin body
+                            ctx.fillStyle = coin.isMega ? '#f59e0b' : '#eab308';
+                            ctx.strokeStyle = '#fef08a';
+                            ctx.lineWidth = 2.2;
+                            ctx.beginPath();
+                            ctx.arc(0, 0, r, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.stroke();
+
+                            // Inner coin symbol
+                            ctx.fillStyle = '#0f172a';
+                            ctx.font = `bold ${coin.isMega ? 13 : 10}px Inter, Arial, sans-serif`;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(coin.isMega ? '+120' : '$', 0, 0.5);
+                            ctx.restore();
+                        }
                     }
                 }
             }
