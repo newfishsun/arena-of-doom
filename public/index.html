@@ -2901,7 +2901,7 @@
                     <div class="gear-card" data-gear="absorbimpact" role="button" tabindex="0" onclick="setSelectedGearCard('absorbimpact')">
                         <div class="gear-title"><span>Absorb Impact</span><span class="gear-code">💠</span></div>
                         <div class="gear-backstory">Does this mean getting more fat?</div>
-                        <div class="gear-effect"><ul class="gear-bullets"><li>For 5 seconds, taking damage grants you 20% of the total damage taken back as Shield</li><li>Cooldown: 70s</li></ul></div>
+                        <div class="gear-effect"><ul class="gear-bullets"><li>For 5 seconds, taking damage grants you 30% of the total damage taken back as Shield</li><li>Cooldown: 70s</li></ul></div>
                     </div>
                 </div>
             </div>
@@ -7153,8 +7153,8 @@
                     if ((!this.target || this.target.dead) && Array.isArray(this.lockedTargets)) {
                         this.target = this.lockedTargets.find(t => t && !t.dead) || null;
                     }
-                    if ((!this.target || this.target.dead) && this.isBomb && this.owner && typeof this.owner.findTarget === 'function') {
-                        this.target = this.owner.findTarget();
+                    if ((!this.target || this.target.dead) && this.isBomb && this.owner) {
+                        this.target = (typeof this.owner.findTargetForF === 'function') ? this.owner.findTargetForF() : (typeof this.owner.findTarget === 'function' ? this.owner.findTarget() : null);
                     }
                     if (this.target && !this.target.dead) {
                         let dx = this.target.x - this.x;
@@ -7241,6 +7241,15 @@
                     // stronger cyan trail + faint white streak for motion
                     particles.push(new Particle(this.x - this.vx * 0.02, this.y - this.vy * 0.02, '#00ffff', 2, 0.35));
                     particles.push(new Particle(this.x - this.vx * 0.04, this.y - this.vy * 0.04, '#ffffff', 0.8, 0.12));
+                }
+                if (this.isInsaneShot) {
+                    // Supersonic crimson-gold plasma wake & Mach ring embers
+                    particles.push(new Particle(this.x - this.vx * 0.012, this.y - this.vy * 0.012, '#FF1E56', 4.2, 0.28));
+                    particles.push(new Particle(this.x - this.vx * 0.024, this.y - this.vy * 0.024, '#FFD700', 3.0, 0.24));
+                    if (Math.random() < 0.65) {
+                        const perp = (this.angle || 0) + (Math.random() < 0.5 ? 1 : -1) * (Math.PI * 0.5);
+                        particles.push(new Particle(this.x - this.vx * 0.018, this.y - this.vy * 0.018, '#FFF7ED', 2.2, 0.18, Math.cos(perp) * 75, Math.sin(perp) * 75));
+                    }
                 }
                 if (this.isPizza) {
                     // Add fire or rap soundwave particles
@@ -8352,6 +8361,98 @@
                     ctx.fillStyle = 'rgba(255,255,255,0.9)';
                     ctx.beginPath();
                     ctx.ellipse(len*0.45, 0, this.size*0.6, this.size*0.3, 0, 0, Math.PI*2);
+                    ctx.fill();
+
+                    ctx.restore();
+                } else if (this.isInsaneShot) {
+                    // BountyHunter Ranged Q: Supersonic Crimson-Gold Armor-Piercing Rail Round
+                    const sx = this.x - camera.x;
+                    const sy = this.y - camera.y;
+                    const ang = (typeof this.angle === 'number' && !Number.isNaN(this.angle)) ? this.angle : Math.atan2(this.vy || 0, this.vx || 1);
+                    const pulse = 0.88 + 0.18 * Math.sin(Date.now() * 0.035);
+                    const r = Math.max(12, this.size || 20);
+
+                    ctx.save();
+                    ctx.translate(sx, sy);
+                    ctx.rotate(ang);
+
+                    // 1. Long supersonic crimson-magenta plasma slipstream tail
+                    const tailLen = r * 6.5;
+                    const tailGrad = ctx.createLinearGradient(r * 1.3, 0, -tailLen, 0);
+                    tailGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+                    tailGrad.addColorStop(0.18, 'rgba(255, 215, 0, 0.92)');
+                    tailGrad.addColorStop(0.48, 'rgba(255, 30, 86, 0.82)');
+                    tailGrad.addColorStop(0.82, 'rgba(190, 18, 60, 0.32)');
+                    tailGrad.addColorStop(1, 'rgba(159, 18, 57, 0)');
+                    ctx.fillStyle = tailGrad;
+                    ctx.beginPath();
+                    ctx.moveTo(r * 1.4, 0);
+                    ctx.lineTo(-r * 0.7, -r * 0.72 * pulse);
+                    ctx.lineTo(-tailLen, 0);
+                    ctx.lineTo(-r * 0.7, r * 0.72 * pulse);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // 2. Dual supersonic Mach cone shockwave chevrons
+                    ctx.strokeStyle = 'rgba(255, 215, 0, 0.88)';
+                    ctx.lineWidth = 2.6;
+                    ctx.beginPath();
+                    ctx.moveTo(r * 0.85, 0);
+                    ctx.lineTo(-r * 1.75, -r * 1.25 * pulse);
+                    ctx.moveTo(r * 0.85, 0);
+                    ctx.lineTo(-r * 1.75, r * 1.25 * pulse);
+                    ctx.stroke();
+
+                    ctx.strokeStyle = 'rgba(255, 30, 86, 0.78)';
+                    ctx.lineWidth = 2.1;
+                    ctx.beginPath();
+                    ctx.moveTo(-r * 0.55, 0);
+                    ctx.lineTo(-r * 3.1, -r * 1.62 * pulse);
+                    ctx.moveTo(-r * 0.55, 0);
+                    ctx.lineTo(-r * 3.1, r * 1.62 * pulse);
+                    ctx.stroke();
+
+                    // 3. Elliptical sonic boom compression ring around the warhead body
+                    ctx.strokeStyle = 'rgba(255, 247, 237, 0.9)';
+                    ctx.lineWidth = 2.2;
+                    ctx.beginPath();
+                    ctx.ellipse(-r * 0.3, 0, r * 0.38, r * 1.18 * pulse, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // 4. Outer crimson-gold radial bloom
+                    const haloGrad = ctx.createRadialGradient(0, 0, r * 0.15, 0, 0, r * 2.0);
+                    haloGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+                    haloGrad.addColorStop(0.35, 'rgba(255, 215, 0, 0.78)');
+                    haloGrad.addColorStop(0.7, 'rgba(255, 30, 86, 0.48)');
+                    haloGrad.addColorStop(1, 'rgba(255, 30, 86, 0)');
+                    ctx.fillStyle = haloGrad;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r * 2.0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 5. Armor-piercing diamond sniper warhead with white-hot core
+                    ctx.shadowColor = '#FF1E56';
+                    ctx.shadowBlur = 18;
+                    ctx.fillStyle = '#FF1E56';
+                    ctx.strokeStyle = '#FFD700';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.moveTo(r * 1.95, 0);
+                    ctx.lineTo(-r * 0.25, -r * 0.65);
+                    ctx.lineTo(-r * 1.15, 0);
+                    ctx.lineTo(-r * 0.25, r * 0.65);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 6. Inner white-gold hyper-velocity core needle
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.beginPath();
+                    ctx.moveTo(r * 1.6, 0);
+                    ctx.lineTo(-r * 0.12, -r * 0.3);
+                    ctx.lineTo(-r * 0.7, 0);
+                    ctx.lineTo(-r * 0.12, r * 0.3);
+                    ctx.closePath();
                     ctx.fill();
 
                     ctx.restore();
@@ -9570,7 +9671,7 @@
                 const damageTakenTotal = Math.ceil(Math.max(Math.max(shieldAbsorbed, 0) + Math.max(d, 0), 0));
                 this.totalDamageTaken = (this.totalDamageTaken || 0) + damageTakenTotal;
                 if (this.absorbImpactTimer && this.absorbImpactTimer > 0 && damageTakenTotal > 0) {
-                    const absorbShieldGain = Math.ceil(damageTakenTotal * 0.20);
+                    const absorbShieldGain = Math.ceil(damageTakenTotal * 0.30);
                     this.shield = (this.shield || 0) + absorbShieldGain;
                 }
                 // While mind-controlled by Karen, damage taken by the mind-controlled enemy also counts to Karen (stops once freed)
@@ -10997,7 +11098,7 @@
                     for (let i = 0; i < 18; i++) {
                         particles.push(new Particle(this.x + (Math.random() - 0.5) * 50, this.y + (Math.random() - 0.5) * 50, '#38bdf8', 4, 0.5));
                     }
-                    if (this.isPlayer) addKillMsg('💠 Absorb Impact Active! (20% Damage -> Shield for 5s)');
+                    if (this.isPlayer) addKillMsg('💠 Absorb Impact Active! (30% Damage -> Shield for 5s)');
                 }
                 else if (this.gear === 'soundblast') {
                     this.rCD = 75;
@@ -14550,10 +14651,34 @@
                 if (this.basicCD <= 0 && this.dashWindowTimer > 0 && d < 100) { this.magicBurst(); this.basicCD = 1.5; }
             }
             
+            findTargetForF() {
+                let c = null, md = 550;
+                for (let e of entities) {
+                    if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && e.isTargetable !== false && e.isVisibleTo(this)) {
+                        let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
+                        if (d <= md) { md = d; c = e; }
+                    }
+                }
+                return c || this.findTarget();
+            }
+
             findTarget() {
                 let c = null, md = 9999;
                 for (let e of entities) {
                     if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && e.isVisibleTo(this)) {
+                        let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
+                        if (d < md) { md = d; c = e; }
+                    }
+                }
+                return c;
+            }
+
+            findTargetForF() {
+                let c = null, md = 9999;
+                for (let e of entities) {
+                    if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && e.isTargetable !== false) {
+                        // Allow locking onto targets through walls/buildings unless invisible/bush-hidden
+                        if ((e.invisibleTimer > 0 || e.inBush) && (e.revealTimer || 0) <= 0 && !e.isVisibleTo(this)) continue;
                         let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                         if (d < md) { md = d; c = e; }
                     }
@@ -30055,78 +30180,66 @@
             performClockwiseSlash(dmg, stunDuration, radius, slashNum) {
                 let hitCount = 0;
                 let hitEnemies = new Set();
-                
-                // Single spinning ring visual (less noisy) for clockwise slash (slightly smaller)
-                particles.push(new SpinningRing(this.x, this.y, radius, '#FF1111', 0.9, 6 + slashNum * 1.5, 10));
-                
-                // Clockwise sweep damage
-                for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 10) {
-                    let checkAngle = this.angle + angle + (slashNum * Math.PI / 4);
-                    let dx = Math.cos(checkAngle) * (radius + 50);
-                    let dy = Math.sin(checkAngle) * (radius + 50);
-                    
-                    for (let e of entities) {
-                        if (e !== this && !e.dead && e.team !== this.team && !hitEnemies.has(e)) {
-                            let d = Math.sqrt((e.x - (this.x + dx))**2 + (e.y - (this.y + dy))**2);
-                            if (d < 80) {
-                                // Guard against non-Entity targets lacking takeDamage
-                                if (typeof e.takeDamage === 'function') {
-                                    e.takeDamage(dmg, this);
-                                    if (typeof e.stunTimer !== 'undefined') e.stunTimer = Math.max(e.stunTimer, stunDuration);
-                                } else if (typeof e.hp === 'number') {
-                                    e.hp -= dmg; if (e.hp<=0 && typeof e.die === 'function') e.die(this);
-                                }
-                                hitEnemies.add(e);
-                                hitCount++;
-                            }
-                        }
-                    }
+                const actualRange = radius; // Exact slash hit radius (350)
+                const isSecond = (slashNum === 1 || slashNum === 2);
+                const primaryCol = isSecond ? '#e11d48' : '#dc2626';
+                const accentCol = isSecond ? '#facc15' : '#fb7185';
+                const coreCol = isSecond ? '#fef08a' : '#ffe4e6';
 
-                // Also ensure close-range enemies near the hunter are hit (fixes Q missing hits at center)
-                const centerHitRadius = Math.min(radius * 0.45, 180);
+                // Sleek Twin-Sickle Execution Crescent Sweep (replaces noisy rings)
+                if (typeof BountyReaperSlashEffect !== 'undefined') {
+                    effectsAdd(new BountyReaperSlashEffect(this.x, this.y, this.angle, actualRange, 0.34, primaryCol, accentCol, coreCol, isSecond ? -1 : 1, false));
+                } else if (typeof MeleeSlashEffect !== 'undefined') {
+                    effectsAdd(new MeleeSlashEffect(this.x, this.y, this.angle, actualRange, 0.30, primaryCol));
+                }
+
+                // Crisp outer razor edge flash showing exact 350 hit boundary
+                if (typeof ringEffects !== 'undefined' && Array.isArray(ringEffects)) {
+                    ringEffects.push({ x: this.x, y: this.y, r: actualRange * 0.86, maxR: actualRange, color: accentCol, alpha: 0.85, lineWidth: 3.5 });
+                }
+
+                // Full circular damage check matching the exact visual slash radius
                 for (let e of entities) {
-                    if (e !== this && !e.dead && e.team !== this.team && !hitEnemies.has(e) && e instanceof Entity) {
-                        let dcenter = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
-                        if (dcenter < centerHitRadius) {
+                    if (e !== this && !e.dead && e.team !== this.team && e.isTargetable !== false && !hitEnemies.has(e) && e instanceof Entity) {
+                        let dcenter = Math.hypot(e.x - this.x, e.y - this.y);
+                        if (dcenter <= actualRange + (e.radius || 0)) {
                             if (typeof e.takeDamage === 'function') {
                                 e.takeDamage(dmg, this);
                                 if (stunDuration > 0) safeApplyStatus(e, 'stun', stunDuration, this);
                             } else if (typeof e.hp === 'number') {
-                                e.hp -= dmg; if (e.hp<=0 && typeof e.die === 'function') e.die(this);
+                                e.hp -= dmg;
+                                if (e.hp <= 0 && typeof e.die === 'function') e.die(this);
+                            }
+                            if (typeof ImpactFlash !== 'undefined') {
+                                effectsAdd(new ImpactFlash(e.x, e.y, Math.atan2(e.y - this.y, e.x - this.x), 85, 0.22, accentCol));
                             }
                             hitEnemies.add(e);
                             hitCount++;
                         }
                     }
                 }
-                }
-                
+
                 // Heal 200 per enemy hit
                 if (hitCount > 0) {
                     const healPer = 200;
                     const totalHeal = healPer * hitCount;
                     this.hp = Math.min(this.maxHp, this.hp + totalHeal);
-                    // Green heal particles flowing upward (scaled modestly by hits)
-                    const particleCount = Math.min(18 + hitCount * 4, 60);
+                    const particleCount = Math.min(14 + hitCount * 4, 40);
                     for (let i = 0; i < particleCount; i++) {
                         let a = (Math.PI * 2 / particleCount) * i;
-                        let vel = new Vector2(Math.cos(a), Math.sin(a)).mult(280);
-                        particles.push(new Particle(this.x + Math.cos(a) * 50, this.y + Math.sin(a) * 50, '#00FF00', 6, 0.9, vel.x, vel.y));
+                        let vel = new Vector2(Math.cos(a), Math.sin(a)).mult(220);
+                        particles.push(new Particle(this.x + Math.cos(a) * 36, this.y + Math.sin(a) * 36, '#4ade80', 4.5, 0.65, vel.x, vel.y));
                     }
                 }
-                
-                // Clockwise visual effect with premium appearance
-                for (let i = 0; i < 24; i++) {
-                    let a = this.angle + (i / 24) * Math.PI * 2 + (slashNum * Math.PI / 4);
-                    let vel = new Vector2(Math.cos(a), Math.sin(a)).mult(420);
-                    particles.push(new Particle(this.x + Math.cos(a) * 80, this.y + Math.sin(a) * 80, '#FF1111', 8, 0.8, vel.x * 0.5, vel.y * 0.5));
-                }
-                
-                // Explosive impact effect
-                for (let i = 0; i < 16; i++) {
-                    let a = Math.random() * Math.PI * 2;
-                    let speed = 180 + Math.random() * 220;
-                    particles.push(new Particle(this.x, this.y, '#FF4444', 6, 0.7, Math.cos(a) * speed, Math.sin(a) * speed));
+
+                // Clean tangential blade sparks along the crescent arc
+                const dirSign = isSecond ? -1 : 1;
+                for (let i = 0; i < 18; i++) {
+                    let a = this.angle + (i / 18) * Math.PI * 2;
+                    let tangentAngle = a + dirSign * (Math.PI / 2);
+                    let rPos = actualRange * (0.72 + (i % 3) * 0.12);
+                    let vel = new Vector2(Math.cos(tangentAngle), Math.sin(tangentAngle)).mult(260);
+                    particles.push(new Particle(this.x + Math.cos(a) * rPos, this.y + Math.sin(a) * rPos, i % 2 === 0 ? accentCol : primaryCol, 4.5, 0.34, vel.x, vel.y));
                 }
             }
             
@@ -30190,15 +30303,23 @@
                 let dmg = 770;
                 // Terrified effect duration
                 let terrorDuration = 2;
+                const swingRadius = 165;
 
-                // Circular swing centered on current position
-                particles.push(new SpinningRing(this.x, this.y, 150, '#FF1744', 0.9, 10, 10));
-                
+                // Enhanced E Arrival Slash Visuals (Reaper Execution Cleave + Terror Sigil Burst)
+                if (typeof BountyReaperSlashEffect !== 'undefined') {
+                    effectsAdd(new BountyReaperSlashEffect(this.x, this.y, this.angle, swingRadius, 0.42, '#be123c', '#f43f5e', '#fde047', 1, true));
+                    effectsAdd(new BountyReaperSlashEffect(this.x, this.y, this.angle + Math.PI * 0.5, swingRadius * 0.88, 0.36, '#7f1d1d', '#c084fc', '#ffffff', -1, true));
+                }
+                effectsAdd(new WaveShockwave(this.x, this.y, swingRadius + 25, 0.42, '#e11d48', '#a855f7'));
+                effectsAdd(new AuraRing(this.x, this.y, swingRadius, 0.38, '#fb7185', 8));
+                effectsAdd(new ImpactFlash(this.x, this.y, this.angle, 135, 0.32, '#fde047'));
+                if (this.isPlayer && typeof screenShake === 'function') screenShake(7);
+
                 let hitCount = 0;
                 for (let e of entities) {
                     if (e !== this && !e.dead && e.team !== this.team && e instanceof Entity) {
                         let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
-                        if (d < 150) {
+                        if (d < 150 + (e.radius || 0)) {
                             if (typeof e.takeDamage === 'function') {
                                 e.takeDamage(dmg, this);
                             } else if (typeof e.hp === 'number') {
@@ -30209,15 +30330,19 @@
                             // Apply terrified effect
                             if (!e.terrifedTimer) e.terrifedTimer = 0;
                             e.terrifedTimer = Math.max(e.terrifedTimer, terrorDuration);
+                            safeApplyStatus(e, 'terrifedTimer', terrorDuration, this);
+                            effectsAdd(new AuraRing(e.x, e.y, 55, 0.35, '#a855f7', 5));
                         }
                     }
                 }
 
-                // Impact particles
-                for (let i = 0; i < 20 + hitCount * 4; i++) {
-                    let a = Math.random() * Math.PI * 2;
-                    let vel = new Vector2(Math.cos(a), Math.sin(a)).mult(160 + Math.random() * 220);
-                    particles.push(new Particle(this.x + Math.cos(a) * 60, this.y + Math.sin(a) * 60, '#FF1744', 6, 0.8, vel.x, vel.y));
+                // Crimson & Dread-Violet Reaper Cleave Sparks
+                for (let i = 0; i < 26 + hitCount * 5; i++) {
+                    let a = (Math.PI * 2 * i) / (26 + hitCount * 5);
+                    let tangent = a + Math.PI * 0.35;
+                    let vel = new Vector2(Math.cos(tangent), Math.sin(tangent)).mult(210 + (i % 4) * 55);
+                    const pCol = i % 3 === 0 ? '#fde047' : (i % 2 === 0 ? '#fb7185' : '#a855f7');
+                    particles.push(new Particle(this.x + Math.cos(a) * 42, this.y + Math.sin(a) * 42, pCol, 5.5, 0.55, vel.x, vel.y));
                 }
             }
             
@@ -30300,32 +30425,43 @@
                 this.qCD = 5;
                 let dmg = 1200;
                 
-                let proj = new Projectile(this, this.x, this.y, this.angle, 1600, dmg, 1200, '#FF0000', 22);
+                let proj = new Projectile(this, this.x, this.y, this.angle, 1600, dmg, 1200, '#FF1E56', 22);
                 proj.isInsaneShot = true;
+                proj.trail = true;
                 proj.onHit = (target) => {
                     // Massive screen shake
                     window.cameraShake = { intensity: 28, duration: 0.7 };
                     target.slowTimer = Math.max(target.slowTimer, 3);
                     
-                    // Massive explosion effect
+                    // High-caliber crimson-gold impact shockwaves & directional shatter burst
+                    effectsAdd(new WaveShockwave(target.x, target.y, 150, 0.42, '#FF1E56', '#FFD700'));
+                    effectsAdd(new AuraRing(target.x, target.y, 110, 0.36, '#FF0055', 8));
+                    effectsAdd(new ImpactFlash(target.x, target.y, proj.angle, 165, 0.35, '#FFF7ED'));
                     for (let i = 0; i < 30; i++) {
                         let a = Math.random() * Math.PI * 2;
-                        let speed = 230 + Math.random() * 320;
-                        particles.push(new Particle(target.x, target.y, '#FF4444', 9, 1.3, Math.cos(a) * speed, Math.sin(a) * speed));
+                        let speed = 230 + Math.random() * 340;
+                        let col = i % 3 === 0 ? '#FFD700' : (i % 2 === 0 ? '#FF1E56' : '#FFF7ED');
+                        particles.push(new Particle(target.x, target.y, col, 8, 1.1, Math.cos(a) * speed, Math.sin(a) * speed));
                     }
                 };
                 entities.push(proj);
                 
-                // Devastating muzzle flash
+                // Devastating rail-sniper muzzle shockwave & Mach cone flash
+                const muzzleX = this.x + Math.cos(this.angle) * 28;
+                const muzzleY = this.y + Math.sin(this.angle) * 28;
+                effectsAdd(new ImpactFlash(muzzleX, muzzleY, this.angle, 140, 0.28, '#FFD700'));
+                effectsAdd(new WaveShockwave(muzzleX, muzzleY, 95, 0.28, '#FF1E56', '#FFD700'));
+                effectsAdd(new AuraRing(muzzleX, muzzleY, 68, 0.24, '#FFFFFF', 5));
                 for (let i = 0; i < 22; i++) {
                     let a = this.angle + (Math.random() - 0.5) * Math.PI / 2.5;
                     let vel = new Vector2(Math.cos(a), Math.sin(a)).mult(600);
-                    particles.push(new Particle(this.x + Math.cos(this.angle) * 28, this.y + Math.sin(this.angle) * 28, '#FF6666', 6, 0.7, vel.x, vel.y));
+                    let col = i % 3 === 0 ? '#FFD700' : (i % 2 === 0 ? '#FF1E56' : '#FFF7ED');
+                    particles.push(new Particle(muzzleX, muzzleY, col, 6, 0.7, vel.x, vel.y));
                 }
                 
                 // Bright bolt tracer
-                for (let i = 0; i < 6; i++) {
-                    particles.push(new Particle(this.x + Math.cos(this.angle) * (i * 8), this.y + Math.sin(this.angle) * (i * 8), '#FFFF00', 4, 0.4));
+                for (let i = 0; i < 8; i++) {
+                    particles.push(new Particle(this.x + Math.cos(this.angle) * (i * 10), this.y + Math.sin(this.angle) * (i * 10), i % 2 === 0 ? '#FFD700' : '#FFFFFF', 4.5, 0.42));
                 }
                 
                 if (this.isPlayer) addKillMsg('💥 INSANE SHOT!');
@@ -32742,7 +32878,7 @@
                     }
                     this.lockedUltTargets = this.lockedUltTargets.filter(e => e && !e.dead);
                     if (!this.lockedUltTarget || this.lockedUltTarget.dead) {
-                        this.lockedUltTarget = this.lockedUltTargets[0] || this.findTarget();
+                        this.lockedUltTarget = this.lockedUltTargets[0] || this.findTargetForF();
                     }
                     if (this.lockedUltTarget && !this.lockedUltTarget.dead) {
                         this.angle = Math.atan2(this.lockedUltTarget.y - this.y, this.lockedUltTarget.x - this.x);
@@ -32800,7 +32936,7 @@
                 }
                 this._eWas = !!keys.e;
                 if (keys.f && this.fCD <= 0 && !this.fCharging) {
-                    let targetForF = this.findTarget();
+                    let targetForF = this.findTargetForF();
                     if (targetForF) {
                         let dd = Math.sqrt((targetForF.x - this.x)**2 + (targetForF.y - this.y)**2);
                         if (dd <= 550) {
@@ -32909,16 +33045,17 @@
             spiritBomb(lockedTarget = null, lockedList = []) {
                 this.fCD = 10;
                 let validLocked = Array.isArray(lockedList) ? lockedList.filter(e => e && !e.dead) : [];
-                let target = (lockedTarget && !lockedTarget.dead) ? lockedTarget : (validLocked[0] || this.findTarget());
+                let target = (lockedTarget && !lockedTarget.dead) ? lockedTarget : (validLocked[0] || this.findTargetForF());
                 if (target) {
                     this.angle = Math.atan2(target.y - this.y, target.x - this.x);
                 }
                 const spawnX = this.x + Math.cos(this.angle) * (this.radius + 22);
                 const spawnY = this.y + Math.sin(this.angle) * (this.radius + 22);
                 const bombColor = (this.currentSkin === 'Don Pollo') ? '#d2691e' : '#ffff00';
-                // Pass dmg=0 and range=2400 so the Spirit Bomb flies across the arena and chases locked enemies instead of exploding on frame 1
+                // Pass dmg=0 and range=2400 so the Spirit Bomb flies across the arena and chases locked enemies through walls instead of exploding on frame 1
                 let bomb = new Projectile(this, spawnX, spawnY, this.angle, 920, 0, 2800, bombColor, 46, false, false, true);
                 bomb.maxDistance = 2800;
+                bomb.ignoreWalls = true;
                 bomb.damageHandledByOnHit = true;
                 bomb.target = target || null;
                 bomb.lockedTargets = validLocked;
@@ -40914,8 +41051,8 @@
                 this.isDashingF = true;
                 this.fDashTimer = 0.22;
 
-                // Short immunity frames during dash
-                this.invincibleTimer = Math.max(this.invincibleTimer || 0, 0.35);
+                // Slightly shorter immunity frames matching dash duration (0.22s)
+                this.invincibleTimer = Math.max(this.invincibleTimer || 0, 0.22);
 
                 // +100 stackable shield
                 this.shield = (this.shield || 0) + 100;
@@ -48858,6 +48995,13 @@
             }
         }
         function endGame(vic, opts = null){
+            try {
+                const sb = document.getElementById('shopBtnInGame'); if (sb) sb.style.display = 'none';
+                const hb = document.getElementById('hudEquipBar'); if (hb) hb.style.display = 'none';
+                const sm = document.getElementById('equipmentShopModal'); if (sm) sm.style.display = 'none';
+                window._trendingZones = [];
+                window._backupDriveMarkers = [];
+            } catch (_) {}
             if (opts && opts.immediateQuit) {
                 window.quitMatchImmediately();
                 return;
@@ -49245,6 +49389,7 @@
         }
 
         function updateHUD(p) {
+            if (typeof updateInGameShopHud === 'function') updateInGameShopHud();
             // First, set hero-specific icons for Q, E, F abilities
             setHeroAbilityIcons(p);
             // hide qCharge by default
@@ -50980,6 +51125,7 @@
                     drawFarmhouse(CTX);
                     drawMapWalls(CTX);
                     if (typeof updateAndDrawRicoExpandedBoxes === 'function') updateAndDrawRicoExpandedBoxes(CTX, dt);
+                    if (typeof updateAndDrawEquipmentWorldZones === 'function') updateAndDrawEquipmentWorldZones(dt, CTX);
                     
                     // Draw Dayum bombs
                     if(window.dayumBombs) {
@@ -54919,7 +55065,7 @@
                 }
             });
             window.addEventListener('mousedown', e => {
-                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #trainingPanelBtn, #trainingDummySwitchBox, #controlsBtn, #controlsPanel, #skinSelectModal')) {
+                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #trainingPanelBtn, #trainingDummySwitchBox, #controlsBtn, #controlsPanel, #skinSelectModal, #shopBtnInGame, #equipmentShopModal, #hudEquipBar')) {
                     return;
                 }
                 if (e.button === 2) {
@@ -54939,7 +55085,7 @@
             
             // Mobile touch support (alongside existing mouse input, doesn't replace it)
             window.addEventListener('touchmove', e => {
-                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #heroSelectScreen, #controlsPanel, #skinSelectModal')) {
+                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #heroSelectScreen, #controlsPanel, #skinSelectModal, #shopBtnInGame, #equipmentShopModal, #hudEquipBar')) {
                     return;
                 }
                 if (e.touches.length > 0) {
@@ -54949,7 +55095,7 @@
             }, { passive: false });
             
             window.addEventListener('touchstart', e => {
-                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #trainingPanelBtn, #trainingDummySwitchBox, #heroSelectScreen, #controlsBtn, #controlsPanel, #skinSelectModal')) {
+                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #trainingPanelBtn, #trainingDummySwitchBox, #heroSelectScreen, #controlsBtn, #controlsPanel, #skinSelectModal, #shopBtnInGame, #equipmentShopModal, #hudEquipBar')) {
                     return;
                 }
                 if (e.touches.length > 0) {
@@ -58225,7 +58371,7 @@
                     this.totalDamageTaken = (this.totalDamageTaken || 0) + Math.ceil(Math.max(finalCombinedDamage, 0));
 
                     if (this.absorbImpactTimer && this.absorbImpactTimer > 0 && finalCombinedDamage > 0) {
-                        this.shield = (this.shield || 0) + Math.ceil(finalCombinedDamage * 0.20);
+                        this.shield = (this.shield || 0) + Math.ceil(finalCombinedDamage * 0.30);
                     }
                     if (totalHpDamage > 0) {
                         let nextHp = Math.max(0, this._hp - totalHpDamage);
@@ -59986,7 +60132,7 @@
                 }
                 if (delta > 0 && Number.isFinite(delta)) {
                   if (player.absorbImpactTimer && player.absorbImpactTimer > 0) {
-                    const absorbGain = Math.ceil(delta * 0.20);
+                    const absorbGain = Math.ceil(delta * 0.30);
                     player.shield = (player.shield || 0) + absorbGain;
                   }
                   if (typeof Cole !== 'undefined' && player instanceof Cole && (player.passiveCD || 0) <= 0) {
@@ -62558,7 +62704,1936 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = { FFAMultiplayer, initializeFFAMultiplayer, startFFAMultiplayerSession };
 }
 
-    </script>
+    
+
+        /* === BATTLE ECONOMY & 29-EQUIPMENT SHOP SYSTEM === */
+        class MeleeSlashEffect {
+            constructor(x, y, angle, radius = 140, duration = 0.28, color = '#ef4444') {
+                this.x = x;
+                this.y = y;
+                this.angle = angle || 0;
+                this.radius = radius;
+                this.maxLife = Math.max(0.08, duration);
+                this.life = this.maxLife;
+                this.color = color;
+            }
+            update(dt) {
+                this.life -= dt;
+                return this.life > 0;
+            }
+            draw(ctx) {
+                if (this.life <= 0) return;
+                const sx = this.x - (typeof camera !== "undefined" ? camera.x : 0);
+                const sy = this.y - (typeof camera !== "undefined" ? camera.y : 0);
+                const p = 1 - Math.max(0, this.life / this.maxLife);
+                const alpha = Math.max(0, 1 - p * 0.9);
+                ctx.save();
+                ctx.translate(sx, sy);
+                ctx.rotate(this.angle + p * 0.85);
+                ctx.globalAlpha = alpha;
+                ctx.strokeStyle = this.color;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 14;
+                ctx.lineWidth = Math.max(2, 12 * (1 - p * 0.55));
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * (0.85 + p * 0.15), -Math.PI * 0.42, Math.PI * 0.42);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+        window.MeleeSlashEffect = MeleeSlashEffect;
+
+        class BountyReaperSlashEffect {
+            constructor(x, y, angle, radius = 350, duration = 0.34, primaryCol = '#dc2626', accentCol = '#fb7185', coreCol = '#fef08a', dir = 1, isCross = false) {
+                this.x = x;
+                this.y = y;
+                this.angle = angle || 0;
+                this.radius = radius;
+                this.maxLife = Math.max(0.1, duration);
+                this.life = this.maxLife;
+                this.primaryCol = primaryCol;
+                this.accentCol = accentCol;
+                this.coreCol = coreCol;
+                this.dir = dir || 1;
+                this.isCross = !!isCross;
+            }
+            update(dt) {
+                this.life -= dt;
+                return this.life > 0;
+            }
+            draw(ctx) {
+                if (this.life <= 0) return;
+                const sx = this.x - (typeof camera !== "undefined" ? camera.x : 0);
+                const sy = this.y - (typeof camera !== "undefined" ? camera.y : 0);
+                const progress = 1 - Math.max(0, this.life / this.maxLife);
+                const ease = 1 - Math.pow(1 - progress, 3);
+                const alpha = Math.max(0, Math.sin((1 - progress) * Math.PI * 0.5));
+
+                ctx.save();
+                ctx.translate(sx, sy);
+                const rot = this.angle + this.dir * ease * Math.PI * 1.35;
+                ctx.rotate(rot);
+                ctx.globalAlpha = alpha;
+
+                // Dual crescent reaper blades (180 degrees apart) sweeping cleanly across the exact radius
+                for (let b = 0; b < 2; b++) {
+                    ctx.save();
+                    ctx.rotate(b * Math.PI);
+
+                    const rOuter = this.radius * (0.94 + 0.06 * ease);
+                    const rInner = rOuter * 0.68;
+                    const startA = -Math.PI * 0.58;
+                    const endA = Math.PI * 0.38;
+
+                    // Crescent body fill
+                    const grad = ctx.createRadialGradient(0, 0, rInner * 0.7, 0, 0, rOuter);
+                    grad.addColorStop(0, 'rgba(0,0,0,0)');
+                    grad.addColorStop(0.55, this.primaryCol + '44');
+                    grad.addColorStop(0.86, this.primaryCol);
+                    grad.addColorStop(1, this.accentCol);
+
+                    ctx.fillStyle = grad;
+                    ctx.shadowColor = this.primaryCol;
+                    ctx.shadowBlur = 18;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, rOuter, startA, endA, false);
+                    ctx.arc(0, 0, rInner, endA - 0.18, startA + 0.22, true);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Molten razor edge highlight
+                    ctx.strokeStyle = this.coreCol;
+                    ctx.lineWidth = Math.max(1.5, 4.5 * (1 - progress * 0.5));
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, rOuter - 2, startA + 0.1, endA, false);
+                    ctx.stroke();
+
+                    // Sickle hook tip
+                    const tipX = Math.cos(endA) * rOuter;
+                    const tipY = Math.sin(endA) * rOuter;
+                    const hookInX = Math.cos(endA + 0.24) * (rOuter * 0.76);
+                    const hookInY = Math.sin(endA + 0.24) * (rOuter * 0.76);
+                    ctx.strokeStyle = this.accentCol;
+                    ctx.lineWidth = Math.max(2, 5 * (1 - progress * 0.4));
+                    ctx.beginPath();
+                    ctx.moveTo(tipX, tipY);
+                    ctx.quadraticCurveTo(Math.cos(endA + 0.14) * (rOuter * 1.03), Math.sin(endA + 0.14) * (rOuter * 1.03), hookInX, hookInY);
+                    ctx.stroke();
+
+                    ctx.restore();
+                }
+
+                // If E arrival slash, add an execution X-cleave and dark-crimson vortex core
+                if (this.isCross) {
+                    ctx.save();
+                    ctx.rotate(-rot * 0.5);
+                    ctx.strokeStyle = this.coreCol;
+                    ctx.shadowColor = this.accentCol;
+                    ctx.shadowBlur = 16;
+                    ctx.lineWidth = Math.max(2, 6 * (1 - progress));
+                    const slashLen = this.radius * (0.75 + 0.25 * ease);
+                    for (let k = 0; k < 2; k++) {
+                        ctx.beginPath();
+                        const ca = k * Math.PI * 0.5 + Math.PI * 0.25;
+                        ctx.moveTo(-Math.cos(ca) * slashLen, -Math.sin(ca) * slashLen);
+                        ctx.lineTo(Math.cos(ca) * slashLen, Math.sin(ca) * slashLen);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+
+                ctx.restore();
+            }
+        }
+        window.BountyReaperSlashEffect = BountyReaperSlashEffect;
+
+        if (typeof Entity !== 'undefined' && !Entity.prototype.findTargetForF) {
+            Entity.prototype.findTargetForF = function() {
+                if (typeof this.findTarget === 'function') return this.findTarget();
+                return null;
+            };
+        }
+
+        const EQUIPMENT_CATALOG = [
+            // ================= ATTACK (15) =================
+            {
+                id: 'masked_fools', name: 'Masked Fools', category: 'ATTACK', icon: '🎭', cost: 650,
+                statsText: 'x1.15 Damage, +150 Health',
+                passiveText: 'Using abilities hallucinates enemies hit (4s CD); deal +10% extra damage to hallucinated enemies.',
+                stats: { dmgMult: 1.15, hp: 150 }
+            },
+            {
+                id: 'death_knife', name: 'Death Knife', category: 'ATTACK', icon: '🗡️', cost: 600,
+                statsText: '+5% Damage, +20% Basic Attack Speed',
+                passiveText: 'Basic attacks deal +20% bonus damage to low-health targets (<40% HP).',
+                stats: { dmgPct: 0.05, atkSpd: 0.20 }
+            },
+            {
+                id: 'eternal_hell', name: 'Eternal Hell', category: 'ATTACK', icon: '🔥', cost: 620,
+                statsText: '+10% Cooldown Speed, +5% Damage',
+                passiveText: 'Using abilities burns your health (2s, 50/s, stackable) and heals 6% of your lost health.',
+                stats: { cdr: 0.10, dmgPct: 0.05 }
+            },
+            {
+                id: 'gamer_tag', name: 'Gamer Tag', category: 'ATTACK', icon: '🎮', cost: 650,
+                statsText: '+5% Cooldown Speed, +10% Damage, +10% Attack Speed',
+                passiveText: 'After using 3 abilities, the next ability spawns a "GG" emoticon projectile that deals 320 damage and slows for 0.6s.',
+                stats: { cdr: 0.05, dmgPct: 0.10, atkSpd: 0.10 }
+            },
+            {
+                id: 'the_lost_wanderer', name: 'The Lost Wanderer', category: 'ATTACK', icon: '🧥', cost: 680,
+                statsText: '+10% Attack Speed, x1.05 Damage, +200 Health',
+                passiveText: 'Out of combat for 5s grants x1.2 movement speed and invisibility until you take damage or use an attack.',
+                stats: { atkSpd: 0.10, dmgMult: 1.05, hp: 200 }
+            },
+            {
+                id: 'steel_breaker', name: 'Steel Breaker', category: 'ATTACK', icon: '⚒️', cost: 680,
+                statsText: '+10% Damage, +5% True Damage',
+                passiveText: 'Attacking an enemy reduces their attack speed by 20% and defense by 10% for 3s (6s CD).',
+                stats: { dmgPct: 0.10, trueDmg: 0.05 }
+            },
+            {
+                id: 'neon_saber', name: 'NEON Saber', category: 'ATTACK', icon: '⚡', cost: 720,
+                statsText: 'x1.1 Damage, x1.1 Movement Speed',
+                passiveText: 'Hitting an enemy triggers Electro, dealing +50% of the attack damage (Basic: 3s CD, Abilities: 6.5s CD).',
+                stats: { dmgMult: 1.10, spdMult: 1.10 }
+            },
+            {
+                id: 'racing_champion', name: 'Racing Champion', category: 'ATTACK', icon: '🏎️', cost: 640,
+                statsText: 'x1.1 Movement Speed, +10% Cooldown Speed, +5% Damage',
+                passiveText: 'Hitting an enemy grants x1.2 movement speed briefly and slows the enemy for 1s (5s CD).',
+                stats: { spdMult: 1.10, cdr: 0.10, dmgPct: 0.05 }
+            },
+            {
+                id: 'a_legend_reborn', name: 'A Legend Reborn', category: 'ATTACK', icon: '🦅', cost: 800,
+                statsText: '+300 Health, +5% Cooldown Speed, +10% Attack Speed',
+                passiveText: 'When your HP drops to 1, you do not die and stay invincible for 1.5s (40s CD).',
+                stats: { hp: 300, cdr: 0.05, atkSpd: 0.10 }
+            },
+            {
+                id: 'core_flames', name: 'Core Flames', category: 'ATTACK', icon: '☄️', cost: 660,
+                statsText: '+10% Damage, +5% Cooldown Speed, +250 Health (Includes Summons)',
+                passiveText: 'Summons gain Core Flames (+250 HP and +10% bonus damage on hit, 10s CD).',
+                stats: { dmgPct: 0.10, cdr: 0.05, hp: 250 }
+            },
+            {
+                id: 'doomscroller', name: 'Doomscroller', category: 'ATTACK', icon: '📱', cost: 700,
+                statsText: '+8% Damage, +8% Attack Speed',
+                passiveText: 'Basic attacks build "doom stacks" on enemies (max 10). At 10 stacks, target suffers a 3s "doomscroll"—taking 2% max HP true damage/s and distorting their health bar (12s CD/target).',
+                stats: { dmgPct: 0.08, atkSpd: 0.08 }
+            },
+            {
+                id: 'pixel_pirate', name: 'Pixel Pirate', category: 'ATTACK', icon: '🏴‍☠️', cost: 640,
+                statsText: '+6% Damage, +5% Cooldown Speed, +100 Health',
+                passiveText: 'Every 4th basic attack steals 15% of target current shield or 40 HP (whichever is higher) for yourself; if target has neither, deals +120 bonus damage.',
+                stats: { dmgPct: 0.06, cdr: 0.05, hp: 100 }
+            },
+            {
+                id: 'lag_switch', name: 'Lag Switch', category: 'ATTACK', icon: '📡', cost: 660,
+                statsText: '+12% Attack Speed, +4% Damage',
+                passiveText: 'Hitting the same enemy 3 times in a row rubberbands their next ability/basic attack—delayed by 0.8s and dealing 30% reduced damage (7s CD).',
+                stats: { atkSpd: 0.12, dmgPct: 0.04 }
+            },
+            {
+                id: 'wifi_warrior', name: 'Wifi Warrior', category: 'ATTACK', icon: '📶', cost: 620,
+                statsText: '+5% Damage, +5% Movement Speed, +150 Health',
+                passiveText: 'Standing still for 1.5s grants "full bars"—your next attack within 3s deals +25% damage and reveals nearby enemies for 2s.',
+                stats: { dmgPct: 0.05, spdPct: 0.05, hp: 150 }
+            },
+            {
+                id: 'influencers_edge', name: "Influencer's Edge", category: 'ATTACK', icon: '📸', cost: 700,
+                statsText: '+7% Damage, +10% Cooldown Speed',
+                passiveText: 'Killing an enemy grants a "viral clip" stack (max 3; +3% dmg & +2% move speed per stack until death). At 3 stacks, your next ability leaves a 2s "trending" zone that slows enemies by 20%.',
+                stats: { dmgPct: 0.07, cdr: 0.10 }
+            },
+
+            // ================= DEFENSE (15) =================
+            {
+                id: 'titans_downfall', name: "Titan's Downfall", category: 'DEFENSE', icon: '🛡️', cost: 720,
+                statsText: '+500 Health, +10% Defense',
+                passiveText: 'When HP drops below 20%, grants a shield wave worth 30% of max HP that decays after 3s (30s CD).',
+                stats: { hp: 500, def: 0.10 }
+            },
+            {
+                id: 'iron_lung', name: 'Iron Lung', category: 'DEFENSE', icon: '🫁', cost: 620,
+                statsText: '+400 Health, +8% Defense',
+                passiveText: 'While below 50% HP, gain 15% tenacity (reduced crowd-control duration).',
+                stats: { hp: 400, def: 0.08 }
+            },
+            {
+                id: 'riot_shield_protocol', name: 'Riot Shield Protocol', category: 'DEFENSE', icon: '🧱', cost: 660,
+                statsText: '+350 Health, +12% Defense',
+                passiveText: 'Every 8s, your next incoming basic attack is fully blocked and reflects 80 damage back at the attacker.',
+                stats: { hp: 350, def: 0.12 }
+            },
+            {
+                id: 'nokia_brick', name: 'Nokia Brick', category: 'DEFENSE', icon: '📟', cost: 740,
+                statsText: '+600 Health',
+                passiveText: 'The first time you would take more than 25% of your max HP in a single hit, that hit is capped at 25% max HP (45s CD).',
+                stats: { hp: 600 }
+            },
+            {
+                id: 'firewall_fort', name: 'Firewall Fort', category: 'DEFENSE', icon: '🏮', cost: 700,
+                statsText: '+300 Health, +10% Defense, +5% Cooldown Speed',
+                passiveText: 'After taking 3 separate hits within 4s, deploys a 2s firewall around you that blocks enemy projectiles and deals 60 damage/s to enemies touching it (18s CD).',
+                stats: { hp: 300, def: 0.10, cdr: 0.05 }
+            },
+            {
+                id: 'lag_armor', name: 'Lag Armor', category: 'DEFENSE', icon: '⏳', cost: 680,
+                statsText: '+450 Health, +7% Defense',
+                passiveText: '20% of damage taken is delayed over 2s instead of applied instantly; killing an enemy cancels all remaining delayed damage.',
+                stats: { hp: 450, def: 0.07 }
+            },
+            {
+                id: 'crash_test_dummy', name: 'Crash Test Dummy', category: 'DEFENSE', icon: '🤖', cost: 820,
+                statsText: '+500 Health, +5% Cooldown Speed',
+                passiveText: 'Upon taking fatal damage, survive at 1 HP, become untargetable for 1s, and gain +40% movement speed for 2s (50s CD).',
+                stats: { hp: 500, cdr: 0.05 }
+            },
+            {
+                id: 'thick_skin', name: 'Thick Skin', category: 'DEFENSE', icon: '🦏', cost: 600,
+                statsText: '+250 Health, +15% Defense',
+                passiveText: 'Incoming basic attacks deal 12% less damage.',
+                stats: { hp: 250, def: 0.15 }
+            },
+            {
+                id: 'the_sponge', name: 'The Sponge', category: 'DEFENSE', icon: '🧽', cost: 650,
+                statsText: '+550 Health',
+                passiveText: '10% of all damage taken is stored as "absorbed mass" (max 200); your next basic attack consumes it to heal you for that amount.',
+                stats: { hp: 550 }
+            },
+            {
+                id: 'debug_barrier', name: 'Debug Barrier', category: 'DEFENSE', icon: '💠', cost: 660,
+                statsText: '+350 Health, +8% Defense, +5% Cooldown Speed',
+                passiveText: 'When HP drops below 30%, gain a 200 shield that regenerates 40 HP/s for 3s (25s CD).',
+                stats: { hp: 350, def: 0.08, cdr: 0.05 }
+            },
+            {
+                id: 'hardware_hacker', name: 'Hardware Hacker', category: 'DEFENSE', icon: '💻', cost: 680,
+                statsText: '+400 Health, +10% Defense',
+                passiveText: 'Enemies who hit you with abilities have their cooldowns increased by 1s (6s CD per enemy).',
+                stats: { hp: 400, def: 0.10 }
+            },
+            {
+                id: 'safe_mode', name: 'Safe Mode', category: 'DEFENSE', icon: '🔒', cost: 620,
+                statsText: '+300 Health, +12% Defense',
+                passiveText: 'After being out of combat for 4s, gain 8% damage reduction until you next take damage.',
+                stats: { hp: 300, def: 0.12 }
+            },
+            {
+                id: 'backup_drive', name: 'Backup Drive', category: 'DEFENSE', icon: '💾', cost: 780,
+                statsText: '+450 Health, +6% Cooldown Speed',
+                passiveText: 'On death, deploys a "backup" marker for 8s; if an ally stands on it for 2s (or self-restores in solo modes), revive with 40% HP (90s CD, once per game).',
+                stats: { hp: 450, cdr: 0.06 }
+            },
+            {
+                id: 'screen_protector', name: 'Screen Protector', category: 'DEFENSE', icon: '📲', cost: 620,
+                statsText: '+200 Health, +10% Defense, +10% Cooldown Speed',
+                passiveText: 'The first crowd-control effect on you every 10s has its duration reduced by 50%.',
+                stats: { hp: 200, def: 0.10, cdr: 0.10 }
+            },
+            {
+                id: 'thermal_paste', name: 'Thermal Paste', category: 'DEFENSE', icon: '❄️', cost: 630,
+                statsText: '+350 Health, +8% Defense',
+                passiveText: 'While you have any shield, gain +10% movement speed and +5% cooldown speed.',
+                stats: { hp: 350, def: 0.08 }
+            },
+
+            // ================= SUPPORT (4) =================
+            {
+                id: 'ping_system', name: 'Ping System', category: 'SUPPORT', icon: '📍', cost: 540,
+                statsText: '+8% Cooldown Speed, +150 Health',
+                passiveText: 'Hitting/marking an enemy reveals them for 2s and grants nearby allies +5% movement speed for 1.5s (4s CD per target).',
+                stats: { cdr: 0.08, hp: 150 }
+            },
+            {
+                id: 'carry_potential', name: 'Carry Potential', category: 'SUPPORT', icon: '🏆', cost: 580,
+                statsText: '+10% Cooldown Speed, +5% Damage, +100 Health',
+                passiveText: 'Healing or shielding an ally grants them +8% damage for 2s; if they get a kill during the buff, you gain +50 gold.',
+                stats: { cdr: 0.10, dmgPct: 0.05, hp: 100 }
+            },
+            {
+                id: 'stream_sniper', name: 'Stream Sniper', category: 'SUPPORT', icon: '🔭', cost: 560,
+                statsText: '+6% Movement Speed, +5% Cooldown Speed',
+                passiveText: 'When an ally is below 40% HP within 600 range, gain +15% movement speed and your next ability heals them for 80 HP (12s CD).',
+                stats: { spdPct: 0.06, cdr: 0.05 }
+            },
+            {
+                id: 'gg_wp', name: 'GG WP', category: 'SUPPORT', icon: '🤝', cost: 580,
+                statsText: '+200 Health, +5% Cooldown Speed, +5% Damage',
+                passiveText: 'After an ally gets a kill or assist near you, both gain +10% attack speed and +5% movement speed for 2s.',
+                stats: { hp: 200, cdr: 0.05, dmgPct: 0.05 }
+            }
+        ];
+
+        const EQUIPMENT_BY_ID = {};
+        for (const item of EQUIPMENT_CATALOG) {
+            EQUIPMENT_BY_ID[item.id] = item;
+        }
+        window.EQUIPMENT_CATALOG = EQUIPMENT_CATALOG;
+        window.EQUIPMENT_BY_ID = EQUIPMENT_BY_ID;
+
+        function isEconomyModeActive() {
+            if (typeof gameRunning !== 'undefined' && !gameRunning) return false;
+            const gm = (typeof gameMode !== 'undefined' && gameMode) ? String(gameMode) : '';
+            if (!gm) return false;
+            if (gm === '1v1' || gm === 'duel_online' || gm === 'solo_levelling') return false;
+            return true;
+        }
+        window.isEconomyModeActive = isEconomyModeActive;
+
+        function ensureEntityEquipState(ent) {
+            if (!ent) return null;
+            if (!ent._equipState) {
+                ent._equipState = {
+                    items: [], // max 6 equipment IDs
+                    cash: ent.isPlayer ? 600 : 600,
+                    appliedMaxHpBonus: 0,
+                    cooldowns: {}, // item.id -> remaining cooldown
+                    targetCDs: {}, // item_id + target_id -> timestamp
+                    lastCombatAt: Date.now(),
+                    lastDamageTakenAt: Date.now(),
+                    lastMoveAt: Date.now(),
+                    lastX: ent.x || 0,
+                    lastY: ent.y || 0,
+                    abilityCastCount: 0,
+                    basicHitCount: 0,
+                    consecutiveTarget: null,
+                    consecutiveHits: 0,
+                    viralClips: 0,
+                    trendingReady: false,
+                    fullBarsTimer: 0,
+                    stillTimer: 0,
+                    eternalBurnStacks: [], // array of remaining durations
+                    riotShieldTimer: 0,
+                    riotShieldReady: true,
+                    firewallHitTimes: [],
+                    firewallActiveTimer: 0,
+                    delayedDamageQueue: [], // [{ remainingDmg, timeLeft }]
+                    absorbedMass: 0,
+                    debugBarrierRegenTimer: 0,
+                    titanShieldRemaining: 0,
+                    titanShieldDelayTimer: 0,
+                    backupUsedThisGame: false,
+                    backupMarker: null,
+                    wandererStealth: false,
+                    racingSpeedTimer: 0,
+                    crashDummySpeedTimer: 0,
+                    ggwpBuffTimer: 0,
+                    pingAllySpeedTimer: 0,
+                    carryBuffTimer: 0,
+                    carryBuffSource: null,
+                    streamSniperReady: false,
+                    rubberbandBasicLock: 0,
+                    rubberbandWeakNextTimer: 0,
+                    steelBreakerDebuffTimer: 0,
+                    doomStacksByAttacker: new Map(),
+                    doomscrollTimer: 0,
+                    doomscrollAttacker: null,
+                    doomscrollTickAccum: 0,
+                    prevBasicCD: 0,
+                    prevQCD: 0,
+                    prevECD: 0,
+                    prevFCD: 0,
+                    cashTrickleAccum: 0,
+                    aiShopAccum: 0
+                };
+            }
+            return ent._equipState;
+        }
+        window.ensureEntityEquipState = ensureEntityEquipState;
+
+        function hasEquip(ent, id) {
+            if (!ent || !ent._equipState || !Array.isArray(ent._equipState.items)) return false;
+            return ent._equipState.items.includes(id);
+        }
+        window.hasEquip = hasEquip;
+
+        function getEquipCD(ent, id) {
+            const st = ensureEntityEquipState(ent);
+            if (!st) return 0;
+            return Math.max(0, Number(st.cooldowns[id]) || 0);
+        }
+
+        function setEquipCD(ent, id, sec) {
+            const st = ensureEntityEquipState(ent);
+            if (!st) return;
+            st.cooldowns[id] = Math.max(0, Number(sec) || 0);
+        }
+
+        function awardBattleCash(ent, amount, reason = '') {
+            if (!isEconomyModeActive() || !ent) return;
+            const ownerHero = (ent.owner instanceof Entity) ? ent.owner : ((ent.caster instanceof Entity) ? ent.caster : ent);
+            if (!ownerHero || !(ownerHero instanceof Entity)) return;
+            const st = ensureEntityEquipState(ownerHero);
+            if (!st) return;
+            const addAmt = Math.max(0, Math.round(Number(amount) || 0));
+            if (addAmt <= 0) return;
+            st.cash = (st.cash || 0) + addAmt;
+            if (ownerHero.isPlayer) {
+                updateInGameShopHud();
+                if (reason) {
+                    addKillMsg(`💰 +${addAmt} Cash (${reason})`);
+                }
+            }
+        }
+        window.awardBattleCash = awardBattleCash;
+
+        function computeEquipAggregates(ent) {
+            const res = {
+                hpBonus: 0,
+                dmgPct: 0,
+                dmgMult: 1,
+                atkSpd: 0,
+                cdr: 0,
+                def: 0,
+                spdPct: 0,
+                spdMult: 1,
+                trueDmg: 0
+            };
+            if (!isEconomyModeActive() || !ent) return res;
+            const host = (ent.owner instanceof Entity && ent !== ent.owner) ? ent.owner : ent;
+            const st = ensureEntityEquipState(host);
+            if (!st || !st.items.length) return res;
+
+            const isSummon = (host !== ent);
+            if (isSummon) {
+                if (hasEquip(host, 'core_flames')) {
+                    res.hpBonus += 250;
+                    res.dmgPct += 0.10;
+                }
+                return res;
+            }
+
+            for (const id of st.items) {
+                const item = EQUIPMENT_BY_ID[id];
+                if (!item || !item.stats) continue;
+                const s = item.stats;
+                if (s.hp) res.hpBonus += s.hp;
+                if (s.dmgPct) res.dmgPct += s.dmgPct;
+                if (s.dmgMult) res.dmgMult *= s.dmgMult;
+                if (s.atkSpd) res.atkSpd += s.atkSpd;
+                if (s.cdr) res.cdr += s.cdr;
+                if (s.def) res.def += s.def;
+                if (s.spdPct) res.spdPct += s.spdPct;
+                if (s.spdMult) res.spdMult *= s.spdMult;
+                if (s.trueDmg) res.trueDmg += s.trueDmg;
+            }
+
+            // Dynamic passive bonuses
+            if (hasEquip(ent, 'influencers_edge') && st.viralClips > 0) {
+                res.dmgPct += 0.03 * st.viralClips;
+                res.spdPct += 0.02 * st.viralClips;
+            }
+            if (hasEquip(ent, 'thermal_paste') && (ent.shield || 0) > 0) {
+                res.spdPct += 0.10;
+                res.cdr += 0.05;
+            }
+            if (hasEquip(ent, 'the_lost_wanderer') && st.wandererStealth) {
+                res.spdMult *= 1.20;
+            }
+            if (st.racingSpeedTimer > 0) {
+                res.spdMult *= 1.20;
+            }
+            if (st.crashDummySpeedTimer > 0) {
+                res.spdPct += 0.40;
+            }
+            if (st.ggwpBuffTimer > 0) {
+                res.atkSpd += 0.10;
+                res.spdPct += 0.05;
+            }
+            if (st.pingAllySpeedTimer > 0) {
+                res.spdPct += 0.05;
+            }
+            if (st.carryBuffTimer > 0) {
+                res.dmgPct += 0.08;
+            }
+            if (hasEquip(ent, 'stream_sniper') && st.streamSniperReady) {
+                res.spdPct += 0.15;
+            }
+            if (st.steelBreakerDebuffTimer > 0) {
+                res.atkSpd = Math.max(-0.6, res.atkSpd - 0.20);
+                res.def -= 0.10;
+            }
+            return res;
+        }
+        window.computeEquipAggregates = computeEquipAggregates;
+
+        function syncEntityEquipmentStats(ent) {
+            if (!ent) return;
+            const st = ensureEntityEquipState(ent);
+            if (!st) return;
+            const agg = computeEquipAggregates(ent);
+            const targetBonus = isEconomyModeActive() ? agg.hpBonus : 0;
+            const deltaHp = targetBonus - (st.appliedMaxHpBonus || 0);
+            if (deltaHp !== 0) {
+                ent.maxHp = Math.max(100, (ent.maxHp || 1000) + deltaHp);
+                if (deltaHp > 0 && !ent.dead) {
+                    ent.hp = Math.min(ent.maxHp, (ent.hp || 0) + deltaHp);
+                } else if (ent.hp > ent.maxHp) {
+                    ent.hp = ent.maxHp;
+                }
+                st.appliedMaxHpBonus = targetBonus;
+            }
+            ent.trueDmgBuff = agg.trueDmg > 0 ? agg.trueDmg : 0;
+        }
+        window.syncEntityEquipmentStats = syncEntityEquipmentStats;
+
+        // NotifyCarryPotential when an ally is healed or shielded by a hero with Carry Potential
+        function triggerCarryPotentialOnAlly(healer, ally) {
+            if (!isEconomyModeActive() || !healer || !ally || healer === ally || ally.dead) return;
+            if (!hasEquip(healer, 'carry_potential')) return;
+            const allySt = ensureEntityEquipState(ally);
+            if (!allySt) return;
+            allySt.carryBuffTimer = 2.5;
+            allySt.carryBuffSource = healer;
+            particles.push(new Particle(ally.x, ally.y, '#facc15', 4.5, 0.45));
+        }
+        window.triggerCarryPotentialOnAlly = triggerCarryPotentialOnAlly;
+
+        // Ability cast trigger for equipment passives
+        function onEntityAbilityUsed(ent, slot) {
+            if (!isEconomyModeActive() || !ent || ent.dead) return;
+            const st = ensureEntityEquipState(ent);
+            if (!st) return;
+            st.lastCombatAt = Date.now();
+            if (st.wandererStealth) {
+                st.wandererStealth = false;
+            }
+
+            // Lag Switch rubberband penalty on ability cast
+            if (st.rubberbandBasicLock > 0) {
+                if (slot === 'q') ent.qCD = (ent.qCD || 0) + 0.8;
+                if (slot === 'e') ent.eCD = (ent.eCD || 0) + 0.8;
+                if (slot === 'f') ent.fCD = (ent.fCD || 0) + 0.8;
+                st.rubberbandBasicLock = 0;
+                if (ent.isPlayer) addKillMsg('📡 Rubberbanded! Ability delayed +0.8s');
+            }
+
+            // 3. Eternal Hell: burn own health (2s, 50/s, stackable) & heal 6% of lost health
+            if (hasEquip(ent, 'eternal_hell')) {
+                const lostHp = Math.max(0, (ent.maxHp || 1000) - (ent.hp || 0));
+                if (lostHp > 0) {
+                    const healAmt = lostHp * 0.06;
+                    ent.hp = Math.min(ent.maxHp, ent.hp + healAmt);
+                }
+                st.eternalBurnStacks.push(2.0);
+                for (let i = 0; i < 6; i++) {
+                    particles.push(new Particle(ent.x + (Math.random() - 0.5) * 28, ent.y + (Math.random() - 0.5) * 28, '#f97316', 4, 0.4));
+                }
+            }
+
+            // 4. Gamer Tag: every 3 abilities, the next ability spawns a "GG" emoticon projectile (320 dmg + 0.6s slow)
+            if (hasEquip(ent, 'gamer_tag')) {
+                st.abilityCastCount = (st.abilityCastCount || 0) + 1;
+                if (st.abilityCastCount >= 4) {
+                    st.abilityCastCount = 0;
+                    let bestEnemy = null, bestD = 950;
+                    for (const e of entities) {
+                        if (e !== ent && !e.dead && e instanceof Entity && e.team !== ent.team && e.isTargetable !== false) {
+                            const d = Math.hypot(e.x - ent.x, e.y - ent.y);
+                            if (d < bestD) { bestD = d; bestEnemy = e; }
+                        }
+                    }
+                    const aimAng = bestEnemy ? Math.atan2(bestEnemy.y - ent.y, bestEnemy.x - ent.x) : (ent.angle || 0);
+                    if (typeof Projectile !== 'undefined') {
+                        const ggProj = new Projectile(ent, ent.x + Math.cos(aimAng) * 24, ent.y + Math.sin(aimAng) * 24, aimAng, 780, 320, 750, '#a855f7', 16);
+                        ggProj.isGamerTagGG = true;
+                        const origHit = ggProj.onHit;
+                        ggProj.onHit = (target) => {
+                            if (origHit) origHit(target);
+                            if (target && !target.dead) {
+                                safeApplyStatus(target, 'slow', 0.6, ent);
+                            }
+                        };
+                        const origDraw = ggProj.draw ? ggProj.draw.bind(ggProj) : null;
+                        ggProj.draw = function(ctx) {
+                            if (origDraw) origDraw(ctx);
+                            const sx = this.x - (typeof camera !== "undefined" ? camera.x : 0), sy = this.y - (typeof camera !== "undefined" ? camera.y : 0);
+                            ctx.save();
+                            ctx.font = 'bold 13px Inter, sans-serif';
+                            ctx.fillStyle = '#fde047';
+                            ctx.strokeStyle = '#0f172a';
+                            ctx.lineWidth = 3;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.strokeText('GG', sx, sy);
+                            ctx.fillText('GG', sx, sy);
+                            ctx.restore();
+                        };
+                        entities.push(ggProj);
+                        if (ent.isPlayer) addKillMsg('🎮 GAMER TAG: GG Emote Fired!');
+                    }
+                }
+            }
+
+            // 15. Influencer's Edge: at 3 stacks, next ability leaves a 2s "trending" zone that slows enemies by 20%
+            if (hasEquip(ent, 'influencers_edge') && st.viralClips >= 3) {
+                if (!window._trendingZones) window._trendingZones = [];
+                window._trendingZones.push({
+                    owner: ent,
+                    team: ent.team,
+                    x: ent.x,
+                    y: ent.y,
+                    radius: 210,
+                    life: 2.0,
+                    maxLife: 2.0
+                });
+                if (ent.isPlayer) addKillMsg('📸 TRENDING ZONE DEPLOYED!');
+            }
+
+            // Support 3. Stream Sniper: when ally < 40% HP within 600 range, next ability heals them for 80 HP (12s CD)
+            if (hasEquip(ent, 'stream_sniper') && getEquipCD(ent, 'stream_sniper') <= 0) {
+                let lowAlly = null, bestRatio = 0.40;
+                for (const e of entities) {
+                    if (e !== ent && !e.dead && e instanceof Entity && e.team === ent.team && e.isTargetable !== false) {
+                        const d = Math.hypot(e.x - ent.x, e.y - ent.y);
+                        const r = (e.hp || 0) / Math.max(1, e.maxHp || 1);
+                        if (d <= 600 && r < 0.40 && r <= bestRatio) {
+                            bestRatio = r;
+                            lowAlly = e;
+                        }
+                    }
+                }
+                if (lowAlly) {
+                    lowAlly.hp = Math.min(lowAlly.maxHp, lowAlly.hp + 80);
+                    setEquipCD(ent, 'stream_sniper', 12.0);
+                    triggerCarryPotentialOnAlly(ent, lowAlly);
+                    effectsAdd(new AuraRing(lowAlly.x, lowAlly.y, 50, 0.35, '#4ade80', 5));
+                    if (ent.isPlayer) addKillMsg(`🔭 Stream Sniper healed ${lowAlly.name || 'Ally'} +80 HP!`);
+                }
+            }
+        }
+
+        // Hook Entity.prototype methods for Equipment passives & Economy
+        (function installEquipmentHooks() {
+            if (typeof Entity === 'undefined' || Entity.prototype.__equipmentHooksInstalled) return;
+            Entity.prototype.__equipmentHooksInstalled = true;
+
+            // 1. Hook getDamageMult
+            const _origGetDamageMult = Entity.prototype.getDamageMult;
+            Entity.prototype.getDamageMult = function() {
+                let m = _origGetDamageMult ? _origGetDamageMult.call(this) : (this.rageTimer > 0 ? 1.1 : 1);
+                if (!isEconomyModeActive()) return m;
+                const agg = computeEquipAggregates(this);
+                m *= (1 + agg.dmgPct) * agg.dmgMult;
+                const st = this._equipState;
+                if (st) {
+                    if (st.fullBarsTimer > 0 && hasEquip(this, 'wifi_warrior')) {
+                        m *= 1.25;
+                    }
+                    if (st.rubberbandWeakNextTimer > 0) {
+                        m *= 0.70;
+                    }
+                }
+                return m;
+            };
+
+            // 2. Hook getEffectiveSpeed
+            const _origGetEffectiveSpeed = Entity.prototype.getEffectiveSpeed;
+            Entity.prototype.getEffectiveSpeed = function() {
+                let s = _origGetEffectiveSpeed ? _origGetEffectiveSpeed.call(this) : this.speed;
+                if (!isEconomyModeActive() || s <= 0) return s;
+                const agg = computeEquipAggregates(this);
+                s = s * (1 + agg.spdPct) * agg.spdMult;
+                if (this._trendingSlowTimer && this._trendingSlowTimer > 0) {
+                    s *= 0.80;
+                }
+                return s;
+            };
+
+            // 3. Hook isVisibleTo for The Lost Wanderer stealth
+            const _origIsVisibleTo = Entity.prototype.isVisibleTo;
+            Entity.prototype.isVisibleTo = function(obs) {
+                if (isEconomyModeActive() && this._equipState && this._equipState.wandererStealth && this.revealTimer <= 0) {
+                    if (obs && obs !== this && obs.team !== this.team) return false;
+                }
+                return _origIsVisibleTo ? _origIsVisibleTo.call(this, obs) : true;
+            };
+
+            // 4. Hook applyStatus for Iron Lung & Screen Protector tenacity
+            const _origApplyStatus = Entity.prototype.applyStatus;
+            Entity.prototype.applyStatus = function(type, value, src) {
+                if (isEconomyModeActive() && (type === 'stun' || type === 'slow' || type === 'freeze' || type === 'blind' || type === 'terrifedTimer' || type === 'hallucinationTimer' || type === 'bransonSlow')) {
+                    let mult = 1.0;
+                    if (hasEquip(this, 'iron_lung') && (this.hp / Math.max(1, this.maxHp || 1)) < 0.50) {
+                        mult *= 0.85; // 15% tenacity
+                    }
+                    if (hasEquip(this, 'screen_protector') && getEquipCD(this, 'screen_protector') <= 0) {
+                        mult *= 0.50; // 50% CC reduction every 10s
+                        setEquipCD(this, 'screen_protector', 10.0);
+                        if (this.isPlayer) addKillMsg('📲 Screen Protector reduced CC by 50%!');
+                    }
+                    if (typeof value === 'number') {
+                        value = value * mult;
+                    }
+                }
+                if (type === 'heal' && src && src !== this && isEconomyModeActive()) {
+                    triggerCarryPotentialOnAlly(src, this);
+                }
+                return _origApplyStatus.call(this, type, value, src);
+            };
+
+            // 5. Hook updateCommon for cooldown haste, attack speed haste, DOTs, out-of-combat passives, and AI shopping
+            const _origUpdateCommon = Entity.prototype.updateCommon;
+            Entity.prototype.updateCommon = function(dt) {
+                _origUpdateCommon.call(this, dt);
+                if (!isEconomyModeActive()) return;
+
+                const isHero = (this.countsAsFFAHero === true || this.isPlayer || (this.owner instanceof Entity));
+                if (!isHero) return;
+
+                const st = ensureEntityEquipState(this);
+                if (!st) return;
+                syncEntityEquipmentStats(this);
+
+                // Tick item cooldowns
+                for (const k in st.cooldowns) {
+                    if (st.cooldowns[k] > 0) {
+                        st.cooldowns[k] = Math.max(0, st.cooldowns[k] - dt);
+                    }
+                }
+                if (this._trendingSlowTimer > 0) this._trendingSlowTimer = Math.max(0, this._trendingSlowTimer - dt);
+                if (st.racingSpeedTimer > 0) st.racingSpeedTimer = Math.max(0, st.racingSpeedTimer - dt);
+                if (st.crashDummySpeedTimer > 0) st.crashDummySpeedTimer = Math.max(0, st.crashDummySpeedTimer - dt);
+                if (st.ggwpBuffTimer > 0) st.ggwpBuffTimer = Math.max(0, st.ggwpBuffTimer - dt);
+                if (st.pingAllySpeedTimer > 0) st.pingAllySpeedTimer = Math.max(0, st.pingAllySpeedTimer - dt);
+                if (st.carryBuffTimer > 0) {
+                    st.carryBuffTimer = Math.max(0, st.carryBuffTimer - dt);
+                    if (st.carryBuffTimer <= 0) st.carryBuffSource = null;
+                }
+                if (st.rubberbandBasicLock > 0) st.rubberbandBasicLock = Math.max(0, st.rubberbandBasicLock - dt);
+                if (st.rubberbandWeakNextTimer > 0) st.rubberbandWeakNextTimer = Math.max(0, st.rubberbandWeakNextTimer - dt);
+                if (st.steelBreakerDebuffTimer > 0) st.steelBreakerDebuffTimer = Math.max(0, st.steelBreakerDebuffTimer - dt);
+
+                // Detect basic attack & ability casts via cooldown jump
+                const curBasic = Number(this.basicCD) || 0;
+                const curQ = Number(this.qCD) || 0;
+                const curE = Number(this.eCD) || 0;
+                const curF = Number(this.fCD) || 0;
+
+                if (curBasic > st.prevBasicCD + 0.08) {
+                    this._lastActionWasAbility = false;
+                    this._lastActionAt = Date.now();
+                    st.lastCombatAt = Date.now();
+                    st.wandererStealth = false;
+                    if (st.rubberbandBasicLock > 0) {
+                        this.basicCD += 0.8;
+                        st.rubberbandBasicLock = 0;
+                    }
+                    // The Sponge: next basic attack consumes absorbed mass to heal
+                    if (hasEquip(this, 'the_sponge') && st.absorbedMass > 0) {
+                        const healSponge = st.absorbedMass;
+                        st.absorbedMass = 0;
+                        this.hp = Math.min(this.maxHp, this.hp + healSponge);
+                        particles.push(new Particle(this.x, this.y, '#4ade80', 5, 0.5));
+                        if (this.isPlayer) addKillMsg(`🧽 The Sponge healed +${Math.round(healSponge)} HP!`);
+                    }
+                }
+                if (curQ > st.prevQCD + 0.25) {
+                    this._lastActionWasAbility = true;
+                    this._lastActionAt = Date.now();
+                    onEntityAbilityUsed(this, 'q');
+                }
+                if (curE > st.prevECD + 0.25) {
+                    this._lastActionWasAbility = true;
+                    this._lastActionAt = Date.now();
+                    onEntityAbilityUsed(this, 'e');
+                }
+                if (curF > st.prevFCD + 0.25) {
+                    this._lastActionWasAbility = true;
+                    this._lastActionAt = Date.now();
+                    onEntityAbilityUsed(this, 'f');
+                }
+
+                // Apply Attack Speed & Cooldown Speed bonuses
+                const agg = computeEquipAggregates(this);
+                if (agg.atkSpd !== 0 && this.basicCD > 0) {
+                    this.basicCD = Math.max(0, this.basicCD - dt * agg.atkSpd);
+                }
+                if (agg.cdr > 0) {
+                    if (this.qCD > 0) this.qCD = Math.max(0, this.qCD - dt * agg.cdr);
+                    if (this.eCD > 0) this.eCD = Math.max(0, this.eCD - dt * agg.cdr);
+                    if (this.fCD > 0) this.fCD = Math.max(0, this.fCD - dt * agg.cdr);
+                }
+
+                st.prevBasicCD = Number(this.basicCD) || 0;
+                st.prevQCD = Number(this.qCD) || 0;
+                st.prevECD = Number(this.eCD) || 0;
+                st.prevFCD = Number(this.fCD) || 0;
+
+                // Track movement for Wifi Warrior (standing still for 1.5s grants Full Bars)
+                const movedDist = Math.hypot((this.x || 0) - st.lastX, (this.y || 0) - st.lastY);
+                st.lastX = this.x || 0;
+                st.lastY = this.y || 0;
+                if (movedDist < 1.2) {
+                    st.stillTimer = (st.stillTimer || 0) + dt;
+                    if (hasEquip(this, 'wifi_warrior') && st.stillTimer >= 1.5) {
+                        st.fullBarsTimer = 3.0;
+                    }
+                } else {
+                    st.stillTimer = 0;
+                    if (st.fullBarsTimer > 0) st.fullBarsTimer = Math.max(0, st.fullBarsTimer - dt);
+                }
+
+                // The Lost Wanderer: out of combat for 5s -> x1.2 speed & invisibility
+                if (hasEquip(this, 'the_lost_wanderer')) {
+                    if ((Date.now() - st.lastCombatAt) >= 5000 && (Date.now() - st.lastDamageTakenAt) >= 5000) {
+                        st.wandererStealth = true;
+                    } else {
+                        st.wandererStealth = false;
+                    }
+                } else {
+                    st.wandererStealth = false;
+                }
+
+                // Eternal Hell self-burn stacks (50/s per stack, non-lethal floor at 1 HP)
+                if (st.eternalBurnStacks && st.eternalBurnStacks.length > 0) {
+                    let activeStacks = 0;
+                    for (let i = st.eternalBurnStacks.length - 1; i >= 0; i--) {
+                        st.eternalBurnStacks[i] -= dt;
+                        if (st.eternalBurnStacks[i] <= 0) st.eternalBurnStacks.splice(i, 1);
+                        else activeStacks++;
+                    }
+                    if (activeStacks > 0 && this.hp > 1) {
+                        this.hp = Math.max(1, this.hp - activeStacks * 50 * dt);
+                    }
+                }
+
+                // Riot Shield Protocol: recharges every 8s
+                if (hasEquip(this, 'riot_shield_protocol')) {
+                    if (!st.riotShieldReady) {
+                        st.riotShieldTimer = (st.riotShieldTimer || 0) + dt;
+                        if (st.riotShieldTimer >= 8.0) {
+                            st.riotShieldTimer = 0;
+                            st.riotShieldReady = true;
+                        }
+                    }
+                }
+
+                // Firewall Fort: blocks enemy projectiles and deals 60 dmg/s while active
+                if (st.firewallActiveTimer > 0) {
+                    st.firewallActiveTimer = Math.max(0, st.firewallActiveTimer - dt);
+                    const fwRadius = 125;
+                    for (const e of entities) {
+                        if (!e || e === this || e.dead || e.del) continue;
+                        if (typeof Projectile !== 'undefined' && e instanceof Projectile && e.owner && e.owner.team !== this.team) {
+                            if (Math.hypot(e.x - this.x, e.y - this.y) <= fwRadius) {
+                                e.del = true;
+                                particles.push(new Particle(e.x, e.y, '#38bdf8', 5, 0.35));
+                            }
+                        } else if (e instanceof Entity && e.team !== this.team && e.isTargetable !== false) {
+                            if (Math.hypot(e.x - this.x, e.y - this.y) <= fwRadius + (e.radius || 16)) {
+                                e.takeDamage(60 * dt, this, { ignoreKnockback: true, fromEquipmentPassive: true });
+                            }
+                        }
+                    }
+                }
+
+                // Lag Armor: delayed damage queue
+                if (st.delayedDamageQueue && st.delayedDamageQueue.length > 0) {
+                    for (let i = st.delayedDamageQueue.length - 1; i >= 0; i--) {
+                        const item = st.delayedDamageQueue[i];
+                        const step = Math.min(dt, item.timeLeft);
+                        const dmgSlice = (item.totalDmg / 2.0) * step;
+                        item.timeLeft -= dt;
+                        if (dmgSlice > 0 && !this.dead) {
+                            this.hp = Math.max(1, this.hp - dmgSlice);
+                        }
+                        if (item.timeLeft <= 0) {
+                            st.delayedDamageQueue.splice(i, 1);
+                        }
+                    }
+                }
+
+                // Titan's Downfall shield decay after 3s
+                if (st.titanShieldRemaining > 0) {
+                    if (st.titanShieldDelayTimer > 0) {
+                        st.titanShieldDelayTimer = Math.max(0, st.titanShieldDelayTimer - dt);
+                    } else {
+                        const decayAmt = (this.maxHp * 0.12) * dt;
+                        const removeAmt = Math.min(st.titanShieldRemaining, decayAmt);
+                        st.titanShieldRemaining = Math.max(0, st.titanShieldRemaining - removeAmt);
+                        this.shield = Math.max(0, (this.shield || 0) - removeAmt);
+                    }
+                }
+
+                // Debug Barrier: regenerates 40 HP/s for 3s
+                if (st.debugBarrierRegenTimer > 0) {
+                    st.debugBarrierRegenTimer = Math.max(0, st.debugBarrierRegenTimer - dt);
+                    this.hp = Math.min(this.maxHp, this.hp + 40 * dt);
+                }
+
+                // Doomscroll DOT: 2% max HP true damage per second for 3s
+                if (st.doomscrollTimer > 0) {
+                    st.doomscrollTimer = Math.max(0, st.doomscrollTimer - dt);
+                    st.doomscrollTickAccum = (st.doomscrollTickAccum || 0) + dt;
+                    if (st.doomscrollTickAccum >= 0.25) {
+                        const ticks = Math.floor(st.doomscrollTickAccum / 0.25);
+                        st.doomscrollTickAccum -= ticks * 0.25;
+                        const trueTick = Math.max(1, (this.maxHp || 1000) * 0.02 * 0.25 * ticks);
+                        this.takeDamage(trueTick, st.doomscrollAttacker || null, { isTrue: true, ignoreKnockback: true, fromEquipmentPassive: true });
+                    }
+                }
+
+                // Stream Sniper proximity check (ally < 40% HP within 600 range)
+                if (hasEquip(this, 'stream_sniper')) {
+                    let foundLowAlly = false;
+                    for (const e of entities) {
+                        if (e !== this && !e.dead && e instanceof Entity && e.team === this.team && e.isTargetable !== false) {
+                            if (Math.hypot(e.x - this.x, e.y - this.y) <= 600 && (e.hp / Math.max(1, e.maxHp || 1)) < 0.40) {
+                                foundLowAlly = true;
+                                break;
+                            }
+                        }
+                    }
+                    st.streamSniperReady = foundLowAlly;
+                }
+
+                // Active Battle Cash Trickle for heroes in combat / battle
+                if (this.countsAsFFAHero && !this.dead) {
+                    st.cashTrickleAccum = (st.cashTrickleAccum || 0) + dt;
+                    if (st.cashTrickleAccum >= 2.0) {
+                        st.cashTrickleAccum -= 2.0;
+                        const inRecentCombat = (Date.now() - st.lastCombatAt) <= 5000 || (Date.now() - st.lastDamageTakenAt) <= 5000;
+                        st.cash = (st.cash || 0) + (inRecentCombat ? 18 : 8);
+                        if (this.isPlayer) updateInGameShopHud();
+                    }
+
+                    // AI Heroes automatically purchase equipment when they have enough cash
+                    if (!this.isPlayer && !this.isTrainingDummy && st.items.length < 6) {
+                        st.aiShopAccum = (st.aiShopAccum || 0) + dt;
+                        if (st.aiShopAccum >= 4.0) {
+                            st.aiShopAccum = 0;
+                            const affordable = EQUIPMENT_CATALOG.filter(it => !st.items.includes(it.id) && st.cash >= it.cost);
+                            if (affordable.length > 0) {
+                                const pick = affordable[Math.floor(Math.random() * affordable.length)];
+                                st.cash -= pick.cost;
+                                st.items.push(pick.id);
+                                syncEntityEquipmentStats(this);
+                            }
+                        }
+                    }
+                }
+            };
+
+            // 6. Hook takeDamage for offensive & defensive equipment passives + Cash rewards
+            const _origTakeDamage = Entity.prototype.takeDamage;
+            Entity.prototype.takeDamage = function(amt, src, meta) {
+                if (this.dead || this.del || this.isTargetable === false) return;
+                if (!isEconomyModeActive() || (meta && meta.fromEquipmentPassive)) {
+                    return _origTakeDamage.call(this, amt, src, meta);
+                }
+
+                const defSt = ensureEntityEquipState(this);
+                const attackerHero = (src && src.owner instanceof Entity) ? src.owner : ((src && src.caster instanceof Entity) ? src.caster : src);
+                const atkSt = (attackerHero instanceof Entity) ? ensureEntityEquipState(attackerHero) : null;
+                const isSummonHit = !!(src && attackerHero && src !== attackerHero);
+                const isAbilityHit = !!(attackerHero && attackerHero._lastActionWasAbility && (Date.now() - (attackerHero._lastActionAt || 0)) < 1400);
+                const isBasicHit = !isAbilityHit && !isSummonHit;
+
+                let modifiedAmt = Number(amt) || 0;
+                if (modifiedAmt <= 0) return;
+
+                if (defSt) {
+                    defSt.lastDamageTakenAt = Date.now();
+                    if (defSt.wandererStealth) defSt.wandererStealth = false;
+                }
+                if (atkSt) {
+                    atkSt.lastCombatAt = Date.now();
+                    if (atkSt.wandererStealth) atkSt.wandererStealth = false;
+                }
+
+                // --- OFFENSIVE EQUIPMENT PASSIVES ON HIT ---
+                if (attackerHero && attackerHero instanceof Entity && attackerHero !== this && attackerHero.team !== this.team && atkSt) {
+                    // 1. Masked Fools: abilities hallucinate enemies hit (4s CD); +10% damage to hallucinated enemies
+                    if (hasEquip(attackerHero, 'masked_fools')) {
+                        if (this.hallucinationTimer > 0) {
+                            modifiedAmt *= 1.10;
+                        }
+                        if (isAbilityHit && getEquipCD(attackerHero, 'masked_fools') <= 0) {
+                            safeApplyStatus(this, 'hallucinationTimer', 2.5, attackerHero);
+                            setEquipCD(attackerHero, 'masked_fools', 4.0);
+                        }
+                    }
+
+                    // 2. Death Knife: basic attacks deal +20% bonus damage to targets below 40% HP
+                    if (hasEquip(attackerHero, 'death_knife') && isBasicHit) {
+                        if ((this.hp / Math.max(1, this.maxHp || 1)) < 0.40) {
+                            modifiedAmt *= 1.20;
+                        }
+                    }
+
+                    // 6. Steel Breaker: attacking reduces enemy attack speed by 20% & defense by 10% for 3s (6s CD)
+                    if (hasEquip(attackerHero, 'steel_breaker') && getEquipCD(attackerHero, 'steel_breaker') <= 0) {
+                        if (defSt) defSt.steelBreakerDebuffTimer = 3.0;
+                        setEquipCD(attackerHero, 'steel_breaker', 6.0);
+                    }
+
+                    // 7. NEON Saber: Electro deals +50% of attack's damage (Basic: 3s CD, Abilities: 6.5s CD)
+                    if (hasEquip(attackerHero, 'neon_saber')) {
+                        const cdKey = isAbilityHit ? 'neon_saber_ability' : 'neon_saber_basic';
+                        const cdDur = isAbilityHit ? 6.5 : 3.0;
+                        if (getEquipCD(attackerHero, cdKey) <= 0) {
+                            setEquipCD(attackerHero, cdKey, cdDur);
+                            const electroBonus = modifiedAmt * 0.50;
+                            modifiedAmt += electroBonus;
+                            effectsAdd(new ImpactFlash(this.x, this.y, 0, 75, 0.22, '#38bdf8'));
+                        }
+                    }
+
+                    // 8. Racing Champion: hitting enemy grants x1.2 move speed briefly & slows enemy for 1s (5s CD)
+                    if (hasEquip(attackerHero, 'racing_champion') && getEquipCD(attackerHero, 'racing_champion') <= 0) {
+                        atkSt.racingSpeedTimer = 1.2;
+                        safeApplyStatus(this, 'slow', 1.0, attackerHero);
+                        setEquipCD(attackerHero, 'racing_champion', 5.0);
+                    }
+
+                    // 10. Core Flames: summons deal +10% bonus damage on hit (10s CD)
+                    if (isSummonHit && hasEquip(attackerHero, 'core_flames') && getEquipCD(attackerHero, 'core_flames') <= 0) {
+                        modifiedAmt *= 1.10;
+                        setEquipCD(attackerHero, 'core_flames', 10.0);
+                        particles.push(new Particle(this.x, this.y, '#f97316', 5, 0.4));
+                    }
+
+                    // 11. Doomscroller: basic attacks build doom stacks (max 10) -> 3s doomscroll (2% max HP true dmg/s + distorted health bar, 12s CD/target)
+                    if (hasEquip(attackerHero, 'doomscroller') && isBasicHit && defSt) {
+                        const targetKey = 'doom_' + (this.id || this.name || 'ent');
+                        const nowSec = Date.now() / 1000;
+                        const readyAt = atkSt.targetCDs[targetKey] || 0;
+                        if (nowSec >= readyAt && defSt.doomscrollTimer <= 0) {
+                            const curStacks = (defSt.doomStacksByAttacker.get(attackerHero) || 0) + 1;
+                            if (curStacks >= 10) {
+                                defSt.doomStacksByAttacker.set(attackerHero, 0);
+                                defSt.doomscrollTimer = 3.0;
+                                defSt.doomscrollAttacker = attackerHero;
+                                atkSt.targetCDs[targetKey] = nowSec + 12.0;
+                                if (attackerHero.isPlayer) addKillMsg(`📱 DOOMSCROLL triggered on ${this.name || 'Enemy'}!`);
+                            } else {
+                                defSt.doomStacksByAttacker.set(attackerHero, curStacks);
+                            }
+                        }
+                    }
+
+                    // 12. Pixel Pirate: every 4th basic attack steals 15% of current shield or 40 HP (whichever is higher), or deals +120 bonus damage
+                    if (hasEquip(attackerHero, 'pixel_pirate') && isBasicHit) {
+                        atkSt.basicHitCount = (atkSt.basicHitCount || 0) + 1;
+                        if (atkSt.basicHitCount >= 4) {
+                            atkSt.basicHitCount = 0;
+                            const shieldSteal = (this.shield || 0) * 0.15;
+                            if (shieldSteal >= 40) {
+                                this.shield = Math.max(0, (this.shield || 0) - shieldSteal);
+                                attackerHero.shield = (attackerHero.shield || 0) + shieldSteal;
+                            } else if ((this.hp || 0) > 40) {
+                                this.hp = Math.max(1, this.hp - 40);
+                                attackerHero.hp = Math.min(attackerHero.maxHp, attackerHero.hp + 40);
+                            } else {
+                                modifiedAmt += 120;
+                            }
+                        }
+                    }
+
+                    // 13. Lag Switch: hitting the same enemy 3 times in a row rubberbands their next ability/basic attack (0.8s delay & 30% reduced damage, 7s CD)
+                    if (hasEquip(attackerHero, 'lag_switch') && getEquipCD(attackerHero, 'lag_switch') <= 0) {
+                        if (atkSt.consecutiveTarget === this) {
+                            atkSt.consecutiveHits = (atkSt.consecutiveHits || 0) + 1;
+                        } else {
+                            atkSt.consecutiveTarget = this;
+                            atkSt.consecutiveHits = 1;
+                        }
+                        if (atkSt.consecutiveHits >= 3 && defSt) {
+                            atkSt.consecutiveHits = 0;
+                            defSt.rubberbandBasicLock = 3.0;
+                            defSt.rubberbandWeakNextTimer = 3.0;
+                            setEquipCD(attackerHero, 'lag_switch', 7.0);
+                            if (attackerHero.isPlayer) addKillMsg(`📡 Lag Switch rubberbanded ${this.name || 'Enemy'}!`);
+                        }
+                    }
+
+                    // 14. Wifi Warrior: Full Bars consumed on hit (+25% damage already in getDamageMult, plus reveal nearby enemies for 2s)
+                    if (hasEquip(attackerHero, 'wifi_warrior') && atkSt.fullBarsTimer > 0) {
+                        atkSt.fullBarsTimer = 0;
+                        atkSt.stillTimer = 0;
+                        for (const e of entities) {
+                            if (e !== attackerHero && !e.dead && e instanceof Entity && e.team !== attackerHero.team) {
+                                if (Math.hypot(e.x - this.x, e.y - this.y) <= 450) {
+                                    e.revealTimer = Math.max(e.revealTimer || 0, 2.0);
+                                }
+                            }
+                        }
+                    }
+
+                    // Support 1. Ping System: hitting/marking enemy reveals them for 2s and grants nearby allies +5% move speed for 1.5s (4s CD per target)
+                    if (hasEquip(attackerHero, 'ping_system')) {
+                        const pingKey = 'ping_' + (this.id || this.name || 'ent');
+                        const nowSec = Date.now() / 1000;
+                        if (nowSec >= (atkSt.targetCDs[pingKey] || 0)) {
+                            atkSt.targetCDs[pingKey] = nowSec + 4.0;
+                            this.revealTimer = Math.max(this.revealTimer || 0, 2.0);
+                            for (const ally of entities) {
+                                if (!ally.dead && ally instanceof Entity && ally.team === attackerHero.team) {
+                                    if (Math.hypot(ally.x - attackerHero.x, ally.y - attackerHero.y) <= 550) {
+                                        const aSt = ensureEntityEquipState(ally);
+                                        if (aSt) aSt.pingAllySpeedTimer = 1.5;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // --- DEFENSIVE EQUIPMENT PASSIVES ON TAKING DAMAGE ---
+                if (defSt) {
+                    const defAgg = computeEquipAggregates(this);
+                    // Flat equipment defense %
+                    if (defAgg.def !== 0 && !(meta === true || (meta && meta.isTrue))) {
+                        modifiedAmt *= Math.max(0.25, 1 - defAgg.def);
+                    }
+
+                    // 3. Riot Shield Protocol: every 8s, next incoming basic attack is blocked and reflects 80 damage
+                    if (hasEquip(this, 'riot_shield_protocol') && defSt.riotShieldReady && isBasicHit && attackerHero && attackerHero !== this) {
+                        defSt.riotShieldReady = false;
+                        defSt.riotShieldTimer = 0;
+                        attackerHero.takeDamage(80, this, { ignoreKnockback: true, fromEquipmentPassive: true });
+                        effectsAdd(new AuraRing(this.x, this.y, 48, 0.3, '#38bdf8', 5));
+                        if (this.isPlayer) addKillMsg('🧱 Riot Shield blocked & reflected 80 dmg!');
+                        return;
+                    }
+
+                    // 8. Thick Skin: incoming basic attacks deal 12% less damage
+                    if (hasEquip(this, 'thick_skin') && isBasicHit) {
+                        modifiedAmt *= 0.88;
+                    }
+
+                    // 12. Safe Mode: out of combat for 4s grants 8% damage reduction on next hit
+                    if (hasEquip(this, 'safe_mode') && (Date.now() - (defSt._prevHitTime || 0)) >= 4000) {
+                        modifiedAmt *= 0.92;
+                    }
+                    defSt._prevHitTime = Date.now();
+
+                    // 4. Nokia Brick: first hit > 25% max HP is capped at 25% max HP (45s CD)
+                    if (hasEquip(this, 'nokia_brick') && getEquipCD(this, 'nokia_brick') <= 0) {
+                        const capAmt = (this.maxHp || 1000) * 0.25;
+                        if (modifiedAmt > capAmt) {
+                            modifiedAmt = capAmt;
+                            setEquipCD(this, 'nokia_brick', 45.0);
+                            if (this.isPlayer) addKillMsg('📟 NOKIA BRICK capped hit at 25% Max HP!');
+                        }
+                    }
+
+                    // 5. Firewall Fort: after taking 3 separate hits within 4s, deploy 2s firewall (18s CD)
+                    if (hasEquip(this, 'firewall_fort') && getEquipCD(this, 'firewall_fort') <= 0) {
+                        const nowMs = Date.now();
+                        defSt.firewallHitTimes = (defSt.firewallHitTimes || []).filter(t => (nowMs - t) <= 4000);
+                        defSt.firewallHitTimes.push(nowMs);
+                        if (defSt.firewallHitTimes.length >= 3) {
+                            defSt.firewallHitTimes = [];
+                            defSt.firewallActiveTimer = 2.0;
+                            setEquipCD(this, 'firewall_fort', 18.0);
+                            if (this.isPlayer) addKillMsg('🏮 FIREWALL FORT DEPLOYED!');
+                        }
+                    }
+
+                    // 11. Hardware Hacker: enemies who hit you with abilities have cooldowns increased by 1s (6s CD/enemy)
+                    if (hasEquip(this, 'hardware_hacker') && isAbilityHit && attackerHero && attackerHero !== this) {
+                        const hhKey = 'hh_' + (attackerHero.id || attackerHero.name || 'atk');
+                        const nowSec = Date.now() / 1000;
+                        if (nowSec >= (defSt.targetCDs[hhKey] || 0)) {
+                            defSt.targetCDs[hhKey] = nowSec + 6.0;
+                            safeApplyStatus(attackerHero, 'cooldownIncrease', 1.0, this);
+                        }
+                    }
+
+                    // 9. The Sponge: 10% of all damage taken is stored as absorbed mass (max 200)
+                    if (hasEquip(this, 'the_sponge')) {
+                        defSt.absorbedMass = Math.min(200, (defSt.absorbedMass || 0) + modifiedAmt * 0.10);
+                    }
+
+                    // 6. Lag Armor: 20% of damage taken is delayed over 2s
+                    if (hasEquip(this, 'lag_armor')) {
+                        const delayedPart = modifiedAmt * 0.20;
+                        modifiedAmt *= 0.80;
+                        defSt.delayedDamageQueue.push({ totalDmg: delayedPart, timeLeft: 2.0 });
+                    }
+                }
+
+                const hpBefore = this.hp;
+                const shieldBefore = this.shield || 0;
+
+                // Execute core damage logic, but guard fatal hits if A Legend Reborn or Crash Test Dummy is ready
+                const legendReady = hasEquip(this, 'a_legend_reborn') && getEquipCD(this, 'a_legend_reborn') <= 0;
+                const crashReady = hasEquip(this, 'crash_test_dummy') && getEquipCD(this, 'crash_test_dummy') <= 0;
+                if (legendReady || crashReady) {
+                    this.invincibleLockTimer = Math.max(this.invincibleLockTimer || 0, 0.05);
+                }
+
+                _origTakeDamage.call(this, modifiedAmt, src, meta);
+
+                // Check post-hit HP thresholds
+                if (!this.dead && defSt) {
+                    const hpRatioAfter = (this.hp || 0) / Math.max(1, this.maxHp || 1);
+
+                    // Fatal save check (HP hit 1 due to invincibleLockTimer)
+                    if (this.hp <= 1.5 && (legendReady || crashReady)) {
+                        if (crashReady) {
+                            this.hp = 1;
+                            this.invulnerableTimer = Math.max(this.invulnerableTimer || 0, 1.0);
+                            this.invincibleTimer = Math.max(this.invincibleTimer || 0, 1.0);
+                            defSt.crashDummySpeedTimer = 2.0;
+                            setEquipCD(this, 'crash_test_dummy', 50.0);
+                            if (this.isPlayer) addKillMsg('🤖 CRASH TEST DUMMY: Survived at 1 HP + Untargetable!');
+                        } else if (legendReady) {
+                            this.hp = 1;
+                            this.invincibleTimer = Math.max(this.invincibleTimer || 0, 1.5);
+                            this.invincibleLockTimer = Math.max(this.invincibleLockTimer || 0, 1.5);
+                            setEquipCD(this, 'a_legend_reborn', 40.0);
+                            if (this.isPlayer) addKillMsg('🦅 A LEGEND REBORN: Invincible for 1.5s!');
+                        }
+                    }
+
+                    // 1. Titan's Downfall: when HP < 20%, grant 30% max HP shield wave that decays after 3s (30s CD)
+                    if (hasEquip(this, 'titans_downfall') && hpRatioAfter > 0 && hpRatioAfter < 0.20 && getEquipCD(this, 'titans_downfall') <= 0) {
+                        const shieldWave = Math.round((this.maxHp || 1000) * 0.30);
+                        this.shield = (this.shield || 0) + shieldWave;
+                        defSt.titanShieldRemaining = shieldWave;
+                        defSt.titanShieldDelayTimer = 3.0;
+                        setEquipCD(this, 'titans_downfall', 30.0);
+                        effectsAdd(new WaveShockwave(this.x, this.y, 180, 0.45, '#38bdf8', '#facc15'));
+                        if (this.isPlayer) addKillMsg("🛡️ TITAN'S DOWNFALL: +30% Max HP Shield!");
+                    }
+
+                    // 10. Debug Barrier: when HP < 30%, gain 200 shield + 40 HP/s for 3s (25s CD)
+                    if (hasEquip(this, 'debug_barrier') && hpRatioAfter > 0 && hpRatioAfter < 0.30 && getEquipCD(this, 'debug_barrier') <= 0) {
+                        this.shield = (this.shield || 0) + 200;
+                        defSt.debugBarrierRegenTimer = 3.0;
+                        setEquipCD(this, 'debug_barrier', 25.0);
+                        if (this.isPlayer) addKillMsg('💠 DEBUG BARRIER: +200 Shield & Regen!');
+                    }
+                }
+
+                // Active Combat Cash Reward for dealing damage to enemy heroes/dummies
+                const actualDealt = Math.max(0, (hpBefore - Math.max(0, this.hp)) + (shieldBefore - Math.max(0, this.shield || 0)));
+                if (actualDealt > 0 && attackerHero && attackerHero instanceof Entity && attackerHero !== this && attackerHero.team !== this.team && (this.countsAsFFAHero || this.isTrainingDummy)) {
+                    const dmgCash = Math.max(2, Math.min(45, Math.round(actualDealt / 18)));
+                    awardBattleCash(attackerHero, dmgCash, '');
+                }
+            };
+
+            // 7. Hook die for kill/assist Cash rewards, Lag Armor clear, Influencer's Edge, GG WP, Carry Potential, and Backup Drive
+            const _origDie = Entity.prototype.die;
+            Entity.prototype.die = function(src) {
+                const wasDead = this.dead;
+                const killerHero = (src && src.owner instanceof Entity) ? src.owner : ((src && src.caster instanceof Entity) ? src.caster : src);
+
+                if (isEconomyModeActive() && !wasDead && (this.countsAsFFAHero || this.isTrainingDummy)) {
+                    // Reset viral clips on death
+                    const mySt = ensureEntityEquipState(this);
+                    if (mySt) {
+                        mySt.viralClips = 0;
+                        mySt.delayedDamageQueue = [];
+                    }
+
+                    if (killerHero && killerHero instanceof Entity && killerHero !== this && killerHero.team !== this.team) {
+                        const kSt = ensureEntityEquipState(killerHero);
+                        // Kill Bounty Cash
+                        awardBattleCash(killerHero, 220, 'Kill Bounty');
+
+                        // Lag Armor: killing an enemy cancels all remaining delayed damage
+                        if (kSt && hasEquip(killerHero, 'lag_armor')) {
+                            kSt.delayedDamageQueue = [];
+                        }
+
+                        // Influencer's Edge: +1 viral clip stack (max 3)
+                        if (kSt && hasEquip(killerHero, 'influencers_edge')) {
+                            kSt.viralClips = Math.min(3, (kSt.viralClips || 0) + 1);
+                            if (killerHero.isPlayer) addKillMsg(`📸 Viral Clip Stack: ${kSt.viralClips}/3!`);
+                        }
+
+                        // Carry Potential: if killer was buffed by an ally's Carry Potential, grant that ally +50 gold
+                        if (kSt && kSt.carryBuffTimer > 0 && kSt.carryBuffSource && !kSt.carryBuffSource.dead) {
+                            awardBattleCash(kSt.carryBuffSource, 50, 'Carry Potential');
+                        }
+
+                        // Award Assist Cash + trigger GG WP
+                        const assistHeroes = [];
+                        if (this.damageContributors && this.damageContributors.size > 0) {
+                            for (const [contrib, dmgObj] of this.damageContributors) {
+                                const dmgTime = (dmgObj && typeof dmgObj === 'object') ? (dmgObj.time || 0) : 0;
+                                if (contrib && contrib !== killerHero && contrib.team === killerHero.team && !contrib.dead && (Date.now() - dmgTime) <= 10000) {
+                                    awardBattleCash(contrib, 110, 'Assist');
+                                    assistHeroes.push(contrib);
+                                }
+                            }
+                        }
+
+                        // GG WP: after an ally gets a kill or assist near you, both gain +10% atk speed and +5% move speed for 2s
+                        for (const ally of entities) {
+                            if (!ally.dead && ally instanceof Entity && ally.team === killerHero.team && hasEquip(ally, 'gg_wp')) {
+                                if (Math.hypot(ally.x - killerHero.x, ally.y - killerHero.y) <= 650) {
+                                    const aSt = ensureEntityEquipState(ally);
+                                    if (aSt) aSt.ggwpBuffTimer = 2.0;
+                                    if (kSt) kSt.ggwpBuffTimer = 2.0;
+                                    for (const ah of assistHeroes) {
+                                        const ahSt = ensureEntityEquipState(ah);
+                                        if (ahSt) ahSt.ggwpBuffTimer = 2.0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 13. Backup Drive: leaves a backup marker for 8s; if an ally stands on it for 2s (or self-backup in solo/FFA modes), revive with 40% HP (once per game, 90s CD)
+                    if (mySt && hasEquip(this, 'backup_drive') && !mySt.backupUsedThisGame && getEquipCD(this, 'backup_drive') <= 0) {
+                        mySt.backupUsedThisGame = true;
+                        setEquipCD(this, 'backup_drive', 90.0);
+                        if (!window._backupDriveMarkers) window._backupDriveMarkers = [];
+                        window._backupDriveMarkers.push({
+                            owner: this,
+                            team: this.team,
+                            x: this.x,
+                            y: this.y,
+                            radius: 95,
+                            life: 8.0,
+                            channelProgress: 0
+                        });
+                        if (this.isPlayer) addKillMsg('💾 BACKUP DRIVE marker deployed! Stand on it 2s to revive!');
+                    }
+                }
+
+                return _origDie.call(this, src);
+            };
+
+            // 8. Hook Entity.prototype.draw for Doomscroller health bar distortion, Firewall Fort barrier, Wanderer stealth tint, Trending Zones, and Backup Drive markers
+            const _origDraw = Entity.prototype.draw;
+            Entity.prototype.draw = function(ctx) {
+                const st = this._equipState;
+                const isDoomscrolling = !!(isEconomyModeActive() && st && st.doomscrollTimer > 0);
+                let origHp = this.hp;
+                if (isDoomscrolling) {
+                    // Distort displayed health bar rapidly during Doomscroll
+                    this.hp = (Math.sin(Date.now() * 0.045) * 0.5 + 0.5) * (this.maxHp || 1000);
+                }
+                if (isEconomyModeActive() && st && st.wandererStealth) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.38;
+                    _origDraw.call(this, ctx);
+                    ctx.restore();
+                } else {
+                    _origDraw.call(this, ctx);
+                }
+                if (isDoomscrolling) {
+                    this.hp = origHp;
+                    const sx = this.x - (typeof camera !== "undefined" ? camera.x : 0), sy = this.y - (typeof camera !== "undefined" ? camera.y : 0);
+                    ctx.save();
+                    ctx.fillStyle = '#ec4899';
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 2.5;
+                    ctx.font = 'bold 11px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.strokeText('📱 DOOMSCROLLING (HP HIDDEN)', sx, sy - this.radius - 26);
+                    ctx.fillText('📱 DOOMSCROLLING (HP HIDDEN)', sx, sy - this.radius - 26);
+                    ctx.restore();
+                }
+                if (isEconomyModeActive() && st && st.firewallActiveTimer > 0 && !this.dead) {
+                    const sx = this.x - (typeof camera !== "undefined" ? camera.x : 0), sy = this.y - (typeof camera !== "undefined" ? camera.y : 0);
+                    ctx.save();
+                    ctx.strokeStyle = '#f97316';
+                    ctx.fillStyle = 'rgba(249, 115, 22, 0.14)';
+                    ctx.lineWidth = 3.5;
+                    ctx.setLineDash([10, 6]);
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, 125, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            };
+        })();
+
+        // Update & Render world-level Equipment Zones (Influencer's Edge Trending Zones & Backup Drive Markers)
+        function updateAndDrawEquipmentWorldZones(dt, ctx) {
+            if (!isEconomyModeActive()) return;
+
+            // 1. Trending Zones
+            if (window._trendingZones && window._trendingZones.length > 0) {
+                for (let i = window._trendingZones.length - 1; i >= 0; i--) {
+                    const z = window._trendingZones[i];
+                    z.life -= dt;
+                    if (z.life <= 0) {
+                        window._trendingZones.splice(i, 1);
+                        continue;
+                    }
+                    for (const e of entities) {
+                        if (e && !e.dead && e instanceof Entity && e.team !== z.team && e.isTargetable !== false) {
+                            if (Math.hypot(e.x - z.x, e.y - z.y) <= z.radius) {
+                                e._trendingSlowTimer = 0.25;
+                            }
+                        }
+                    }
+                    if (ctx) {
+                        const sx = z.x - (typeof camera !== "undefined" ? camera.x : 0), sy = z.y - (typeof camera !== "undefined" ? camera.y : 0);
+                        ctx.save();
+                        ctx.globalAlpha = Math.min(1, z.life / 0.5) * 0.75;
+                        ctx.strokeStyle = '#ec4899';
+                        ctx.fillStyle = 'rgba(236, 72, 153, 0.14)';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.arc(sx, sy, z.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.fillStyle = '#fbcfe8';
+                        ctx.font = 'bold 12px Inter, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('📸 #TRENDING (-20% SPD)', sx, sy - z.radius + 22);
+                        ctx.restore();
+                    }
+                }
+            }
+
+            // 2. Backup Drive Markers
+            if (window._backupDriveMarkers && window._backupDriveMarkers.length > 0) {
+                for (let i = window._backupDriveMarkers.length - 1; i >= 0; i--) {
+                    const m = window._backupDriveMarkers[i];
+                    m.life -= dt;
+                    if (m.life <= 0 || !m.owner) {
+                        window._backupDriveMarkers.splice(i, 1);
+                        continue;
+                    }
+                    let allyStanding = false;
+                    for (const e of entities) {
+                        if (e && !e.dead && e !== m.owner && e instanceof Entity && e.team === m.team) {
+                            if (Math.hypot(e.x - m.x, e.y - m.y) <= m.radius) {
+                                allyStanding = true;
+                                break;
+                            }
+                        }
+                    }
+                    // In FFA/training where player has no living teammates, allow self-backup channel
+                    const hasAnyTeammate = entities.some(e => e && e !== m.owner && e instanceof Entity && e.team === m.team);
+                    if (allyStanding || !hasAnyTeammate) {
+                        m.channelProgress += dt;
+                    }
+                    if (m.channelProgress >= 2.0) {
+                        const u = m.owner;
+                        u.dead = false;
+                        u.hp = Math.round((u.maxHp || 1000) * 0.40);
+                        u.x = m.x;
+                        u.y = m.y;
+                        if (!entities.includes(u)) entities.push(u);
+                        effectsAdd(new WaveShockwave(u.x, u.y, 180, 0.5, '#22c55e', '#38bdf8'));
+                        if (u.isPlayer) addKillMsg('💾 BACKUP RESTORED! Revived at 40% HP!');
+                        window._backupDriveMarkers.splice(i, 1);
+                        continue;
+                    }
+                    if (ctx) {
+                        const sx = m.x - (typeof camera !== "undefined" ? camera.x : 0), sy = m.y - (typeof camera !== "undefined" ? camera.y : 0);
+                        ctx.save();
+                        ctx.strokeStyle = '#22c55e';
+                        ctx.fillStyle = 'rgba(34, 197, 94, 0.18)';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.arc(sx, sy, m.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.fillStyle = '#86efac';
+                        ctx.font = 'bold 12px Inter, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(`💾 BACKUP DRIVE (${Math.min(100, Math.round((m.channelProgress / 2) * 100))}%)`, sx, sy);
+                        ctx.restore();
+                    }
+                }
+            }
+        }
+        window.updateAndDrawEquipmentWorldZones = updateAndDrawEquipmentWorldZones;
+
+        // ================= SHOP UI & KEYBIND (B) =================
+        let activeShopCategory = 'ATTACK';
+
+        function createShopUIElements() {
+            if (document.getElementById('shopBtnInGame')) return;
+
+            const styleEl = document.createElement('style');
+            styleEl.textContent = `
+                #shopBtnInGame {
+                    position: fixed;
+                    top: 18px;
+                    right: 20px;
+                    height: 44px;
+                    padding: 0 16px;
+                    border-radius: 12px;
+                    background: linear-gradient(135deg, rgba(15, 23, 42, 0.94) 0%, rgba(30, 41, 59, 0.94) 100%);
+                    color: #f8fafc;
+                    border: 1.5px solid rgba(250, 204, 21, 0.65);
+                    font-size: 14px;
+                    font-weight: 800;
+                    cursor: pointer;
+                    z-index: 1205;
+                    display: none;
+                    align-items: center;
+                    gap: 10px;
+                    box-shadow: 0 8px 24px rgba(2, 6, 23, 0.6), 0 0 14px rgba(250, 204, 21, 0.22);
+                    backdrop-filter: blur(8px);
+                    transition: transform 0.15s ease, border-color 0.15s ease;
+                }
+                #shopBtnInGame:hover {
+                    transform: translateY(-2px);
+                    border-color: #facc15;
+                }
+                #hudEquipBar {
+                    position: fixed;
+                    top: 70px;
+                    right: 20px;
+                    display: none;
+                    gap: 6px;
+                    z-index: 1200;
+                    background: rgba(15, 23, 42, 0.78);
+                    padding: 6px 8px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(148, 163, 184, 0.28);
+                    backdrop-filter: blur(6px);
+                }
+                .hud-equip-slot {
+                    width: 34px;
+                    height: 34px;
+                    border-radius: 8px;
+                    background: rgba(30, 41, 59, 0.85);
+                    border: 1px solid rgba(148, 163, 184, 0.32);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 17px;
+                    position: relative;
+                    cursor: pointer;
+                }
+                .hud-equip-slot.filled {
+                    border-color: #facc15;
+                    background: rgba(250, 204, 21, 0.12);
+                }
+                .hud-equip-cd {
+                    position: absolute;
+                    bottom: 1px;
+                    right: 2px;
+                    font-size: 9px;
+                    font-weight: 800;
+                    color: #fde047;
+                    background: rgba(2, 6, 23, 0.85);
+                    padding: 0 3px;
+                    border-radius: 4px;
+                }
+                #equipmentShopModal {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(2, 6, 23, 0.72);
+                    backdrop-filter: blur(8px);
+                    z-index: 2500;
+                    display: none;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                }
+                .equip-shop-card {
+                    width: min(980px, 95vw);
+                    max-height: 86vh;
+                    background: linear-gradient(165deg, #0f172a 0%, #1e293b 100%);
+                    border: 1.5px solid rgba(250, 204, 21, 0.45);
+                    border-radius: 18px;
+                    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                    color: #f8fafc;
+                    font-family: Inter, system-ui, sans-serif;
+                }
+                .equip-shop-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 16px 22px;
+                    background: rgba(2, 6, 23, 0.55);
+                    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+                }
+                .equip-shop-tabs {
+                    display: flex;
+                    gap: 10px;
+                    padding: 12px 22px;
+                    background: rgba(15, 23, 42, 0.75);
+                    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+                    flex-wrap: wrap;
+                    align-items: center;
+                }
+                .equip-tab-btn {
+                    padding: 8px 18px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(148, 163, 184, 0.3);
+                    background: rgba(30, 41, 59, 0.7);
+                    color: #cbd5e1;
+                    font-weight: 800;
+                    font-size: 13px;
+                    cursor: pointer;
+                }
+                .equip-tab-btn.active {
+                    background: linear-gradient(135deg, #ca8a04 0%, #eab308 100%);
+                    color: #0f172a;
+                    border-color: #fde047;
+                }
+                .equip-shop-grid {
+                    padding: 18px 22px;
+                    overflow-y: auto;
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                    gap: 12px;
+                }
+                .equip-item-box {
+                    background: rgba(30, 41, 59, 0.75);
+                    border: 1px solid rgba(148, 163, 184, 0.25);
+                    border-radius: 12px;
+                    padding: 12px 14px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: space-between;
+                    gap: 8px;
+                }
+                .equip-item-box.owned {
+                    border-color: #22c55e;
+                    background: rgba(34, 197, 94, 0.1);
+                }
+            `;
+            document.head.appendChild(styleEl);
+
+            const btn = document.createElement('button');
+            btn.id = 'shopBtnInGame';
+            btn.innerHTML = '<span>🛒 SHOP [B]</span><span id="shopBtnCashText" style="color:#fde047;">💰 600</span>';
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                toggleEquipmentShopModal();
+            };
+            document.body.appendChild(btn);
+
+            const bar = document.createElement('div');
+            bar.id = 'hudEquipBar';
+            bar.onclick = (e) => {
+                e.stopPropagation();
+                toggleEquipmentShopModal();
+            };
+            document.body.appendChild(bar);
+
+            const modal = document.createElement('div');
+            modal.id = 'equipmentShopModal';
+            modal.onclick = (e) => {
+                if (e.target === modal) toggleEquipmentShopModal(false);
+            };
+            modal.innerHTML = `
+                <div class="equip-shop-card" onclick="event.stopPropagation()">
+                    <div class="equip-shop-header">
+                        <div>
+                            <div style="font-size:19px;font-weight:900;letter-spacing:0.03em;">⚔️ BATTLE EQUIPMENT SHOP <span style="font-size:12px;color:#94a3b8;font-weight:600;">(Press [B] to Toggle · Max 6 Items)</span></div>
+                            <div style="font-size:12px;color:#94a3b8;margin-top:2px;">Earn Cash by dealing combat damage, getting kills (+220), and assists (+110)!</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:14px;">
+                            <div id="shopModalCashDisplay" style="font-size:18px;font-weight:900;color:#fde047;background:rgba(250,204,21,0.12);padding:6px 14px;border-radius:10px;border:1px solid rgba(250,204,21,0.4);">💰 600</div>
+                            <button id="shopTrainingGrantBtn" style="display:none;padding:7px 12px;border-radius:8px;background:#0ea5e9;color:#fff;font-weight:800;border:none;cursor:pointer;" onclick="grantTrainingTestCash()">+2000 Cash (Lab)</button>
+                            <button style="padding:7px 14px;border-radius:8px;background:#ef4444;color:#fff;font-weight:800;border:none;cursor:pointer;" onclick="toggleEquipmentShopModal(false)">✕ CLOSE</button>
+                        </div>
+                    </div>
+                    <div class="equip-shop-tabs">
+                        <button class="equip-tab-btn active" id="equipTab_ATTACK" onclick="switchShopCategory('ATTACK')">⚔️ ATTACK (15)</button>
+                        <button class="equip-tab-btn" id="equipTab_DEFENSE" onclick="switchShopCategory('DEFENSE')">🛡️ DEFENSE (15)</button>
+                        <button class="equip-tab-btn" id="equipTab_SUPPORT" onclick="switchShopCategory('SUPPORT')">✨ SUPPORT (4)</button>
+                        <div id="shopOwnedSlotsPreview" style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:#cbd5e1;"></div>
+                    </div>
+                    <div class="equip-shop-grid" id="equipShopGrid"></div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function grantTrainingTestCash() {
+            if (typeof player !== 'undefined' && player) {
+                const st = ensureEntityEquipState(player);
+                if (st) {
+                    st.cash = (st.cash || 0) + 2000;
+                    renderEquipmentShopModal();
+                    updateInGameShopHud();
+                }
+            }
+        }
+        window.grantTrainingTestCash = grantTrainingTestCash;
+
+        function switchShopCategory(cat) {
+            activeShopCategory = cat;
+            ['ATTACK', 'DEFENSE', 'SUPPORT'].forEach(c => {
+                const el = document.getElementById('equipTab_' + c);
+                if (el) el.classList.toggle('active', c === cat);
+            });
+            renderEquipmentShopModal();
+        }
+        window.switchShopCategory = switchShopCategory;
+
+        function buyOrSellEquipment(itemId) {
+            if (!isEconomyModeActive() || typeof player === 'undefined' || !player) return;
+            const st = ensureEntityEquipState(player);
+            const item = EQUIPMENT_BY_ID[itemId];
+            if (!st || !item) return;
+
+            const idx = st.items.indexOf(itemId);
+            if (idx >= 0) {
+                // Sell / Unequip for 70% refund
+                st.items.splice(idx, 1);
+                const refund = Math.round(item.cost * 0.70);
+                st.cash += refund;
+                syncEntityEquipmentStats(player);
+                addKillMsg(`Sold ${item.name} (+${refund} Cash)`);
+            } else {
+                if (st.items.length >= 6) {
+                    addKillMsg('⚠️ Max 6 Equipments! Sell an item first.');
+                    return;
+                }
+                if (st.cash < item.cost) {
+                    addKillMsg(`⚠️ Need ${item.cost - st.cash} more Cash for ${item.name}!`);
+                    return;
+                }
+                st.cash -= item.cost;
+                st.items.push(itemId);
+                syncEntityEquipmentStats(player);
+                addKillMsg(`🛒 Equipped ${item.icon} ${item.name}!`);
+            }
+            renderEquipmentShopModal();
+            updateInGameShopHud();
+        }
+        window.buyOrSellEquipment = buyOrSellEquipment;
+
+        function renderEquipmentShopModal() {
+            createShopUIElements();
+            const grid = document.getElementById('equipShopGrid');
+            const cashEl = document.getElementById('shopModalCashDisplay');
+            const previewEl = document.getElementById('shopOwnedSlotsPreview');
+            const labBtn = document.getElementById('shopTrainingGrantBtn');
+            if (!grid || typeof player === 'undefined' || !player) return;
+
+            const st = ensureEntityEquipState(player);
+            if (cashEl) cashEl.textContent = `💰 ${Math.floor(st.cash || 0)}`;
+            if (labBtn) labBtn.style.display = (typeof gameMode !== 'undefined' && gameMode === 'training') ? 'inline-block' : 'none';
+
+            if (previewEl) {
+                let htmlSlots = `<span style="font-weight:700;">Equipped (${st.items.length}/6):</span>`;
+                for (let i = 0; i < 6; i++) {
+                    const id = st.items[i];
+                    const it = id ? EQUIPMENT_BY_ID[id] : null;
+                    if (it) {
+                        htmlSlots += `<span title="${it.name} (Click to sell)" onclick="buyOrSellEquipment('${it.id}')" style="cursor:pointer;padding:3px 7px;border-radius:6px;background:rgba(250,204,21,0.18);border:1px solid #facc15;">${it.icon}</span>`;
+                    } else {
+                        htmlSlots += `<span style="padding:3px 7px;border-radius:6px;background:rgba(30,41,59,0.7);border:1px dashed rgba(148,163,184,0.35);">·</span>`;
+                    }
+                }
+                previewEl.innerHTML = htmlSlots;
+            }
+
+            const items = EQUIPMENT_CATALOG.filter(it => it.category === activeShopCategory);
+            grid.innerHTML = items.map(it => {
+                const owned = st.items.includes(it.id);
+                const canAfford = (st.cash || 0) >= it.cost && st.items.length < 6;
+                const btnLabel = owned ? 'SELL (70%)' : `BUY · 💰 ${it.cost}`;
+                const btnBg = owned ? '#ef4444' : (canAfford ? '#eab308' : '#334155');
+                const btnCol = owned ? '#ffffff' : (canAfford ? '#0f172a' : '#94a3b8');
+                return `
+                    <div class="equip-item-box ${owned ? 'owned' : ''}">
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                                <div style="font-weight:800;font-size:15px;color:#f8fafc;">${it.icon} ${it.name}</div>
+                                <span style="font-size:11px;font-weight:800;color:#fde047;">💰 ${it.cost}</span>
+                            </div>
+                            <div style="font-size:12px;font-weight:700;color:#38bdf8;margin-top:4px;">${it.statsText}</div>
+                            <div style="font-size:11.5px;color:#cbd5e1;margin-top:5px;line-height:1.35;">${it.passiveText}</div>
+                        </div>
+                        <button onclick="buyOrSellEquipment('${it.id}')" style="margin-top:6px;padding:7px 12px;border-radius:8px;border:none;font-weight:800;font-size:12px;cursor:pointer;background:${btnBg};color:${btnCol};">
+                            ${btnLabel}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+        window.renderEquipmentShopModal = renderEquipmentShopModal;
+
+        function toggleEquipmentShopModal(forceState) {
+            createShopUIElements();
+            const modal = document.getElementById('equipmentShopModal');
+            if (!modal) return;
+            if (!isEconomyModeActive()) {
+                modal.style.display = 'none';
+                return;
+            }
+            const nextOpen = (typeof forceState === 'boolean') ? forceState : (modal.style.display !== 'flex');
+            if (nextOpen) {
+                renderEquipmentShopModal();
+                modal.style.display = 'flex';
+            } else {
+                modal.style.display = 'none';
+            }
+        }
+        window.toggleEquipmentShopModal = toggleEquipmentShopModal;
+
+        function updateInGameShopHud() {
+            createShopUIElements();
+            const btn = document.getElementById('shopBtnInGame');
+            const bar = document.getElementById('hudEquipBar');
+            const modal = document.getElementById('equipmentShopModal');
+            const controlsBtn = document.getElementById('controlsBtn');
+            if (!btn || !bar) return;
+
+            if (!isEconomyModeActive() || typeof player === 'undefined' || !player) {
+                btn.style.display = 'none';
+                bar.style.display = 'none';
+                if (modal) modal.style.display = 'none';
+                return;
+            }
+
+            // Ensure ? button stays hidden while in-game shop button occupies top-right
+            if (controlsBtn && typeof gameRunning !== 'undefined' && gameRunning) {
+                controlsBtn.style.display = 'none';
+            }
+            btn.style.display = 'flex';
+            bar.style.display = 'flex';
+
+            const st = ensureEntityEquipState(player);
+            const cashSpan = document.getElementById('shopBtnCashText');
+            if (cashSpan && st) {
+                cashSpan.textContent = `💰 ${Math.floor(st.cash || 0)}`;
+            }
+
+            let slotsHtml = '';
+            for (let i = 0; i < 6; i++) {
+                const id = st && st.items[i];
+                const it = id ? EQUIPMENT_BY_ID[id] : null;
+                if (it) {
+                    const cd = Math.ceil(getEquipCD(player, it.id));
+                    slotsHtml += `<div class="hud-equip-slot filled" title="${it.name}: ${it.passiveText}">${it.icon}${cd > 0 ? `<span class="hud-equip-cd">${cd}s</span>` : ''}</div>`;
+                } else {
+                    slotsHtml += `<div class="hud-equip-slot" title="Empty Equipment Slot (Press B to open Shop)">·</div>`;
+                }
+            }
+            bar.innerHTML = slotsHtml;
+        }
+        window.updateInGameShopHud = updateInGameShopHud;
+
+        window.addEventListener('keydown', e => {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+            const k = (e.key || '').toLowerCase();
+            if (k === 'b' && isEconomyModeActive()) {
+                // Do not open shop if user is holding B+R+A+N+S or B+O+S secret chords on menu
+                if (window._secretHeldKeys && (window._secretHeldKeys.has('r') || window._secretHeldKeys.has('o'))) return;
+                e.preventDefault();
+                toggleEquipmentShopModal();
+            } else if (e.key === 'Escape') {
+                const modal = document.getElementById('equipmentShopModal');
+                if (modal && modal.style.display === 'flex') {
+                    toggleEquipmentShopModal(false);
+                }
+            }
+        });
+
+</script>
     
     <!-- ========================================================================
          HERO SYSTEM MAINTENANCE GUIDE
