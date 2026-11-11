@@ -1548,7 +1548,7 @@
                         <p><strong>Basic - Sword Slash:</strong> Normal sword slash dealing 200 damage. <em>(1.5s cooldown)</em></p>
                         <p><strong>Q - Triple Short Dash (➡️):</strong> Press Q to dash up to three short times (must press again to chain). First two dashes deal 250 dmg, third deals 400 dmg and knocks back. 0.5s window between dashes. <em>(7s cooldown)</em></p>
                         <p><strong>E - Sword Energy (💠):</strong> Releases sword energy dealing 780 damage and heals Faik for 40% of damage dealt. <em>(5s cooldown)</em></p>
-                        <p><strong>F - Blood Rage (🩸):</strong> Instantly deals 300 damage to nearby enemies and heals Faik for the damage dealt. During Blood Rage (8s) basic attacks become an enhanced sword energy slash (70 dmg, 0.18s cd) and heal 50% of damage dealt. <em>(20s cooldown)</em></p>
+                        <p><strong>F - Blood Rage (🩸):</strong> Instantly deals 300 damage to nearby enemies and heals Faik for the damage dealt. During Blood Rage (8s) basic attacks become an enhanced sword energy slash (100 dmg, 0.18s cd) healing 35% of damage dealt, and E triggers a second slash 0.1s later for 50% damage (no stun). <em>(20s cooldown)</em></p>
                     </div>
                     <div class="hero-description advanced">
                         <h4>Backstory</h4>
@@ -1557,7 +1557,7 @@
                         <p><strong>Basic - Sword Slash:</strong> 200 damage, 1.5s cooldown.</p>
                         <p><strong>Q - Triple Short Dash:</strong> 3 sequential short dashes (dash distance short, dash duration ~0.18s). Stage1: 250 dmg. Stage2: 250 dmg. Stage3: 400 dmg + knockback. Must press Q again within 0.5s to chain. Full sequence puts Q on 7s cooldown.</p>
                         <p><strong>E - Sword Energy:</strong> 780 damage to nearby enemies (220 radius), heal 40% of total damage dealt. 5s cooldown.</p>
-                        <p><strong>F - Blood Rage:</strong> Instant 300 damage AOE (200 radius) healing Faik for total damage dealt. Blood Rage lasts 8s; while active, basic attack becomes enhanced sword energy slash (70 damage, 0.18s cooldown) and heals 50% of damage dealt until Blood Rage ends. 20s cooldown.</p>
+                        <p><strong>F - Blood Rage:</strong> Instant 300 damage AOE (200 radius) healing Faik for total damage dealt. Blood Rage lasts 8s; while active, basic attack becomes enhanced sword energy slash (100 damage, 0.18s cooldown) healing 35% of damage dealt, and E triggers a second slash after 0.1s dealing 50% damage without stun. 20s cooldown.</p>
                     </div>
                 </div>
                 <!-- Darrick -->
@@ -34631,7 +34631,7 @@
                 if (this.fActive) {
                     // enhanced basic during blood rage / high-seas tempest
                     this.basicCD = 0.18;
-                    let dmg = 70;
+                    let dmg = 100;
                     if (isPirate) {
                         particles.push(new SwordTrail(this.x, this.y, this.angle, 255, 0.36, '#06b6d4'));
                         particles.push(new Slash(this.x, this.y, this.angle, 235, Math.PI / 1.35, '#38bdf8'));
@@ -34658,8 +34658,8 @@
                             }
                         }
                     }
-                    // heal 50% of damage dealt while blood rage active
-                    let heal = damageDealt * 0.5;
+                    // heal 35% of damage dealt while blood rage active
+                    let heal = damageDealt * 0.35;
                     this.hp = Math.min(this.maxHp, this.hp + heal);
                 } else {
                     this.basicCD = 1.5;
@@ -34718,15 +34718,16 @@
             doE() {
                 // Sword energy: deals 700 damage, heal 40% of damage dealt
                 this.revealTimer = 1.0;
+                const firstSlashDmg = 700;
                 let totalDamage = 0;
                 const R = 220;
                 for (let e of entities) {
                     if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                         let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
                         if (d < R) {
-                            e.takeDamage(700, this);
-                            safeApplyStatus(e, 'stun', 0.5, this); // 0.5s stun
-                            totalDamage += 700;
+                            e.takeDamage(firstSlashDmg, this);
+                            safeApplyStatus(e, 'stun', 0.5, this); // 0.5s stun on first slash only
+                            totalDamage += firstSlashDmg;
                         }
                     }
                 }
@@ -34753,6 +34754,34 @@
                 }
                 this.abilityVisuals.faik = this.abilityVisuals.faik || {};
                 this.abilityVisuals.faik.e = { x: this.x, y: this.y, timer: 0.6 };
+
+                // When F (Blood Rage) is active, trigger a second slash 0.1s after the first slash dealing 50% damage (350) without stun
+                if (this.fActive) {
+                    const secondSlashDmg = firstSlashDmg * 0.5;
+                    setTimeout(() => {
+                        if (this.dead) return;
+                        let secondTotalDamage = 0;
+                        for (let e of entities) {
+                            if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
+                                let d = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
+                                if (d < R) {
+                                    e.takeDamage(secondSlashDmg, this); // No stun on second slash
+                                    secondTotalDamage += secondSlashDmg;
+                                }
+                            }
+                        }
+                        if (secondTotalDamage > 0) {
+                            this.hp = Math.min(this.maxHp, this.hp + secondTotalDamage * 0.4);
+                        }
+                        if (isPirate) {
+                            effectsAdd(new WaveShockwave(this.x, this.y, 225, 0.45, '#06b6d4', '#bae6fd'));
+                            particles.push(new SpinningRing(this.x, this.y, 220, '#38bdf8', 0.5, -16, 7));
+                        } else {
+                            effectsAdd(new WaveShockwave(this.x, this.y, 225, 0.45, '#FF0000', '#FFD700'));
+                            particles.push(new SpinningRing(this.x, this.y, 220, '#FF4444', 0.5, -15, 7));
+                        }
+                    }, 100);
+                }
             }
 
             doF() {
@@ -36396,7 +36425,7 @@
                     '<strong>Basic - Sword Slash:</strong> Cleaves enemies for 200 damage in melee range. <em>(1.5s cooldown)</em>',
                     '<strong>Q - Triple Short Dash (➡️):</strong> Chains up to 3 short dashes within a 0.5s window. Dashes 1 &amp; 2 deal 250 damage each; Dash 3 deals 400 damage and applies knockback. <em>(7s cooldown)</em>',
                     '<strong>E - Sword Energy (💠):</strong> Releases a 220-radius sword wave dealing 780 damage and healing Faik for 40% of total damage dealt. <em>(5s cooldown)</em>',
-                    '<strong>F - Blood Rage (🩸):</strong> Instantly deals 300 AoE damage (200 radius) and heals for 100% of damage dealt. For 8s, basic attacks fire ranged energy slashes dealing 70 damage every 0.18s with 50% lifesteal. <em>(20s cooldown)</em>'
+                    '<strong>F - Blood Rage (🩸):</strong> Instantly deals 300 AoE damage (200 radius) and heals for 100% of damage dealt. For 8s, basic attacks fire ranged energy slashes dealing 100 damage every 0.18s with 35% lifesteal, and E triggers a second slash 0.1s later dealing 50% damage without stun. <em>(20s cooldown)</em>'
                 ],
                 noob: [
                     '<strong>Basic - Classic Sword:</strong> Strikes for 120 melee damage; empowered basic strikes deal 300 damage (2.5x) and stun for 0.5s. <em>(0.6s cooldown)</em>',
