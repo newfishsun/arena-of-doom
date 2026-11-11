@@ -9478,7 +9478,13 @@
                 // Active Karen mind-control attribution (only while mind control is active; stops once target breaks free)
                 const srcMindController = this.getActiveKarenMindController(src);
                 const victimMindController = this.getActiveKarenMindController(this);
-                const creditAttacker = srcMindController || src;
+                const unwrappedSrc = (src && src.proxyRef instanceof Entity) ? src.proxyRef
+                    : ((src && src.owner instanceof Entity) ? src.owner
+                    : ((src && src.caster instanceof Entity) ? src.caster
+                    : ((src && src.monza instanceof Entity) ? src.monza
+                    : ((src && src.karen instanceof Entity) ? src.karen : src))));
+                const unwrappedMindCtrl = (unwrappedSrc && typeof this.getActiveKarenMindController === 'function') ? this.getActiveKarenMindController(unwrappedSrc) : null;
+                const creditAttacker = srcMindController || unwrappedMindCtrl || unwrappedSrc;
                 
                 // Track damage in training mode (start counter only; totalDamage updated after final damage calculation)
                 if(gameMode === 'training' && ((creditAttacker && creditAttacker.isPlayer) || (victimMindController && victimMindController.isPlayer)) && window.trainingStats) {
@@ -9804,6 +9810,12 @@
                 }
             }
             die(src){
+                if (src && !(src instanceof Entity) && src.proxyRef instanceof Entity) {
+                    src = src.proxyRef;
+                } else if (src && src instanceof Entity && !src.countsAsFFAHero && !(typeof OnlinePlayerProxy !== 'undefined' && src instanceof OnlinePlayerProxy)) {
+                    const heroOwner = (src.owner instanceof Entity) ? src.owner : ((src.caster instanceof Entity) ? src.caster : ((src.monza instanceof Entity) ? src.monza : ((src.karen instanceof Entity) ? src.karen : null)));
+                    if (heroOwner) src = heroOwner;
+                }
                 // Attribute kills/assists to Karen or Karen's team when mind control is active at time of death
                 const srcMindCtrl = typeof this.getActiveKarenMindController === 'function' ? this.getActiveKarenMindController(src) : null;
                 const victimMindCtrl = typeof this.getActiveKarenMindController === 'function' ? this.getActiveKarenMindController(this) : null;
@@ -9913,15 +9925,15 @@
                             playNoobSkinSound(src, 'kill', this.x, this.y, 1.0);
                         }
 
-                        // Award assists to teammates who damaged this entity (only in team modes)
-                        if(!isFFA && this.damageContributors && this.damageContributors.size > 0) {
+                        // Award assists to other heroes who damaged this entity within 10s
+                        if(this.damageContributors && this.damageContributors.size > 0) {
                             const ASSIST_WINDOW_MS = 10000; // only recent contributors within 10s count
                             for(let [contributor, dmgObj] of this.damageContributors) {
-                                // Support legacy numeric entries and the new {amount,time} shape
                                 const dmgAmount = (dmgObj && typeof dmgObj === 'object') ? (dmgObj.amount || 0) : (dmgObj || 0);
                                 const dmgTime = (dmgObj && typeof dmgObj === 'object') ? (dmgObj.time || this.lastDamageTime) : this.lastDamageTime;
-                                if(contributor !== src && contributor.team === src.team && !contributor.dead && dmgAmount > 0 && (Date.now() - dmgTime) <= ASSIST_WINDOW_MS) {
-                                    contributor.assists++;
+                                const validTeamAssist = isFFA ? (contributor !== src && contributor !== this) : (contributor !== src && contributor.team === src.team);
+                                if(contributor instanceof Entity && validTeamAssist && !contributor.dead && dmgAmount > 0 && (Date.now() - dmgTime) <= ASSIST_WINDOW_MS) {
+                                    contributor.assists = (contributor.assists || 0) + 1;
                                 }
                             }
                         }
@@ -37973,6 +37985,11 @@
             const px = player.x, py = player.y, pGear = player.gear || selectedGear || 'speedster';
             const prevSocketId = player.socketId || (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || window.mySocketId || mySocketId || window.myTrainingPeerId;
             const prevTeam = player.team || 1;
+            const prevKills = player.kills || 0;
+            const prevDeaths = player.deaths || 0;
+            const prevAssists = player.assists || 0;
+            const prevTotalDamage = player.totalDamage || 0;
+            const prevTotalDamageTaken = player.totalDamageTaken || 0;
             const idx = entities.indexOf(player);
             cleanupEntityVisualsAndEffects(player);
             selectedHeroType = heroKey;
@@ -37980,6 +37997,11 @@
             player.heroType = heroKey;
             player.socketId = prevSocketId;
             player.team = prevTeam;
+            player.kills = prevKills;
+            player.deaths = prevDeaths;
+            player.assists = prevAssists;
+            player.totalDamage = prevTotalDamage;
+            player.totalDamageTaken = prevTotalDamageTaken;
             player.gear = pGear;
             player.currentSkin = (typeof selectedSkins !== 'undefined' && selectedSkins[heroKey]) ? selectedSkins[heroKey] : 'default';
             if (idx !== -1) entities[idx] = player;
@@ -44109,36 +44131,70 @@
             }
         }
         
+        function getLeaderboardDisplayName(e, idx) {
+            if (!e) return 'Unknown';
+            const rawName = String(e.name || 'Unknown').trim();
+            const ht = String(e.heroType || (e.constructor && e.constructor.name !== 'OnlinePlayerProxy' ? e.constructor.name : '') || '').trim();
+            const heroLabel = ht ? (ht.charAt(0).toUpperCase() + ht.slice(1)) : '';
+            if (e.isPlayer) {
+                if (rawName === 'Player' && heroLabel) return `Player (${heroLabel})`;
+                return rawName;
+            }
+            if (typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) {
+                if (rawName === 'Player' || rawName === `Player (${heroLabel})`) {
+                    const tag = e.socketId ? String(e.socketId).slice(-4).toUpperCase() : String(idx + 1);
+                    return heroLabel ? `Player #${tag} (${heroLabel})` : `Player #${tag}`;
+                }
+                if (heroLabel && !rawName.toLowerCase().includes(heroLabel.toLowerCase())) {
+                    return `${rawName} (${heroLabel})`;
+                }
+            }
+            return rawName;
+        }
+
         function updateLeaderboardDisplay() {
             let content = document.getElementById('leaderboardContent');
             if(!content) return;
             
             let isFFA = gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online';
             let stats = [];
+            const seenSocketIds = new Set();
+            const myId = (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || window.mySocketId || mySocketId || (player && player.socketId) || null;
+            if (myId) seenSocketIds.add(myId);
             
-            // Collect all alive and dead entities that are heroes
-            for(let e of entities) {
-                if(e instanceof Entity && e.countsAsFFAHero !== false) {  // Include if not explicitly false
-                    let kda = isFFA ? e.kills : Math.max(1, e.deaths);
-                    let ratio = isFFA ? e.kills : ((e.kills + (e.assists || 0) / 2) / kda).toFixed(2);
+            // Collect all alive and dead entities that are heroes (including local player, every OnlinePlayerProxy, and AI heroes)
+            for(let i = 0; i < entities.length; i++) {
+                let e = entities[i];
+                if(e instanceof Entity && e.countsAsFFAHero !== false && !e.isTrainingDummy) {
+                    if (typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) {
+                        if (e.socketId && seenSocketIds.has(e.socketId)) continue;
+                        if (e.socketId) seenSocketIds.add(e.socketId);
+                    }
+                    const killsVal = Number(e.kills) || 0;
+                    const deathsVal = Number(e.deaths) || 0;
+                    const assistsVal = Number(e.assists) || 0;
+                    let kda = isFFA ? killsVal : Math.max(1, deathsVal);
+                    let ratio = isFFA ? killsVal : ((killsVal + assistsVal / 2) / kda).toFixed(2);
                     stats.push({
-                        name: e.name || 'Unknown',
-                        kills: e.kills,
-                        deaths: e.deaths || 0,
-                        assists: e.assists || 0,
+                        name: getLeaderboardDisplayName(e, stats.length),
+                        kills: killsVal,
+                        deaths: deathsVal,
+                        assists: assistsVal,
                         totalDamage: Math.ceil(e.totalDamage || 0),
                         damageTaken: Math.ceil(e.totalDamageTaken || 0),
                         ratio: ratio,
-                        isPlayer: e.isPlayer,
+                        isPlayer: !!e.isPlayer,
                         entity: e
                     });
                 }
             }
             
-            // Sort by kills first, then by KDA ratio
+            // Sort by kills first, then by KDA ratio, then by totalDamage dealt
             stats.sort((a, b) => {
                 if(b.kills !== a.kills) return b.kills - a.kills;
-                return parseFloat(b.ratio) - parseFloat(a.ratio);
+                const rDiff = parseFloat(b.ratio) - parseFloat(a.ratio);
+                if (Math.abs(rDiff) > 1e-4) return rDiff;
+                return (b.totalDamage || 0) - (a.totalDamage || 0);
             });
             
             // Generate HTML for leaderboard entries
@@ -45564,7 +45620,7 @@
 
             applyMaxSpeedBarTrueDamageAndHeal(target) {
                 if (!target || target.dead) return;
-                const bonusTrue = Math.max(1, Math.floor(this.getSpeedForDamage() * 0.20));
+                const bonusTrue = Math.max(1, Math.floor(this.getSpeedForDamage() * 0.18));
                 target.takeDamage(bonusTrue, this, { isTrue: true, trueDamage: true });
                 this.hp = Math.min(this.maxHp, this.hp + bonusTrue);
             }
@@ -45771,7 +45827,7 @@
                 if (!keys.r) this._rWas = false;
             }
 
-            // Normal Basic Attack: Kunai (105 dmg, 0.7s CD; +20% walkspeed true dmg & heal when speed bar is max)
+            // Normal Basic Attack: Kunai (105 dmg, 0.7s CD; +18% walkspeed true dmg & heal when speed bar is max)
             basicAtk() {
                 if (this.basicCD > 0) return;
                 if (this.absoluteTimer > 0) {
@@ -46075,12 +46131,12 @@
                     this.qCD = Math.max(0, this.qCD - 0.4);
                 }
 
-                // 3. Pushed projectile deals 75% of its original projectile damage, auto-aims to the closest enemy,
+                // 3. Pushed projectile deals 70% of its original projectile damage, auto-aims to the closest enemy,
                 //    and disappears right after getting pushed!
                 if (typeof proj.origInouDmg !== 'number') {
                     proj.origInouDmg = proj.dmg;
                 }
-                proj.dmg = Math.floor(proj.origInouDmg * 0.75);
+                proj.dmg = Math.floor(proj.origInouDmg * 0.70);
                 proj.inouLingering = false;
                 proj.inouLingerTimer = 0;
                 delete proj._firstEnemyHitDist;
@@ -50651,6 +50707,7 @@
                                     existingProj._pushedByInouE = true;
                                     existingProj.inouLingering = false;
                                     existingProj.inouLingerTimer = 0;
+                                    if (typeof entityData.damage === 'number' && entityData.damage > 0) existingProj.dmg = entityData.damage;
                                     existingProj.speed = entityData.speed || 1320;
                                     existingProj.angle = entityData.angle || existingProj.angle;
                                     existingProj.vx = Math.cos(existingProj.angle) * existingProj.speed;
@@ -57910,6 +57967,7 @@
 
                 // Intercept direct `e.hp -= amount` subtractions (used by Acheron, Ming, Kai, Gamb, Max, Noli, Darrick, Ash, Electrico, Soundblast, etc.)
                 this._hp = maxHp || 5000;
+                this._deathProcessedForCurrentLife = false;
                 Object.defineProperty(this, 'hp', {
                     configurable: true,
                     enumerable: true,
@@ -57924,7 +57982,27 @@
                         if (!this._applyingServerHp && !this._inTakeDamage && prev > this._hp) {
                             const directDelta = prev - this._hp;
                             if (directDelta > 0.5) {
-                                this.broadcastDamageToServer(directDelta, player, { isTrue: true });
+                                const rawActor = (window._currentlyUpdatingEntity instanceof Entity && window._currentlyUpdatingEntity !== this)
+                                    ? window._currentlyUpdatingEntity
+                                    : player;
+                                const directActor = (rawActor && rawActor.owner instanceof Entity) ? rawActor.owner : rawActor;
+                                const dmgInt = Math.ceil(directDelta);
+                                this.totalDamageTaken = (this.totalDamageTaken || 0) + dmgInt;
+                                if (directActor && directActor instanceof Entity && directActor !== this) {
+                                    directActor.totalDamage = (directActor.totalDamage || 0) + dmgInt;
+                                    if (directActor.team !== this.team) {
+                                        if (!this.damageContributors) this.damageContributors = new Map();
+                                        const ex = this.damageContributors.get(directActor) || { amount: 0, time: 0 };
+                                        ex.amount = (ex.amount || 0) + dmgInt;
+                                        ex.time = Date.now();
+                                        this.damageContributors.set(directActor, ex);
+                                        this.lastDamageTime = Date.now();
+                                    }
+                                }
+                                const isRemoteActor = !!(directActor && (directActor._isRemoteOwner || directActor instanceof OnlinePlayerProxy));
+                                if (!isRemoteActor) {
+                                    this.broadcastDamageToServer(directDelta, directActor, { isTrue: true });
+                                }
                             }
                         }
                     }
@@ -58029,6 +58107,12 @@
                     }
                 } catch (_) {}
 
+                const resolvedSrc = (src && src.proxyRef instanceof Entity) ? src.proxyRef
+                    : ((src && src.owner instanceof Entity) ? src.owner
+                    : ((src && src.caster instanceof Entity) ? src.caster
+                    : ((src && src.monza instanceof Entity) ? src.monza
+                    : ((src && src.karen instanceof Entity) ? src.karen : src))));
+                this._pendingBurstAttacker = (resolvedSrc instanceof Entity) ? resolvedSrc : player;
                 this._pendingBurstDamage = (this._pendingBurstDamage || 0) + dmgAmount;
                 this._pendingBurstTrueAmount = (this._pendingBurstTrueAmount || 0) + truePart;
                 if (meta && meta.isProSniper) this._pendingBurstProSniper = true;
@@ -58043,6 +58127,13 @@
                     const totalTrueAmt = Math.min(totalBurst, Math.max(0, Math.round(this._pendingBurstTrueAmount || 0)));
                     const isPro = !!this._pendingBurstProSniper;
                     const isTrue = !!(this._pendingBurstTrueDamage || (totalTrueAmt >= totalBurst && totalBurst > 0));
+                    const atkEnt = this._pendingBurstAttacker || player;
+                    const isLocalPlayerAtk = !atkEnt || atkEnt === player || !!atkEnt.isPlayer;
+                    const myIdStr = (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId || window.myTrainingPeerId;
+                    const atkSocketId = isLocalPlayerAtk
+                        ? myIdStr
+                        : (atkEnt.socketId || (`localbot_${atkEnt.id || atkEnt.name || 'bot'}`));
+                    const atkDealerName = (atkEnt && atkEnt.name) ? atkEnt.name : ((player && player.name) ? player.name : 'Player');
                     this._pendingBurstDamage = 0;
                     this._pendingBurstTrueAmount = 0;
                     this._pendingBurstProSniper = false;
@@ -58053,8 +58144,10 @@
                             socketId: this.socketId,
                             damageTaken: totalBurst,
                             trueDamageAmount: totalTrueAmt,
-                            damageDealer: (player && player.name) ? player.name : 'Player',
-                            attackerSocketId: (typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId || window.myTrainingPeerId,
+                            damageDealer: atkDealerName,
+                            attackerSocketId: atkSocketId,
+                            attackerIsLocalBot: !isLocalPlayerAtk,
+                            attackerBotName: !isLocalPlayerAtk && atkEnt ? atkEnt.name : undefined,
                             isProSniper: isPro,
                             trueDamage: isTrue
                         });
@@ -58366,23 +58459,48 @@
                     }
                     const totalHpDamage = hpFromNormal + remTruePart;
                     const finalCombinedDamage = shieldAbsorbed + totalHpDamage;
-                    if (src && typeof Mecca !== 'undefined' && src instanceof Mecca && !src.ascended && finalCombinedDamage > 0) {
-                        src.addGCharge(Math.min(8, finalCombinedDamage / 195));
+                    const rawAttacker = (src && src.proxyRef instanceof Entity) ? src.proxyRef
+                        : ((src && src.owner instanceof Entity) ? src.owner
+                        : ((src && src.caster instanceof Entity) ? src.caster
+                        : ((src && src.monza instanceof Entity) ? src.monza
+                        : ((src && src.karen instanceof Entity) ? src.karen : src))));
+                    const srcMindController = (rawAttacker && typeof this.getActiveKarenMindController === 'function')
+                        ? this.getActiveKarenMindController(rawAttacker) : null;
+                    const creditAttacker = srcMindController || rawAttacker;
+                    const dmgIntToRecord = Math.ceil(Math.max(finalCombinedDamage, 0));
+
+                    if (creditAttacker && typeof Mecca !== 'undefined' && creditAttacker instanceof Mecca && !creditAttacker.ascended && finalCombinedDamage > 0) {
+                        creditAttacker.addGCharge(Math.min(8, finalCombinedDamage / 195));
                     }
 
-                    if (src && src instanceof Entity && src !== this) {
-                        src.totalDamage = (src.totalDamage || 0) + Math.ceil(Math.max(finalCombinedDamage, 0));
-                        if (typeof Ren !== 'undefined' && src instanceof Ren && src.healActive) {
-                            src.hp = Math.min(src.maxHp, src.hp + finalCombinedDamage * 0.40);
+                    if (creditAttacker && creditAttacker instanceof Entity && creditAttacker !== this) {
+                        creditAttacker.totalDamage = (creditAttacker.totalDamage || 0) + dmgIntToRecord;
+                        if (gameMode === 'training' && creditAttacker.isPlayer && window.trainingStats) {
+                            if (!window.trainingStats.countingStarted) {
+                                window.trainingStats.countingStarted = true;
+                                window.trainingStats.startTime = Date.now();
+                            }
+                            window.trainingStats.totalDamage += dmgIntToRecord;
                         }
-                        if (!src.dead && (src.rageTimer > 0 || src.rageActive)) {
-                            src.hp = Math.min(src.maxHp, src.hp + finalCombinedDamage * 0.08);
+                        if (creditAttacker.team !== this.team) {
+                            if (!this.damageContributors) this.damageContributors = new Map();
+                            const existingContrib = this.damageContributors.get(creditAttacker) || { amount: 0, time: 0 };
+                            existingContrib.amount = (existingContrib.amount || 0) + dmgIntToRecord;
+                            existingContrib.time = Date.now();
+                            this.damageContributors.set(creditAttacker, existingContrib);
+                            this.lastDamageTime = Date.now();
                         }
-                        if (src.guidingLightOwner && src.guidingLightBuffTimer > 0 && !(meta && meta.guidingLightHeal)) {
-                            src.guidingLightOwner.hp = Math.min(src.guidingLightOwner.maxHp, src.guidingLightOwner.hp + finalCombinedDamage * (src.guidingLightHealRatio || 0.15));
+                        if (typeof Ren !== 'undefined' && creditAttacker instanceof Ren && creditAttacker.healActive) {
+                            creditAttacker.hp = Math.min(creditAttacker.maxHp, creditAttacker.hp + finalCombinedDamage * 0.40);
+                        }
+                        if (!creditAttacker.dead && (creditAttacker.rageTimer > 0 || creditAttacker.rageActive)) {
+                            creditAttacker.hp = Math.min(creditAttacker.maxHp, creditAttacker.hp + finalCombinedDamage * 0.08);
+                        }
+                        if (creditAttacker.guidingLightOwner && creditAttacker.guidingLightBuffTimer > 0 && !(meta && meta.guidingLightHeal)) {
+                            creditAttacker.guidingLightOwner.hp = Math.min(creditAttacker.guidingLightOwner.maxHp, creditAttacker.guidingLightOwner.hp + finalCombinedDamage * (creditAttacker.guidingLightHealRatio || 0.15));
                         }
                     }
-                    this.totalDamageTaken = (this.totalDamageTaken || 0) + Math.ceil(Math.max(finalCombinedDamage, 0));
+                    this.totalDamageTaken = (this.totalDamageTaken || 0) + dmgIntToRecord;
 
                     if (this.absorbImpactTimer && this.absorbImpactTimer > 0 && finalCombinedDamage > 0) {
                         this.shield = (this.shield || 0) + Math.ceil(finalCombinedDamage * 0.30);
@@ -58404,9 +58522,9 @@
                     }
 
                     // Apply standard hit knockback when finalCombinedDamage > 200 (matching offline Entity.prototype.takeDamage!)
-                    const isRemoteSrc = !!(src && (src._isRemoteOwner || src instanceof OnlinePlayerProxy));
-                    if (!isRemoteSrc && src && finalCombinedDamage > 200 && !(meta && meta.ignoreKnockback) && typeof src.x === 'number' && typeof src.y === 'number') {
-                        const kbAng = Math.atan2(this.y - src.y, this.x - src.x);
+                    const isRemoteSrc = !!( (src && (src._isRemoteOwner || src instanceof OnlinePlayerProxy)) || (creditAttacker && (creditAttacker._isRemoteOwner || creditAttacker instanceof OnlinePlayerProxy)) );
+                    if (!isRemoteSrc && creditAttacker && finalCombinedDamage > 200 && !(meta && meta.ignoreKnockback) && typeof creditAttacker.x === 'number' && typeof creditAttacker.y === 'number') {
+                        const kbAng = Math.atan2(this.y - creditAttacker.y, this.x - creditAttacker.x);
                         this.kbx = (this.kbx || 0) + Math.cos(kbAng) * 500;
                         this.kby = (this.kby || 0) + Math.sin(kbAng) * 500;
                         this._lastKnockbackOrHitMs = Date.now();
@@ -58422,18 +58540,87 @@
                             hpDamage: totalHpDamage,
                             isTrue: (normalDamagePart <= 0 && trueDamagePart > 0)
                         });
-                        this.broadcastDamageToServer(finalCombinedDamage, src || player, outMeta);
+                        this.broadcastDamageToServer(finalCombinedDamage, creditAttacker || src || player, outMeta);
                         this.syncDirectStatusEffectsToServer();
+                        // If operating in peer-to-peer / BroadcastChannel Training Lab without authoritative server room, credit kill/death locally when HP hits 0
+                        if (this._hp <= 0 && !this._deathProcessedForCurrentLife && (!onlineSocket || !onlineSocket.connected || !window._trainingServerRoomConfirmed)) {
+                            this.recordOnlineProxyDeath(creditAttacker || src || player);
+                        }
                     } else if (!gameMode || !gameMode.includes('online')) {
                         if (this._hp <= 0) {
                             this.setAuthoritativeHp(0);
-                            this.die(src);
+                            this.die(creditAttacker || src);
                         }
                     }
                 } catch (e) {
                     console.warn('Failed to broadcast proxy damage to server', e);
                 } finally {
                     this._inTakeDamage = prevInTakeDamage || false;
+                }
+            }
+
+            recordOnlineProxyDeath(killerEntity) {
+                if (this._deathProcessedForCurrentLife) return;
+                this._deathProcessedForCurrentLife = true;
+                this.dead = true;
+                const isFFA = gameMode === 'ffa' || gameMode === 'equipment_ffa' || gameMode === 'ffa_online';
+                if (!isFFA) {
+                    this.deaths = (this.deaths || 0) + 1;
+                }
+                const killer = (killerEntity && killerEntity.proxyRef instanceof Entity) ? killerEntity.proxyRef
+                    : ((killerEntity && killerEntity.owner instanceof Entity) ? killerEntity.owner : killerEntity);
+                if (killer && killer instanceof Entity && killer !== this) {
+                    killer.kills = (killer.kills || 0) + 1;
+                    if (killer === player || killer.isPlayer) {
+                        addKillMsg(`Eliminated ${this.name || 'Player'}`);
+                        if (typeof BountyHunter !== 'undefined' && killer instanceof BountyHunter) {
+                            killer.killStacks = Math.min(killer.maxKillStacks || 3, (killer.killStacks || 0) + 1);
+                            if (killer.killStacks === 3) {
+                                killer.hp = Math.min(killer.maxHp, killer.hp + 1280);
+                            }
+                        }
+                        if (typeof Ambrose !== 'undefined' && killer instanceof Ambrose) {
+                            killer.fCD = 0;
+                        }
+                        if (typeof Noob !== 'undefined' && killer instanceof Noob && killer.currentSkin === 'Classic') {
+                            effectsAdd(new ClassicNoobKillEffect(this.x, this.y));
+                            playNoobSkinSound(killer, 'kill', this.x, this.y, 1.0);
+                        }
+                        if (typeof Tate !== 'undefined' && killer instanceof Tate && killer.currentSkin === 'Real Top G') {
+                            effectsAdd(new KOEffect(this.x, this.y));
+                        }
+                        if (typeof Don !== 'undefined' && killer instanceof Don && killer.currentSkin === 'Don Pollo') {
+                            effectsAdd(new DishBlast(this.x, this.y));
+                        }
+                    }
+                    if ((gameMode === '5v5' || gameMode === '5v5_online') && window.gameState5v5) {
+                        if (killer.team === 1) window.gameState5v5.blueScore = (window.gameState5v5.blueScore || 0) + 1;
+                        else if (killer.team === 2) window.gameState5v5.redScore = (window.gameState5v5.redScore || 0) + 1;
+                    }
+                    if (typeof isEconomyModeActive === 'function' && isEconomyModeActive() && typeof awardBattleCash === 'function') {
+                        awardBattleCash(killer, 220, 'Hero Elimination');
+                    }
+                }
+                if (this.damageContributors && this.damageContributors.size > 0) {
+                    const ASSIST_WINDOW_MS = 10000;
+                    const nowMs = Date.now();
+                    for (let [contributor, dmgObj] of this.damageContributors) {
+                        const dmgAmount = (dmgObj && typeof dmgObj === 'object') ? (dmgObj.amount || 0) : (dmgObj || 0);
+                        const dmgTime = (dmgObj && typeof dmgObj === 'object') ? (dmgObj.time || this.lastDamageTime || 0) : (this.lastDamageTime || 0);
+                        const validAssist = isFFA
+                            ? (contributor !== killer && contributor !== this)
+                            : (contributor !== killer && (!killer || contributor.team === killer.team));
+                        if (contributor instanceof Entity && validAssist && !contributor.dead && dmgAmount > 0 && (nowMs - dmgTime) <= ASSIST_WINDOW_MS) {
+                            contributor.assists = (contributor.assists || 0) + 1;
+                            if (typeof isEconomyModeActive === 'function' && isEconomyModeActive() && typeof awardBattleCash === 'function') {
+                                awardBattleCash(contributor, 110, 'Assist');
+                            }
+                        }
+                    }
+                    this.damageContributors.clear();
+                }
+                if (leaderboardVisible && typeof updateLeaderboardDisplay === 'function') {
+                    updateLeaderboardDisplay();
                 }
             }
 
@@ -58494,6 +58681,34 @@
                 this.speedMult = (typeof data.speedMult === 'number') ? data.speedMult : (this.speedMult || 1);
                 this.dmgMult = (typeof data.dmgMult === 'number') ? data.dmgMult : (this.dmgMult || 1);
                 this.name = data.name || this.name;
+
+                if (typeof data.kills === 'number' && Number.isFinite(data.kills)) {
+                    this.kills = Math.max(this.kills || 0, data.kills);
+                }
+                if (typeof data.deaths === 'number' && Number.isFinite(data.deaths)) {
+                    this.deaths = Math.max(this.deaths || 0, data.deaths);
+                }
+                if (typeof data.assists === 'number' && Number.isFinite(data.assists)) {
+                    this.assists = Math.max(this.assists || 0, data.assists);
+                }
+                if (typeof data.totalDamage === 'number' && Number.isFinite(data.totalDamage)) {
+                    this.totalDamage = Math.max(this.totalDamage || 0, data.totalDamage);
+                }
+                if (typeof data.totalDamageTaken === 'number' && Number.isFinite(data.totalDamageTaken)) {
+                    this.totalDamageTaken = Math.max(this.totalDamageTaken || 0, data.totalDamageTaken);
+                }
+                if (data.abilityVisuals && data.abilityVisuals.stats && typeof data.abilityVisuals.stats === 'object') {
+                    const st = data.abilityVisuals.stats;
+                    if (typeof st.kills === 'number' && Number.isFinite(st.kills)) this.kills = Math.max(this.kills || 0, st.kills);
+                    if (typeof st.deaths === 'number' && Number.isFinite(st.deaths)) this.deaths = Math.max(this.deaths || 0, st.deaths);
+                    if (typeof st.assists === 'number' && Number.isFinite(st.assists)) this.assists = Math.max(this.assists || 0, st.assists);
+                    if (typeof st.totalDamage === 'number' && Number.isFinite(st.totalDamage)) this.totalDamage = Math.max(this.totalDamage || 0, st.totalDamage);
+                    if (typeof st.totalDamageTaken === 'number' && Number.isFinite(st.totalDamageTaken)) this.totalDamageTaken = Math.max(this.totalDamageTaken || 0, st.totalDamageTaken);
+                }
+                if (this._hp > 0 && this._deathProcessedForCurrentLife) {
+                    this._deathProcessedForCurrentLife = false;
+                    this.dead = false;
+                }
 
                 if (data.heroType) {
                     const prevHero = this.heroType;
@@ -58897,6 +59112,7 @@
                     this.dead = true;
                 } else if (this._hp > 0 && this.dead) {
                     this.dead = false;
+                    this._deathProcessedForCurrentLife = false;
                 }
             }
 
@@ -59446,6 +59662,13 @@
               }
             }
             abilityVisuals.drawState = buildOnlineDrawState(player);
+            abilityVisuals.stats = {
+              kills: Number(player.kills) || 0,
+              deaths: Number(player.deaths) || 0,
+              assists: Number(player.assists) || 0,
+              totalDamage: Math.ceil(player.totalDamage || 0),
+              totalDamageTaken: Math.ceil(player.totalDamageTaken || 0)
+            };
             if (window._pendingOnlineFxQueue && window._pendingOnlineFxQueue.length > 0) {
               window._pendingOnlineFxQueue = window._pendingOnlineFxQueue.filter(item => item && (nowSyncMs - (item.ts || nowSyncMs)) <= 70);
               if (window._pendingOnlineFxQueue.length > 0) {
@@ -59481,6 +59704,11 @@
               maxShield: Math.round(player.maxShield || 0),
               speedMult: player.speedMult || 1,
               dmgMult: player.dmgMult || 1,
+              kills: Number(player.kills) || 0,
+              deaths: Number(player.deaths) || 0,
+              assists: Number(player.assists) || 0,
+              totalDamage: Math.ceil(player.totalDamage || 0),
+              totalDamageTaken: Math.ceil(player.totalDamageTaken || 0),
               name: player.name || 'Player',
               entities: entitiesToBroadcast,
               slashes: slashesToBroadcast,
@@ -59990,6 +60218,13 @@
                 } else if (player && player.team !== 1) {
                   player.team = 1;
                 }
+                if (player) {
+                  if (typeof pd.kills === 'number' && Number.isFinite(pd.kills)) player.kills = Math.max(player.kills || 0, pd.kills);
+                  if (typeof pd.deaths === 'number' && Number.isFinite(pd.deaths)) player.deaths = Math.max(player.deaths || 0, pd.deaths);
+                  if (typeof pd.assists === 'number' && Number.isFinite(pd.assists)) player.assists = Math.max(player.assists || 0, pd.assists);
+                  if (typeof pd.totalDamage === 'number' && Number.isFinite(pd.totalDamage)) player.totalDamage = Math.max(player.totalDamage || 0, pd.totalDamage);
+                  if (typeof pd.totalDamageTaken === 'number' && Number.isFinite(pd.totalDamageTaken)) player.totalDamageTaken = Math.max(player.totalDamageTaken || 0, pd.totalDamageTaken);
+                }
               } else if (pid) {
                 window.onlinePlayers[pid] = pd;
                 reconcileRemoteOnlineEntities(pid, pd.entities || [], false);
@@ -60050,10 +60285,35 @@
           onlineSocket.on('playerHealthUpdated', function(data) {
             try {
               if (!data) return;
+              const myId = (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId;
+              const dmgAppliedInt = Math.ceil(Math.max(0, Number(data.damageApplied) || 0));
+              let attackerEnt = null;
+              if (data.attackerSocketId && data.attackerSocketId === myId && !data.attackerIsLocalBot) {
+                attackerEnt = player;
+              } else if (data.attackerSocketId) {
+                attackerEnt = entities.find(e => e instanceof OnlinePlayerProxy && e.socketId === data.attackerSocketId) || null;
+              }
+              if (!attackerEnt && (data.attackerBotName || data.attacker)) {
+                const targetBotName = data.attackerBotName || data.attacker;
+                attackerEnt = entities.find(e => e && !e.isPlayer && !(e instanceof OnlinePlayerProxy) && e.countsAsFFAHero && e.name === targetBotName) || null;
+              }
+
+              // Attribute damage dealt to remote attacker (local player & local bots already record their own damage dealt on hit)
+              if (attackerEnt && attackerEnt instanceof OnlinePlayerProxy && dmgAppliedInt > 0) {
+                attackerEnt.totalDamage = (attackerEnt.totalDamage || 0) + dmgAppliedInt;
+              }
+              if (attackerEnt && typeof data.attackerTotalDamage === 'number' && Number.isFinite(data.attackerTotalDamage)) {
+                attackerEnt.totalDamage = Math.max(attackerEnt.totalDamage || 0, Math.ceil(data.attackerTotalDamage));
+              }
+              if (attackerEnt && typeof data.attackerKills === 'number' && Number.isFinite(data.attackerKills)) {
+                attackerEnt.kills = Math.max(attackerEnt.kills || 0, data.attackerKills);
+              }
+
               let proxy = entities.find(e => e instanceof OnlinePlayerProxy && e.socketId === data.socketId);
               if (proxy) {
                 if (data.vivalRevived) {
                   proxy.dead = false;
+                  proxy._deathProcessedForCurrentLife = false;
                   proxy.ritualActive = false;
                   proxy.secondLifeTriggered = true;
                   if (typeof data.x === 'number') { proxy.x = data.x; proxy.serverX = data.x; proxy.prevServerX = data.x; }
@@ -60062,34 +60322,36 @@
                 if (typeof data.hp === 'number' && Number.isFinite(data.hp)) proxy.setAuthoritativeHp(data.hp);
                 if (typeof data.maxHp === 'number' && Number.isFinite(data.maxHp) && data.maxHp > 0) proxy.maxHp = data.maxHp;
                 if (typeof data.shield === 'number' && Number.isFinite(data.shield)) proxy.shield = data.shield;
-                if (proxy.hp <= 0 && !proxy.dead && !data.vivalRevived) {
-                  proxy.dead = true;
-                  const myIdLocal = mySocketId || (onlineSocket && onlineSocket.id);
-                  if (player && !player.dead && data.attackerSocketId && data.attackerSocketId === myIdLocal) {
-                    if (typeof BountyHunter !== 'undefined' && player instanceof BountyHunter) {
-                      player.killStacks = Math.min(player.maxKillStacks || 3, (player.killStacks || 0) + 1);
-                      if (player.killStacks === 3) {
-                        player.hp = Math.min(player.maxHp, player.hp + 1280);
-                      }
-                    }
-                    if (typeof Ambrose !== 'undefined' && player instanceof Ambrose) {
-                      player.fCD = 0;
-                    }
-                    if (typeof Noob !== 'undefined' && player instanceof Noob && player.currentSkin === 'Classic') {
-                      effectsAdd(new ClassicNoobKillEffect(proxy.x, proxy.y));
-                      playNoobSkinSound(player, 'kill', proxy.x, proxy.y, 1.0);
-                    }
-                    if (typeof Tate !== 'undefined' && player instanceof Tate && player.currentSkin === 'Real Top G') {
-                      effectsAdd(new KOEffect(proxy.x, proxy.y));
-                    }
-                    if (typeof Don !== 'undefined' && player instanceof Don && player.currentSkin === 'Don Pollo') {
-                      effectsAdd(new DishBlast(proxy.x, proxy.y));
-                    }
+
+                // Track damage taken & damageContributors on proxy when hit by remote players/bots
+                if (dmgAppliedInt > 0 && attackerEnt !== player && !(attackerEnt && !attackerEnt.isPlayer && !(attackerEnt instanceof OnlinePlayerProxy))) {
+                  proxy.totalDamageTaken = (proxy.totalDamageTaken || 0) + dmgAppliedInt;
+                  if (attackerEnt && attackerEnt instanceof Entity && attackerEnt !== proxy) {
+                    if (!proxy.damageContributors) proxy.damageContributors = new Map();
+                    const prevC = proxy.damageContributors.get(attackerEnt) || { amount: 0, time: 0 };
+                    prevC.amount = (prevC.amount || 0) + dmgAppliedInt;
+                    prevC.time = Date.now();
+                    proxy.damageContributors.set(attackerEnt, prevC);
+                    proxy.lastDamageTime = Date.now();
                   }
+                }
+                if (typeof data.victimTotalDamageTaken === 'number' && Number.isFinite(data.victimTotalDamageTaken)) {
+                  proxy.totalDamageTaken = Math.max(proxy.totalDamageTaken || 0, Math.ceil(data.victimTotalDamageTaken));
+                }
+
+                if (proxy.hp <= 0 && !proxy._deathProcessedForCurrentLife && !data.vivalRevived) {
+                  if (typeof proxy.recordOnlineProxyDeath === 'function') {
+                    proxy.recordOnlineProxyDeath(attackerEnt);
+                  } else {
+                    proxy.dead = true;
+                    proxy._deathProcessedForCurrentLife = true;
+                  }
+                }
+                if (typeof data.victimDeaths === 'number' && Number.isFinite(data.victimDeaths)) {
+                  proxy.deaths = Math.max(proxy.deaths || 0, data.victimDeaths);
                 }
               }
 
-              const myId = mySocketId || onlineSocket.id;
               if (data.socketId === myId && player && !player.dead) {
                 const currentHp = Number.isFinite(player.hp) ? player.hp : 0;
                 const serverHp = (typeof data.hp === 'number' && Number.isFinite(data.hp)) ? data.hp : currentHp;
@@ -60142,6 +60404,21 @@
                   }
                   if (delta > 0 && Number.isFinite(delta) && !player.ascended) {
                     player.addGCharge(Math.min(5, delta / 260));
+                  }
+                }
+                const recordedLocalDmg = dmgAppliedInt > 0 ? dmgAppliedInt : Math.ceil(Math.max(0, delta));
+                if (recordedLocalDmg > 0) {
+                  player.totalDamageTaken = (player.totalDamageTaken || 0) + recordedLocalDmg;
+                  if (typeof data.victimTotalDamageTaken === 'number' && Number.isFinite(data.victimTotalDamageTaken)) {
+                    player.totalDamageTaken = Math.max(player.totalDamageTaken || 0, Math.ceil(data.victimTotalDamageTaken));
+                  }
+                  if (attackerEnt && attackerEnt instanceof Entity && attackerEnt !== player) {
+                    if (!player.damageContributors) player.damageContributors = new Map();
+                    const prevC = player.damageContributors.get(attackerEnt) || { amount: 0, time: 0 };
+                    prevC.amount = (prevC.amount || 0) + recordedLocalDmg;
+                    prevC.time = Date.now();
+                    player.damageContributors.set(attackerEnt, prevC);
+                    player.lastDamageTime = Date.now();
                   }
                 }
                 if (delta > 0 && Number.isFinite(delta)) {
@@ -60252,6 +60529,7 @@
               const proxy = entities.find(e => e instanceof OnlinePlayerProxy && e.socketId === sid);
               if (proxy) {
                 proxy.dead = false;
+                proxy._deathProcessedForCurrentLife = false;
                 proxy._lastLocalDamageAt = 0;
                 if (typeof data.maxHp === 'number' && Number.isFinite(data.maxHp) && data.maxHp > 0) proxy.maxHp = data.maxHp;
                 if (typeof data.hp === 'number' && Number.isFinite(data.hp)) proxy.setAuthoritativeHp(data.hp);

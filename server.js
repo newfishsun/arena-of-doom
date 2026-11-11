@@ -339,6 +339,11 @@ class GameRoom {
       speedMult: 1,
       dmgMult: 1,
       kills: 0,
+      deaths: 0,
+      assists: 0,
+      totalDamage: 0,
+      totalDamageTaken: 0,
+      damageContributors: new Map(),
       team: team,
       lastUpdate: Date.now(),
       entities: [],
@@ -489,8 +494,35 @@ class GameRoom {
         const dmg = Math.floor(140 + Math.random() * 110);
         const prevHp = closest.hp;
         closest.hp = Math.max(0, closest.hp - dmg);
+        const actualDealt = Math.max(0, prevHp - closest.hp);
         closest.lastClientReportedHp = closest.hp;
         closest.lastDamagedAt = now;
+        p.totalDamage = (p.totalDamage || 0) + actualDealt;
+        closest.totalDamageTaken = (closest.totalDamageTaken || 0) + actualDealt;
+        if (!closest.damageContributors) closest.damageContributors = new Map();
+        const prevContrib = closest.damageContributors.get(p.socketId) || { amount: 0, time: 0 };
+        prevContrib.amount = (prevContrib.amount || 0) + actualDealt;
+        prevContrib.time = now;
+        closest.damageContributors.set(p.socketId, prevContrib);
+
+        if (closest.hp <= 0 && prevHp > 0) {
+          p.kills = (p.kills || 0) + 1;
+          if (this.mode !== 'ffa') {
+            closest.deaths = (closest.deaths || 0) + 1;
+          }
+          if (closest.damageContributors && closest.damageContributors.size > 0) {
+            for (const [contribId, cObj] of closest.damageContributors) {
+              if (contribId === p.socketId || contribId === closest.socketId) continue;
+              const cPlayer = this.players.get(contribId);
+              if (cPlayer && cPlayer.hp > 0 && cObj && cObj.amount > 0 && (now - (cObj.time || 0)) <= 10000) {
+                if (this.mode === 'ffa' || cPlayer.team === p.team) {
+                  cPlayer.assists = (cPlayer.assists || 0) + 1;
+                }
+              }
+            }
+            closest.damageContributors.clear();
+          }
+        }
 
         p.slashes = [{
           type: 'slash',
@@ -509,16 +541,19 @@ class GameRoom {
           shield: closest.shield || 0,
           attacker: p.name,
           attackerSocketId: p.socketId,
-          damageApplied: prevHp - closest.hp,
+          attackerKills: p.kills || 0,
+          attackerTotalDamage: p.totalDamage || 0,
+          victimDeaths: closest.deaths || 0,
+          victimTotalDamageTaken: closest.totalDamageTaken || 0,
+          damageApplied: actualDealt,
           damageToShield: 0,
-          damageToHp: prevHp - closest.hp,
+          damageToHp: actualDealt,
           computedDamage: dmg,
           clamped: false,
           trueDamage: false
         });
 
         if (closest.hp <= 0 && prevHp > 0) {
-          p.kills++;
           this.checkVictoryAfterDeath(closest);
         }
       } else {
@@ -601,7 +636,11 @@ class GameRoom {
         maxShield: p.maxShield,
         speedMult: p.speedMult || 1,
         dmgMult: p.dmgMult || 1,
-        kills: p.kills,
+        kills: p.kills || 0,
+        deaths: p.deaths || 0,
+        assists: p.assists || 0,
+        totalDamage: Math.ceil(p.totalDamage || 0),
+        totalDamageTaken: Math.ceil(p.totalDamageTaken || 0),
         lastUpdate: p.lastUpdate,
         entities: safeEntities,
         slashes: safeSlashes,
@@ -698,6 +737,21 @@ class GameRoom {
     }
     if (typeof data.dmgMult === 'number' && Number.isFinite(data.dmgMult)) {
       player.dmgMult = Math.max(0.1, Math.min(10, data.dmgMult));
+    }
+    if (typeof data.kills === 'number' && Number.isFinite(data.kills)) {
+      player.kills = Math.max(player.kills || 0, Math.floor(data.kills));
+    }
+    if (typeof data.deaths === 'number' && Number.isFinite(data.deaths)) {
+      player.deaths = Math.max(player.deaths || 0, Math.floor(data.deaths));
+    }
+    if (typeof data.assists === 'number' && Number.isFinite(data.assists)) {
+      player.assists = Math.max(player.assists || 0, Math.floor(data.assists));
+    }
+    if (typeof data.totalDamage === 'number' && Number.isFinite(data.totalDamage)) {
+      player.totalDamage = Math.max(player.totalDamage || 0, Math.ceil(data.totalDamage));
+    }
+    if (typeof data.totalDamageTaken === 'number' && Number.isFinite(data.totalDamageTaken)) {
+      player.totalDamageTaken = Math.max(player.totalDamageTaken || 0, Math.ceil(data.totalDamageTaken));
     }
     if (data.abilityVisuals && typeof data.abilityVisuals === 'object') {
       player.abilityVisuals = data.abilityVisuals;
@@ -1265,14 +1319,20 @@ io.on('connection', (socket) => {
     const leaderboard = Array.from(room.players.values())
       .map(p => ({
         playerId: p.socketId,
+        socketId: p.socketId,
         name: p.name,
         heroType: p.heroType,
         kills: p.kills || 0,
+        deaths: p.deaths || 0,
+        assists: p.assists || 0,
+        totalDamage: Math.ceil(p.totalDamage || 0),
+        damageTaken: Math.ceil(p.totalDamageTaken || 0),
+        totalDamageTaken: Math.ceil(p.totalDamageTaken || 0),
         hp: p.hp,
         maxHp: p.maxHp,
         alive: p.hp > 0
       }))
-      .sort((a, b) => b.kills - a.kills);
+      .sort((a, b) => (b.kills - a.kills) || ((b.totalDamage || 0) - (a.totalDamage || 0)));
     socket.emit('leaderboard', leaderboard);
   });
 
@@ -1420,6 +1480,18 @@ io.on('connection', (socket) => {
     victimMap.set(attackerId, nowTs);
     playerRoom.lastDamageTimestamps.set(data.socketId, victimMap);
     const attackerSocketId = data.attackerSocketId || socket.id;
+    const isLocalBotHit = !!data.attackerIsLocalBot;
+    const actualAttacker = isLocalBotHit ? null : (playerRoom.players.get(attackerSocketId) || attacker);
+
+    victim.totalDamageTaken = (victim.totalDamageTaken || 0) + computedApplied;
+    if (actualAttacker && actualAttacker !== victim) {
+      actualAttacker.totalDamage = (actualAttacker.totalDamage || 0) + computedApplied;
+      if (!victim.damageContributors) victim.damageContributors = new Map();
+      const prevC = victim.damageContributors.get(actualAttacker.socketId) || { amount: 0, time: 0 };
+      prevC.amount = (prevC.amount || 0) + computedApplied;
+      prevC.time = nowTs;
+      victim.damageContributors.set(actualAttacker.socketId, prevC);
+    }
 
     // Check if victim is Vival with active Ritual Second Life (requires 3 E hits -> vivalReviveReady) before declaring death!
     let vivalRevivedNow = false;
@@ -1436,7 +1508,24 @@ io.on('connection', (socket) => {
     }
 
     if (victim.hp <= 0 && prevHp > 0 && !vivalRevivedNow) {
-      attacker.kills = (attacker.kills || 0) + 1;
+      if (actualAttacker && actualAttacker !== victim) {
+        actualAttacker.kills = (actualAttacker.kills || 0) + 1;
+      }
+      if (playerRoom.mode !== 'ffa') {
+        victim.deaths = (victim.deaths || 0) + 1;
+      }
+      if (victim.damageContributors && victim.damageContributors.size > 0) {
+        for (const [contribId, cObj] of victim.damageContributors) {
+          if ((actualAttacker && contribId === actualAttacker.socketId) || contribId === victim.socketId) continue;
+          const cPlayer = playerRoom.players.get(contribId);
+          if (cPlayer && cPlayer.hp > 0 && cObj && cObj.amount > 0 && (nowTs - (cObj.time || 0)) <= 10000) {
+            if (playerRoom.mode === 'ffa' || !actualAttacker || cPlayer.team === actualAttacker.team) {
+              cPlayer.assists = (cPlayer.assists || 0) + 1;
+            }
+          }
+        }
+        victim.damageContributors.clear();
+      }
     }
 
     if (victim.shield <= 0 || (typeof victim.yellowShield === 'number' && victim.yellowShield <= 0)) {
@@ -1453,8 +1542,14 @@ io.on('connection', (socket) => {
       x: vivalRevivedNow ? victim.x : undefined,
       y: vivalRevivedNow ? victim.y : undefined,
       vivalRevived: vivalRevivedNow,
-      attacker: data.damageDealer || attacker.name || null,
+      attacker: data.damageDealer || (actualAttacker && actualAttacker.name) || attacker.name || null,
       attackerSocketId: attackerSocketId,
+      attackerIsLocalBot: isLocalBotHit,
+      attackerBotName: data.attackerBotName || undefined,
+      attackerKills: actualAttacker ? (actualAttacker.kills || 0) : undefined,
+      attackerTotalDamage: actualAttacker ? Math.ceil(actualAttacker.totalDamage || 0) : undefined,
+      victimDeaths: victim.deaths || 0,
+      victimTotalDamageTaken: Math.ceil(victim.totalDamageTaken || 0),
       damageApplied: computedApplied,
       damageToShield: damageToShield,
       damageToHp: damageToHp,
