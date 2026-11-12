@@ -1129,7 +1129,10 @@
                 </div>
             </div>
             
-            <h1>SELECT GAME MODE</h1>
+            <div style="display:flex; align-items:center; justify-content:center; gap:16px; flex-wrap:wrap; margin-bottom:6px;">
+                <h1 style="margin:0;">SELECT GAME MODE</h1>
+                <button id="balanceChangesBtn" onclick="openBalanceChangesModal()" style="padding:9px 18px; border-radius:10px; border:1.5px solid rgba(148,163,184,0.45); background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color:#f8fafc; font-family:Inter, Segoe UI, sans-serif; font-weight:800; font-size:13px; letter-spacing:0.05em; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,0.45);">📋 BALANCE CHANGES</button>
+            </div>
             <div class="mode-grid">
                 <div class="mode-card active-mode" data-mode="ffa" onclick="selectGameMode('ffa')">
                     <div class="mode-card-title"><span>FREE FOR ALL</span><span class="mode-tag">SOLO</span></div>
@@ -5035,7 +5038,7 @@
                     proj._boxExpanded = true;
                     window._suppressOnlineFxCapture = true;
                     try {
-                        const halfSize = 115;
+                        const halfSize = 135;
                         const ownerRef = proj.owner || null;
                         const dup = Array.isArray(ricoExpandedBoxes) && ricoExpandedBoxes.some(b => b && b.duration > 1.5 && Math.hypot(b.x - bx, b.y - by) < 40);
                         if (!dup && Array.isArray(ricoExpandedBoxes)) {
@@ -5043,8 +5046,8 @@
                                 x: bx,
                                 y: by,
                                 halfSize: halfSize,
-                                duration: 2.0,
-                                maxDuration: 2.0,
+                                duration: 2.2,
+                                maxDuration: 2.2,
                                 owner: ownerRef,
                                 team: ownerRef ? ownerRef.team : undefined,
                                 containsPoint(px, py) {
@@ -5284,15 +5287,15 @@
                         break;
                     case 'RicoExpandedBox':
                         if (Array.isArray(ricoExpandedBoxes)) {
-                            const halfSize = fx.halfSize || 115;
+                            const halfSize = fx.halfSize || 135;
                             const dup = ricoExpandedBoxes.some(b => b && b.duration > 1.5 && Math.hypot(b.x - fxX, b.y - fxY) < 40);
                             if (!dup) {
                                 ricoExpandedBoxes.push({
                                     x: fxX,
                                     y: fxY,
                                     halfSize: halfSize,
-                                    duration: fx.duration || 2.0,
-                                    maxDuration: fx.duration || 2.0,
+                                    duration: fx.duration || 2.2,
+                                    maxDuration: fx.duration || 2.2,
                                     owner: ownerProxy || null,
                                     team: ownerProxy ? ownerProxy.team : undefined,
                                     containsPoint(px, py) {
@@ -7404,9 +7407,7 @@
                                                 e.hp -= ricoBounceTrueBonus;
                                                 if (e.hp <= 0 && typeof e.die === 'function') e.die(this.owner);
                                             }
-                                            if (typeof damageTexts !== 'undefined' && Array.isArray(damageTexts)) {
-                                                damageTexts.push({ x: e.x, y: e.y - (e.radius || 20) - 14, text: `+${ricoBounceTrueBonus} TRUE`, color: '#ffffff', life: 0.65 });
-                                            }
+                                            // Do not display "+? TRUE" text popup on Rico bounce true damage
                                             for (let k = 0; k < 4; k++) {
                                                 particles.push(new Particle(e.x, e.y, '#ffffff', 3, 0.3));
                                             }
@@ -9109,12 +9110,15 @@
                 // Generic status applier used to broadcast effects in online FFA
                 if (type === 'stun') {
                     if (this.stunImmuneTimer > 0) return;
+                    let cleanStun = Number(value);
+                    if (!Number.isFinite(cleanStun) || cleanStun <= 0) return;
+                    cleanStun = Math.min(4.0, cleanStun);
                     // electrico stun buff: ensure electrico stuns are at least 0.4s
-                    if (src && src.gear === 'electrico') value = Math.max(Number(value) || 0, 0.4);
+                    if (src && src.gear === 'electrico') cleanStun = Math.max(cleanStun, 0.4);
                     if (typeof this.stunResistance === 'number' && this.stunResistance > 0) {
-                        value = Math.max(0, Number(value) || 0) * (1 - this.stunResistance);
+                        cleanStun = Math.max(0, cleanStun) * (1 - this.stunResistance);
                     }
-                    this.stunTimer = Math.max(this.stunTimer || 0, Number(value) || 0);
+                    this.stunTimer = Math.min(4.0, Math.max(Number.isFinite(this.stunTimer) ? this.stunTimer : 0, cleanStun));
                 } else if (type === 'bransonSlow') {
                     const dur = Math.max(0.1, Number(value) || 1.0);
                     this.bransonSlowTimer = Math.max(this.bransonSlowTimer || 0, dur);
@@ -9334,6 +9338,17 @@
                     this.austinMarkedBy = (src instanceof Entity) ? src : (entities.find(e => e instanceof OnlinePlayerProxy && e.heroType === 'austin') || null);
                 } else if (type === 'terrifedTimer') {
                     this.terrifedTimer = Math.max(this.terrifedTimer || 0, Number(value) || 1.5);
+                } else if (type === 'afraid') {
+                    const dur = (value && typeof value === 'object') ? (Number(value.duration) || 2.0) : (Number(value) || 2.0);
+                    this.afraidTimer = Math.max(this.afraidTimer || 0, Math.min(4.0, dur));
+                    if (value && typeof value === 'object' && typeof value.x === 'number' && typeof value.y === 'number') {
+                        this.afraidFromX = value.x;
+                        this.afraidFromY = value.y;
+                    } else if (src && typeof src.x === 'number' && typeof src.y === 'number') {
+                        this.afraidFromX = src.x;
+                        this.afraidFromY = src.y;
+                    }
+                    if (src instanceof Entity) this.afraidSource = src;
                 } else if (type === 'echoTimer') {
                     this.echoTimer = Math.max(this.echoTimer || 0, Number(value) || 6.0);
                     this.revealTimer = Math.max(this.revealTimer || 0, Number(value) || 6.0);
@@ -9425,6 +9440,13 @@
                 } else {
                     // Fallback: set property directly if exists
                     try { this[type] = value; } catch(_){}
+                }
+
+                // Always update _syncedStatusSnapshot on OnlinePlayerProxy so syncDirectStatusEffectsToServer never re-emits or echoes remote effects in 3+ player rooms
+                if (typeof OnlinePlayerProxy !== 'undefined' && this instanceof OnlinePlayerProxy) {
+                    if (typeof this.refreshSyncedStatusSnapshot === 'function') {
+                        this.refreshSyncedStatusSnapshot();
+                    }
                 }
 
                 // If this is a remote proxy and not a remote replay, notify server so stuns, blinds, slows, pulls, marks, and knockbacks replicate online
@@ -9701,6 +9723,19 @@
                     src.takeDamage(d * 0.5, src.echoOwner, { echoReflection: true });
                 }
                 this.hp -= d;
+                // Taking damage inside a bush reveals the target for 0.5s (no overhead label)
+                if ((d > 0 || shieldAbsorbed > 0) && src && src !== this && src.team !== this.team) {
+                    const inBushWhenHit = !!(this.bush || (typeof bushes !== 'undefined' && Array.isArray(bushes) && bushes.some(b => b && typeof b.contains === 'function' && b.contains(this))));
+                    if (inBushWhenHit) {
+                        const bushRevealDur = 0.5;
+                        this.revealTimer = Math.max(this.revealTimer || 0, bushRevealDur);
+                        if (typeof OnlinePlayerProxy !== 'undefined' && this instanceof OnlinePlayerProxy) {
+                            safeApplyStatus(this, 'reveal', bushRevealDur, src);
+                        }
+                    } else {
+                        this.revealTimer = Math.max(this.revealTimer || 0, 0.5);
+                    }
+                }
                 // Karen temporary ally (mind-controlled entity) heals Karen for 15% of damage dealt
                 if (src && src.mindControlledBy && !src.mindControlledBy.dead && damageTakenTotal > 0) {
                     const karenOwner = src.mindControlledBy;
@@ -10157,8 +10192,13 @@
             updateCommon(dt){
                 if (this._blinkWallGrace && this._blinkWallGrace > 0) this._blinkWallGrace = Math.max(0, this._blinkWallGrace - dt);
                 this.bush=null;for(let b of bushes)if(b.contains(this)){this.bush=b;break;}
-                if(this.revealTimer>0)this.revealTimer-=dt;
-                if(this.stunTimer>0)this.stunTimer-=dt;
+                if(this.revealTimer>0)this.revealTimer=Math.max(0, this.revealTimer - dt);
+                if(this.bushDamageRevealTimer>0)this.bushDamageRevealTimer=Math.max(0, this.bushDamageRevealTimer - dt);
+                if(!Number.isFinite(this.stunTimer) || this.stunTimer < 0) this.stunTimer = 0;
+                else if(this.stunTimer > 4.5) this.stunTimer = 4.0;
+                if(this.stunTimer>0)this.stunTimer=Math.max(0, this.stunTimer - dt);
+                if(!Number.isFinite(this.fightingTimer) || this.fightingTimer < 0) this.fightingTimer = 0;
+                else if(this.fightingTimer > 3.5) this.fightingTimer = 3.0;
                 if(this.fightingTimer>0){
                     this.fightingTimer=Math.max(0, this.fightingTimer - dt);
                     this.stunTimer=Math.max(this.stunTimer || 0, 0.05);
@@ -10701,6 +10741,15 @@
                     ctx.textAlign = 'center';
                     ctx.fillText('HALLUCINATING', 0, 0);
                     ctx.restore();
+                }
+                if ((this.afraidTimer && this.afraidTimer > 0) || (this.terrifedTimer && this.terrifedTimer > 0)) {
+                    ctx.save();
+                    ctx.font = '22px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", Arial, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('😨', sx, sy - this.radius - 28);
+                    ctx.restore();
+                    this._scaredEmojiDrawnFrameId = window._renderFrameId;
                 }
                 if(this.blindTimer && this.blindTimer > 0){
                     ctx.save();
@@ -22964,12 +23013,57 @@
                 if (this.rCD > 0) this.rCD -= dt;
                 if (this.immuneTimer > 0) this.immuneTimer -= dt;
                 
+                // Handle E-enhanced basic attack Spear Dash (hits enemies on the way with real spear-lunge visuals)
+                if (this.eDashTimer && this.eDashTimer > 0) {
+                    this.eDashTimer -= dt;
+                    const dashSpd = 1220;
+                    const isLongWay = this.currentSkin === 'Long Way Through';
+                    this.x = Math.max(20, Math.min(WORLD_SIZE - 20, this.x + Math.cos(this.eDashAngle) * dashSpd * dt));
+                    this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + Math.sin(this.eDashAngle) * dashSpd * dt));
+                    // Continuous spear-tip wind wake & lance trail during dash
+                    const tipX = this.x + Math.cos(this.eDashAngle) * 58;
+                    const tipY = this.y + Math.sin(this.eDashAngle) * 58;
+                    const perpA = this.eDashAngle + Math.PI / 2;
+                    for (const side of [-1, 1]) {
+                        const wx = this.x + Math.cos(perpA) * (side * 16);
+                        const wy = this.y + Math.sin(perpA) * (side * 16);
+                        const wakeCol = isLongWay ? (side > 0 ? '#ec4899' : '#fbcfe8') : (side > 0 ? '#FFD700' : '#FF6B6B');
+                        particles.push(new Particle(wx, wy, wakeCol, 4.2, 0.28, -Math.cos(this.eDashAngle) * 240, -Math.sin(this.eDashAngle) * 240));
+                    }
+                    particles.push(new SwordTrail(this.x, this.y, this.eDashAngle, 115, 0.18, isLongWay ? '#f472b6' : '#FFD700'));
+
+                    for (let e of entities) {
+                        if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && (!this.eDashHitSet || !this.eDashHitSet.has(e))) {
+                            let d = Math.hypot(e.x - this.x, e.y - this.y);
+                            let dTip = Math.hypot(e.x - tipX, e.y - tipY);
+                            if (d < 95 + (e.radius || 18) || dTip < 75 + (e.radius || 18)) {
+                                if (this.eDashHitSet) this.eDashHitSet.add(e);
+                                e.takeDamage(600, this);
+                                if (this.skyscraperActive) this.totalDamageDealtInScraper += 600;
+                                effectsAdd(new ImpactFlash(e.x, e.y, this.eDashAngle, 95, 0.25, isLongWay ? '#fbcfe8' : '#FFD700'));
+                                particles.push(new Slash(e.x, e.y, this.eDashAngle, 105, Math.PI / 2.2, isLongWay ? '#ec4899' : '#FF6B6B'));
+                            }
+                        }
+                    }
+                    if (this.eDashTimer <= 0) {
+                        this.eDashTimer = 0;
+                        effectsAdd(new ImpactFlash(tipX, tipY, this.eDashAngle, 130, 0.28, isLongWay ? '#f472b6' : '#FFD700'));
+                        particles.push(new Slash(this.x, this.y, this.eDashAngle, 145, Math.PI / 2, isLongWay ? '#ec4899' : '#FF6B6B'));
+                    }
+                }
+
                 if (this.skyscraperActive) {
                     this.skyscraperTimer -= dt;
+                    if (this.currentSkin === 'Long Way Through' && Math.random() < 0.45) {
+                        const pa = Math.random() * Math.PI * 2;
+                        const pr = 40 + Math.random() * 155;
+                        const pinkCols = ['#ec4899', '#f472b6', '#fbcfe8', '#fdf2f8'];
+                        particles.push(new Particle(this.x + Math.cos(pa) * pr, this.y + Math.sin(pa) * pr, pinkCols[Math.floor(Math.random() * pinkCols.length)], 4, 0.45));
+                    }
                     if (this.skyscraperTimer <= 0) {
                         this.skyscraperActive = false;
-                        // Heal based on 50% of damage dealt
-                        this.hp = Math.min(this.maxHp, this.hp + this.totalDamageDealtInScraper * 0.5);
+                        // Heal after 10s buffed from 35% to 40% of damage dealt
+                        this.hp = Math.min(this.maxHp, this.hp + this.totalDamageDealtInScraper * 0.40);
                         this.totalDamageDealtInScraper = 0;
                     }
                     
@@ -23019,30 +23113,46 @@
             }
             
             basicAttack() {
+                // Cannot use normal basic attack while Q (stabbing) is active, but CAN use enhanced basic attack!
+                if (this.stabbing && !this.enhancedBasicActive) return;
                 this.revealTimer = 0.5;
                 this.basicCD = 1.5;
+                const isLongWay = this.currentSkin === 'Long Way Through';
                 
                 if (this.enhancedBasicActive) {
-                    // Dash briefly before the enhanced strike so it behaves like a burst-in attack
-                    this.x += Math.cos(this.angle) * 120;
-                    this.y += Math.sin(this.angle) * 120;
-                    particles.push(new Slash(this.x, this.y, this.angle, 140, Math.PI/2, '#FF6B6B'));
+                    // Reworked E enhanced strike: real Spear Dash lunging forward and hitting enemies on the way!
+                    this.enhancedBasicActive = false;
+                    this.eDashAngle = this.angle;
+                    this.eDashTimer = 0.18;
+                    this.eDashHitSet = new Set();
+                    if (typeof YunSpearDashEffect !== 'undefined') {
+                        effectsAdd(new YunSpearDashEffect(this.x, this.y, this.angle, 225, 0.30, isLongWay));
+                    }
+                    effectsAdd(new ImpactFlash(this.x + Math.cos(this.angle) * 36, this.y + Math.sin(this.angle) * 36, this.angle, 145, 0.26, isLongWay ? '#fbcfe8' : '#FFD700'));
+                    particles.push(new SwordTrail(this.x, this.y, this.angle, 165, 0.28, isLongWay ? '#ec4899' : '#FF6B6B'));
                     for (let e of entities) {
-                        if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
-                            let d = Math.sqrt((e.x-this.x)**2 + (e.y-this.y)**2);
-                            let angle = Math.atan2(e.y-this.y, e.x-this.x);
-                            let angleDiff = Math.abs(this.angle - angle);
-                            if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
-                            if (d < 160 && angleDiff < Math.PI/2.5) {
+                        if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && !this.eDashHitSet.has(e)) {
+                            let d = Math.hypot(e.x - this.x, e.y - this.y);
+                            if (d < 95 + (e.radius || 18)) {
+                                this.eDashHitSet.add(e);
                                 e.takeDamage(600, this);
                                 if (this.skyscraperActive) this.totalDamageDealtInScraper += 600;
                             }
                         }
                     }
-                    this.enhancedBasicActive = false;
                 } else {
                     // Regular spear attack: 200 damage
-                    particles.push(new Slash(this.x, this.y, this.angle, 100, Math.PI/2, '#FFB300'));
+                    if (isLongWay) {
+                        particles.push(new Slash(this.x, this.y, this.angle, 115, Math.PI/2, '#ec4899'));
+                        particles.push(new Slash(this.x, this.y, this.angle, 95, Math.PI/2.4, '#fbcfe8'));
+                        particles.push(new SwordTrail(this.x, this.y, this.angle, 120, 0.22, '#f472b6'));
+                        for (let i = 0; i < 8; i++) {
+                            const sa = this.angle + (Math.random() - 0.5) * 0.85;
+                            particles.push(new Particle(this.x + Math.cos(sa) * 75, this.y + Math.sin(sa) * 75, i % 2 === 0 ? '#f472b6' : '#fbcfe8', 4, 0.35));
+                        }
+                    } else {
+                        particles.push(new Slash(this.x, this.y, this.angle, 100, Math.PI/2, '#FFB300'));
+                    }
                     for (let e of entities) {
                         if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                             let d = Math.sqrt((e.x-this.x)**2 + (e.y-this.y)**2);
@@ -23066,6 +23176,7 @@
                 let stabCount = 0;
                 const maxStabs = 50;
                 const stabInterval = 0.05;
+                const stabDmg = 50; // Buffed back from 40 to 50
                 
                 const stabLoop = setInterval(() => {
                     if (this.dead || !this.stabbing || stabCount >= maxStabs) {
@@ -23073,9 +23184,20 @@
                         this.stabbing = false;
                         return;
                     }
-                    
-                    // Visual effect for each stab (longer reach)
-                    particles.push(new Slash(this.x, this.y, this.angle, 220, Math.PI/3, '#FFD700'));
+                    const isLongWay = this.currentSkin === 'Long Way Through';
+                    // Visual effect for each stab (longer reach + enhanced pink lance flurry for Long Way Through)
+                    if (isLongWay) {
+                        const pinkCols = ['#ec4899', '#f472b6', '#fbcfe8', '#fdf2f8'];
+                        const c1 = pinkCols[stabCount % pinkCols.length];
+                        const jitterA = this.angle + (Math.random() - 0.5) * 0.26;
+                        particles.push(new Slash(this.x, this.y, jitterA, 225, Math.PI/3.2, c1));
+                        particles.push(new SwordTrail(this.x, this.y, jitterA, 225, 0.16, '#fbcfe8'));
+                        if (stabCount % 2 === 0) {
+                            particles.push(new Particle(this.x + Math.cos(jitterA) * (120 + Math.random() * 90), this.y + Math.sin(jitterA) * (120 + Math.random() * 90), c1, 4.5, 0.35));
+                        }
+                    } else {
+                        particles.push(new Slash(this.x, this.y, this.angle, 220, Math.PI/3, '#FFD700'));
+                    }
                     
                     // Deal damage to nearby enemies
                     for (let e of entities) {
@@ -23085,9 +23207,9 @@
                             let angleDiff = Math.abs(this.angle - angle);
                             if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
                             if (d < 220 && angleDiff < Math.PI/2) {
-                                e.takeDamage(50, this);
+                                e.takeDamage(stabDmg, this);
                                 e.slowTimer = Math.max(e.slowTimer, 0.3); // Slow enemies
-                                if (this.skyscraperActive) this.totalDamageDealtInScraper += 50;
+                                if (this.skyscraperActive) this.totalDamageDealtInScraper += stabDmg;
                             }
                         }
                     }
@@ -23106,23 +23228,25 @@
                 this.eCD = 6;
                 this.immuneTimer = 1;
                 this.enhancedBasicActive = true;
-                // brief forward burst before the enhanced basic can hit
-                this.x += Math.cos(this.angle) * 40;
-                this.y += Math.sin(this.angle) * 40;
-                
-                // Visual indicator
+                const isLongWay = this.currentSkin === 'Long Way Through';
+                // E ability has no dash on activation; empowers next basic attack into a Spear Dash and displays a Spear Stance surge!
+                effectsAdd(new AuraRing(this.x, this.y, 68, 0.42, isLongWay ? '#ec4899' : '#FFD700', 10));
+                particles.push(new SpinningRing(this.x, this.y, 54, isLongWay ? '#fbcfe8' : '#00FF00', 0.45, 14, 5));
+                particles.push(new SwordTrail(this.x, this.y, this.angle, 95, 0.32, isLongWay ? '#f472b6' : '#FFD700'));
                 for(let i=0;i<20;i++) {
                     let angle = Math.random() * Math.PI * 2;
                     let vel = new Vector2(Math.cos(angle), Math.sin(angle)).mult(200);
-                    particles.push(new Particle(this.x, this.y, '#00FF00', 3, 1, vel.x, vel.y));
+                    const pCol = isLongWay ? (i % 2 === 0 ? '#ec4899' : '#fbcfe8') : '#00FF00';
+                    particles.push(new Particle(this.x, this.y, pCol, 3.5, 0.85, vel.x, vel.y));
                 }
                 
-                if (this.isPlayer) addKillMsg('Immunity Mode!');
+                if (this.isPlayer) addKillMsg('Immunity Mode! Spear Dash Ready!');
             }
             
             ultimateJump() {
                 this.revealTimer = 0.5;
                 this.fCD = 18;
+                const isLongWay = this.currentSkin === 'Long Way Through';
                 
                 // Determine jump target (to mouse for player, or toward target/facing for AI, up to 350 radius)
                 const aimPos = getEntityAimPosition(this, 300, 350);
@@ -23134,43 +23258,50 @@
                 this.x = aimPos.x;
                 this.y = aimPos.y;
                 
-                // Damage in 300 radius
+                // Damage in 300 radius (650 damage, 110 knockback)
                 for (let e of entities) {
                     if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                         let d = Math.sqrt((e.x - this.x) ** 2 + (e.y - this.y) ** 2);
                         if (d < 300) {
-                            e.takeDamage(800, this);
+                            e.takeDamage(650, this);
                             
-                            // Knockback
+                            // Reduced Knockback
                             let knockAngle = Math.atan2(e.y - this.y, e.x - this.x);
-                            let knockDist = 200;
+                            let knockDist = 110;
                             e.x += Math.cos(knockAngle) * knockDist;
                             e.y += Math.sin(knockAngle) * knockDist;
                         }
                     }
                 }
                 
-                // Strong, distinct explosion visuals for Yun ultimate
+                // Strong, distinct explosion visuals for Yun ultimate (enhanced pink blossom nova for Long Way Through)
+                if (isLongWay) {
+                    effectsAdd(new WaveShockwave(this.x, this.y, 330, 0.65, '#ec4899', '#fbcfe8'));
+                    effectsAdd(new AuraRing(this.x, this.y, 260, 0.58, '#f472b6', 12));
+                    particles.push(new SpinningRing(this.x, this.y, 290, '#ec4899', 0.68, 14, 8));
+                    particles.push(new SpinningRing(this.x, this.y, 185, '#fbcfe8', 0.58, -16, 6));
+                }
                 for (let i = 0; i < 48; i++) {
                     let a = (i / 48) * Math.PI * 2;
                     let speed = 300 + Math.random() * 400;
                     let vx = Math.cos(a) * speed * (0.8 + Math.random() * 0.8);
                     let vy = Math.sin(a) * speed * (0.8 + Math.random() * 0.8);
-                    let col = (i % 3 === 0) ? '#FF4500' : (i % 3 === 1 ? '#FFD700' : '#FFFFFF');
+                    let col = isLongWay
+                        ? ((i % 3 === 0) ? '#ec4899' : (i % 3 === 1 ? '#f472b6' : '#fbcfe8'))
+                        : ((i % 3 === 0) ? '#FF4500' : (i % 3 === 1 ? '#FFD700' : '#FFFFFF'));
                     particles.push(new Particle(this.x, this.y, col, 6, 0.9, vx, vy));
                 }
                 // Add a bright shockwave slash (large radius) to emphasize impact
-                particles.push(new Slash(this.x, this.y, 0, 420, Math.PI * 2, '#FFFFFF'));
+                particles.push(new Slash(this.x, this.y, 0, 420, Math.PI * 2, isLongWay ? '#fbcfe8' : '#FFFFFF'));
 
                 // Add a ring effect for the ultimate impact
-                ringEffects.push({ x: this.x, y: this.y, life: 0.9, duration: 0.9, maxRadius: 420, color: '#FFFFFF' });
+                ringEffects.push({ x: this.x, y: this.y, life: 0.9, duration: 0.9, maxRadius: 420, color: isLongWay ? '#ec4899' : '#FFFFFF' });
 
                 // Activate skyscraper mode
                 this.skyscraperActive = true;
                 this.skyscraperTimer = 10;
                 this.totalDamageDealtInScraper = 0;
                 this.speed = this.baseSpd * 1.4; // 40% speed boost
-                // tiny sustain nerf: heal from skyscraper only slightly less
                 if (this.skyscraperActive) {
                     this.hp = Math.min(this.maxHp, this.hp + 30);
                 }
@@ -23179,7 +23310,7 @@
                 for(let i=0;i<30;i++) {
                     let angle = Math.random() * Math.PI * 2;
                     let vel = new Vector2(Math.cos(angle), Math.sin(angle)).mult(400);
-                    particles.push(new Particle(this.x, this.y, '#FF4500', 4, 0.8, vel.x, vel.y));
+                    particles.push(new Particle(this.x, this.y, isLongWay ? '#f472b6' : '#FF4500', 4, 0.8, vel.x, vel.y));
                 }
                 
                 if (this.isPlayer) addKillMsg('Sky Scrapper!');
@@ -23244,63 +23375,117 @@
             
             draw(ctx) {
                 if(this.dead)return;
-                super.draw(ctx);
+                const isLongWay = this.currentSkin === 'Long Way Through';
+                if (isLongWay) {
+                    if (!drawSkinImage(ctx, this, 'yun', this.currentSkin, '#ec4899', { alpha: 0.98 })) {
+                        super.draw(ctx);
+                    }
+                } else {
+                    super.draw(ctx);
+                }
                 
                 let screenX = this.x - camera.x;
                 let screenY = this.y - camera.y;
+                const isDashing = !!(this.eDashTimer && this.eDashTimer > 0);
+                const spearThrust = isDashing ? 22 : (this.enhancedBasicActive ? 8 : 0);
                 
-                // Draw spear
+                // Draw spear (with Spear Dash thrust extension & Long Way Through pink blossom lance styling)
                 ctx.save();
                 ctx.translate(screenX, screenY);
-                ctx.rotate(this.angle);
+                ctx.rotate(isDashing ? this.eDashAngle : this.angle);
+
+                // If E Spear Dash is active, draw a glowing wind-lance cone around the spear
+                if (isDashing || this.enhancedBasicActive) {
+                    ctx.save();
+                    const coneGrad = ctx.createLinearGradient(0, 0, 72 + spearThrust, 0);
+                    if (isLongWay) {
+                        coneGrad.addColorStop(0, 'rgba(236, 72, 153, 0)');
+                        coneGrad.addColorStop(0.55, 'rgba(244, 114, 182, 0.35)');
+                        coneGrad.addColorStop(1, 'rgba(253, 242, 248, 0.85)');
+                    } else {
+                        coneGrad.addColorStop(0, 'rgba(255, 179, 0, 0)');
+                        coneGrad.addColorStop(0.55, 'rgba(255, 107, 107, 0.35)');
+                        coneGrad.addColorStop(1, 'rgba(255, 215, 0, 0.85)');
+                    }
+                    ctx.fillStyle = coneGrad;
+                    ctx.beginPath();
+                    ctx.moveTo(68 + spearThrust, 0);
+                    ctx.lineTo(14, -18);
+                    ctx.lineTo(26, 0);
+                    ctx.lineTo(14, 18);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+                }
                 
                 // Spear shaft
-                ctx.fillStyle = '#8B4513';
-                ctx.fillRect(5, -2, 40, 4);
-                // Spear head
-                ctx.fillStyle = '#FFB300';
+                ctx.fillStyle = isLongWay ? '#be185d' : '#8B4513';
+                ctx.fillRect(5 + spearThrust * 0.4, -2.5, 42 + spearThrust * 0.6, 5);
+                if (isLongWay) {
+                    // Pink tassel & pearl trim
+                    ctx.fillStyle = '#fbcfe8';
+                    ctx.fillRect(36 + spearThrust, -4, 6, 8);
+                }
+                // Spear head (longer, sharper diamond lance head)
+                ctx.fillStyle = isLongWay ? '#ec4899' : '#FFB300';
+                ctx.strokeStyle = isLongWay ? '#fdf2f8' : '#FFF7ED';
+                ctx.lineWidth = 1.5;
                 ctx.beginPath();
-                ctx.moveTo(45, 0);
-                ctx.lineTo(48, -8);
-                ctx.lineTo(42, 0);
-                ctx.lineTo(48, 8);
+                ctx.moveTo(62 + spearThrust, 0);
+                ctx.lineTo(44 + spearThrust, -9);
+                ctx.lineTo(48 + spearThrust, 0);
+                ctx.lineTo(44 + spearThrust, 9);
                 ctx.closePath();
                 ctx.fill();
+                ctx.stroke();
                 
                 ctx.restore();
                 
                 // Immunity indicator
                 if (this.immuneTimer > 0) {
-                    ctx.strokeStyle = '#00FF00';
-                    ctx.lineWidth = 2;
+                    ctx.save();
+                    ctx.strokeStyle = isLongWay ? '#f472b6' : '#00FF00';
+                    ctx.shadowColor = isLongWay ? '#ec4899' : '#00FF00';
+                    ctx.shadowBlur = 10;
+                    ctx.lineWidth = 2.5;
                     ctx.beginPath();
-                    ctx.arc(screenX, screenY, this.radius + 5, 0, Math.PI * 2);
+                    ctx.arc(screenX, screenY, this.radius + 6, 0, Math.PI * 2);
                     ctx.stroke();
+                    ctx.restore();
                 }
                 
                 // Skyscraper mode indicator
                 if (this.skyscraperActive) {
-                    ctx.strokeStyle = '#FF4500';
+                    const primaryAura = isLongWay ? '#ec4899' : '#FF4500';
+                    const secondaryAura = isLongWay ? '#fbcfe8' : '#FFD700';
+                    ctx.save();
+                    ctx.strokeStyle = primaryAura;
                     ctx.lineWidth = 3;
-                    ctx.setLineDash([5, 5]);
+                    ctx.setLineDash([6, 5]);
                     ctx.beginPath();
                     ctx.arc(screenX, screenY, 200, 0, Math.PI * 2);
                     ctx.stroke();
                     ctx.setLineDash([]);
+                    if (isLongWay) {
+                        ctx.strokeStyle = secondaryAura;
+                        ctx.lineWidth = 1.8;
+                        ctx.beginPath();
+                        ctx.arc(screenX, screenY, 186, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
                     
-                    // Pulsing glow effect for skyscraper aura (distinct from Gigi)
+                    // Pulsing glow effect for skyscraper aura
                     let pulsePhase = (Date.now() / 500) % 1;
-                    let pulseOpacity = 0.2 + Math.sin(pulsePhase * Math.PI * 2) * 0.2;
-                    ctx.save();
+                    let pulseOpacity = 0.18 + Math.sin(pulsePhase * Math.PI * 2) * 0.14;
                     ctx.globalAlpha = pulseOpacity;
-                    ctx.fillStyle = '#FF4500';
+                    ctx.fillStyle = primaryAura;
                     ctx.beginPath();
-                    ctx.arc(screenX, screenY, 200 + Math.sin(pulsePhase * Math.PI * 2) * 30, 0, Math.PI * 2);
+                    ctx.arc(screenX, screenY, 200 + Math.sin(pulsePhase * Math.PI * 2) * 24, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.restore();
                     
                     // Skyscraper timer
-                    ctx.fillStyle = '#FF4500';
+                    ctx.fillStyle = isLongWay ? '#fbcfe8' : '#FF4500';
                     ctx.font = 'bold 12px Arial';
                     ctx.textAlign = 'center';
                     ctx.fillText(`${Math.ceil(this.skyscraperTimer)}s`, screenX, screenY - this.radius - 26);
@@ -30389,6 +30574,13 @@
                                 e.takeDamage(dmg, this, true);
                                 e.defDebuff = Math.max(e.defDebuff, defReduction);
                                 e.slowTimer = Math.max(e.slowTimer, slowDuration);
+                                // Apply Afraid effect: enemy runs away automatically and cannot control movement (scared emoji indicator only)
+                                const afraidDur = 2.0;
+                                e.afraidTimer = Math.max(e.afraidTimer || 0, afraidDur);
+                                e.afraidFromX = this.x;
+                                e.afraidFromY = this.y;
+                                e.afraidSource = this;
+                                safeApplyStatus(e, 'afraid', { duration: afraidDur, x: Math.round(this.x), y: Math.round(this.y) }, this);
                             }
                         }
                     }
@@ -31564,7 +31756,7 @@
                 const centerX = this.deathDragon.x;
                 const centerY = this.deathDragon.y;
                 const blastRange = 220;
-                const blastDamage = 1300;
+                const blastDamage = 1200;
                 let totalDamageDealt = 0;
                 for (let e of entities) {
                     if (e !== this && e !== this.deathDragon && !e.dead && e instanceof Entity && e.team !== this.team && e.isTargetable !== false) {
@@ -31574,7 +31766,7 @@
                             e.takeDamage(blastDamage, this);
                             const dealt = Math.max(0, beforeHp - e.hp);
                             totalDamageDealt += dealt;
-                            this.healIfBloodDebt(dealt, 1.5);
+                            this.healIfBloodDebt(dealt, 1.2);
                         }
                     }
                 }
@@ -31729,7 +31921,7 @@
                                 const perpDist = Math.abs(-dx * sinD + dy * cosD);
                                 if (projForward > -10 && projForward <= reach + (e.radius || 20) && perpDist <= beamHalfWidth + (e.radius || 20)) {
                                     const beforeHp = e.hp;
-                                    e.takeDamage(160, this);
+                                    e.takeDamage(150, this);
                                     const dealt = Math.max(0, beforeHp - e.hp);
                                     this.healIfBloodDebt(dealt);
                                     for (let p = 0; p < 3; p++) {
@@ -31802,7 +31994,7 @@
                                     }
                                     const beforeHp = target.hp;
                                     target._lastDamageTaken = 0;
-                                    target.takeDamage(280, this);
+                                    target.takeDamage(270, this);
                                     const dealt = target._lastDamageTaken > 0 ? target._lastDamageTaken : Math.max(0, beforeHp - target.hp);
                                     this.healIfBloodDebt(dealt, 0.7);
                                 }
@@ -31954,7 +32146,7 @@
                                 executedTarget = true;
                             } else if (wasAlive && (e.dead || (e.hpBarsRemaining && e.hpBarsRemaining < beforeBars))) {
                                 executedTarget = true;
-                            } else if (e.hp > 0 && e.hp <= e.maxHp * 0.1 && !e.dead) {
+                            } else if (e.hp > 0 && e.hp <= e.maxHp * 0.07 && !e.dead) {
                                 e.hp = 0;
                                 e.die(this);
                                 executedTarget = true;
@@ -31962,8 +32154,8 @@
                             }
 
                             if (executedTarget) {
-                                // Successful execution heals Caskrice for 8% of Caskrice's max HP!
-                                const execHeal = Math.round(this.maxHp * 0.08);
+                                // Successful execution heals Caskrice for 6% of Caskrice's max HP!
+                                const execHeal = Math.round(this.maxHp * 0.06);
                                 this.hp = Math.min(this.maxHp, this.hp + execHeal);
                                 for (let k = 0; k < 8; k++) {
                                     const a = (Math.PI * 2 * k) / 8;
@@ -32139,7 +32331,7 @@
                                 }
                                 const beforeHp = target.hp;
                                 target._lastDamageTaken = 0;
-                                target.takeDamage(280, ownerEnt);
+                                target.takeDamage(270, ownerEnt);
                                 const dealt = target._lastDamageTaken > 0 ? target._lastDamageTaken : Math.max(0, beforeHp - target.hp);
                                 if (typeof ownerEnt.healIfBloodDebt === 'function') {
                                     // Death Dragon heals 70% of the attack damage dealt instead of 100%!
@@ -34716,9 +34908,9 @@
             }
 
             doE() {
-                // Sword energy: deals 700 damage, heal 40% of damage dealt
+                // Sword energy: deals 650 damage, heal 40% of damage dealt
                 this.revealTimer = 1.0;
-                const firstSlashDmg = 700;
+                const firstSlashDmg = 650;
                 let totalDamage = 0;
                 const R = 220;
                 for (let e of entities) {
@@ -41790,13 +41982,13 @@
             }
 
             spawnExpandedBox(bx, by) {
-                const halfSize = 115;
+                const halfSize = 135;
                 const box = {
                     x: bx,
                     y: by,
                     halfSize: halfSize,
-                    duration: 2.0,
-                    maxDuration: 2.0,
+                    duration: 2.2,
+                    maxDuration: 2.2,
                     owner: this,
                     team: this.team,
                     containsPoint(px, py) {
@@ -41811,7 +42003,7 @@
                         x: Math.round(bx),
                         y: Math.round(by),
                         halfSize: halfSize,
-                        duration: 2.0
+                        duration: 2.2
                     });
                 }
                 effectsAdd(new WaveShockwave(bx, by, halfSize * 1.25, 0.38, '#22d3ee', '#fde047'));
@@ -50421,10 +50613,10 @@
                 ctx.strokeText('⚡ BLINDED', sx, sy - ent.radius - 26);
                 ctx.fillText('⚡ BLINDED', sx, sy - ent.radius - 26);
             }
-            if (ent.terrifedTimer && ent.terrifedTimer > 0) {
-                ctx.font = 'bold 22px Arial';
+            if (((ent.afraidTimer && ent.afraidTimer > 0) || (ent.terrifedTimer && ent.terrifedTimer > 0)) && ent._scaredEmojiDrawnFrameId !== window._renderFrameId) {
+                ctx.font = '22px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", Arial, sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('😨', sx, sy - ent.radius - 42);
+                ctx.fillText('😨', sx, sy - ent.radius - 28);
             }
             if (ent.countsAsFFAHero === true) {
                 const bw = 44, bh = 6;
@@ -50839,10 +51031,11 @@
                             }
                         }
                         if (typeof OnlinePlayerProxy !== 'undefined' && ent instanceof OnlinePlayerProxy) {
-                            if (Math.hypot(ent.x - (ent._lastOwnX ?? ent.x), ent.y - (ent._lastOwnY ?? ent.y)) > 0.02 ||
-                                Math.hypot(ent.kbx || 0, ent.kby || 0) > 15 ||
-                                (ent.knockbackDuration > 0 && Math.hypot(ent.knockbackX || 0, ent.knockbackY || 0) > 5)) {
-                                ent.syncDirectStatusEffectsToServer();
+                            const actorIsLocal = !actor || actor === player || (!actor.isRemote && !(actor instanceof OnlinePlayerProxy) && !(actor.owner && actor.owner._isRemoteOwner));
+                            if (actorIsLocal) {
+                                ent.syncDirectStatusEffectsToServer(true);
+                            } else if (typeof ent.refreshSyncedStatusSnapshot === 'function') {
+                                ent.refreshSyncedStatusSnapshot();
                             }
                         }
                         ent._preStepX = ent.x;
@@ -55165,7 +55358,7 @@
                 }
             });
             window.addEventListener('mousedown', e => {
-                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #trainingPanelBtn, #trainingDummySwitchBox, #controlsBtn, #controlsPanel, #skinSelectModal, #shopBtnInGame, #equipmentShopModal, #hudEquipBar')) {
+                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #trainingPanelBtn, #trainingDummySwitchBox, #controlsBtn, #controlsPanel, #skinSelectModal, #shopBtnInGame, #equipmentShopModal, #hudEquipBar, #balanceChangesBtn, #balanceChangesModal')) {
                     return;
                 }
                 if (e.button === 2) {
@@ -55185,7 +55378,7 @@
             
             // Mobile touch support (alongside existing mouse input, doesn't replace it)
             window.addEventListener('touchmove', e => {
-                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #heroSelectScreen, #controlsPanel, #skinSelectModal, #shopBtnInGame, #equipmentShopModal, #hudEquipBar')) {
+                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #heroSelectScreen, #controlsPanel, #skinSelectModal, #shopBtnInGame, #equipmentShopModal, #hudEquipBar, #balanceChangesBtn, #balanceChangesModal')) {
                     return;
                 }
                 if (e.touches.length > 0) {
@@ -55195,7 +55388,7 @@
             }, { passive: false });
             
             window.addEventListener('touchstart', e => {
-                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #trainingPanelBtn, #trainingDummySwitchBox, #heroSelectScreen, #controlsBtn, #controlsPanel, #skinSelectModal, #shopBtnInGame, #equipmentShopModal, #hudEquipBar')) {
+                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#trainingControlPanel, #trainingPanelBtn, #trainingDummySwitchBox, #heroSelectScreen, #controlsBtn, #controlsPanel, #skinSelectModal, #shopBtnInGame, #equipmentShopModal, #hudEquipBar, #balanceChangesBtn, #balanceChangesModal')) {
                     return;
                 }
                 if (e.touches.length > 0) {
@@ -57857,6 +58050,7 @@
             }
             if (typeof ds.revealTimer === 'number' && ds.revealTimer > 0) {
                 proxy.revealTimer = Math.max(proxy.revealTimer || 0, ds.revealTimer);
+                if (proxy._syncedStatusSnapshot) proxy._syncedStatusSnapshot.revealTimer = proxy.revealTimer;
             }
             for (let k in ds) {
                 if (ONLINE_HERO_SKIP_KEYS.has(k) || k.startsWith('_')) continue;
@@ -58655,7 +58849,6 @@
 
             applyServerState(data) {
                 if (!data) return;
-                this.syncDirectStatusEffectsToServer();
                 this.prevServerX = this.serverX;
                 this.prevServerY = this.serverY;
                 this.prevServerTs = this.lastServerUpdate || Date.now();
@@ -58815,7 +59008,24 @@
                 }
             }
 
-            syncDirectStatusEffectsToServer() {
+            refreshSyncedStatusSnapshot() {
+                const snap = this._syncedStatusSnapshot || (this._syncedStatusSnapshot = {});
+                const props = [
+                    'stunTimer', 'freezeTimer', 'slowTimer', 'blindTimer', 'injuredTimer',
+                    'revealTimer', 'defDebuff', 'apolloFireTimer', 'moonMark', 'burnTimer',
+                    'fightingTimer', 'movementLockdownTimer', 'enhancedKBTimer', 'hallucinationTimer',
+                    'suspectedTimer', 'echoTimer', 'defenseShredTimer', 'austinMarkTimer',
+                    'terrifedTimer', 'fadingSoulTimer', 'bransonSlowTimer'
+                ];
+                for (let i = 0; i < props.length; i++) {
+                    const p = props[i];
+                    snap[p] = Number(this[p]) || 0;
+                }
+                this._lastOwnX = this.x;
+                this._lastOwnY = this.y;
+            }
+
+            syncDirectStatusEffectsToServer(allowStatusEmit = false) {
                 if (!isOnlineSyncActive()) return;
 
                 // 1. Detect direct position displacement (pushes/pulls/drags like Ian's F ability, Blackhole, Tornado, Hook, Gregory Q, Winston Wind, Mecca F, etc.)
@@ -58880,7 +59090,7 @@
                     }
                 }
 
-                // 2. Detect direct status timer assignments (including enhancedKBTimer!)
+                // 2. Detect direct status timer assignments made by the local player (never echo remote playerEffect updates in 3+ player FFA!)
                 const snap = this._syncedStatusSnapshot || (this._syncedStatusSnapshot = {});
                 const statusKeys = [
                     ['stunTimer', 'stun'],
@@ -58905,12 +59115,14 @@
                     ['fadingSoulTimer', 'fadingSoul'],
                     ['bransonSlowTimer', 'bransonSlow']
                 ];
+                const curActor = window._currentlyUpdatingEntity;
+                const isRemoteActorTurn = !!(this._suppressEffectEmit || !allowStatusEmit || (curActor && ((typeof OnlinePlayerProxy !== 'undefined' && curActor instanceof OnlinePlayerProxy) || curActor.isRemote || (curActor.owner && curActor.owner._isRemoteOwner))));
                 for (let i = 0; i < statusKeys.length; i++) {
                     const prop = statusKeys[i][0];
                     const effType = statusKeys[i][1];
                     const curVal = Number(this[prop]) || 0;
                     const prevVal = Number(snap[prop]) || 0;
-                    if (curVal > prevVal + 0.05) {
+                    if (!isRemoteActorTurn && curVal > prevVal + 0.05) {
                         snap[prop] = curVal;
                         try {
                             emitTrainingOrOnline('playerEffect', {
@@ -58973,6 +59185,7 @@
                 if (this.slowTimer > 0) this.slowTimer = Math.max(0, this.slowTimer - dt);
                 if (this.blindTimer > 0) this.blindTimer = Math.max(0, this.blindTimer - dt);
                 if (this.terrifedTimer > 0) this.terrifedTimer = Math.max(0, this.terrifedTimer - dt);
+                if (this.afraidTimer > 0) this.afraidTimer = Math.max(0, this.afraidTimer - dt);
                 if (this.injuredTimer > 0) this.injuredTimer = Math.max(0, this.injuredTimer - dt);
                 if (this.revealTimer > 0) this.revealTimer = Math.max(0, this.revealTimer - dt);
                 if (this.defDebuff > 0) this.defDebuff = Math.max(0, this.defDebuff - dt);
@@ -59744,7 +59957,13 @@
               particles: particlesToBroadcast,
               abilityVisuals: abilityVisuals,
               angle: Number((player.angle || 0).toFixed(3)),
-              currentSkin: player.currentSkin || 'default'
+              currentSkin: player.currentSkin || 'default',
+              inBush: !!(player.bush),
+              isConcealedInBush: !!(player.bush && !(player.revealTimer > 0)),
+              revealTimer: Number((player.revealTimer || 0).toFixed(2)),
+              bushX: player.bush ? Math.round(player.bush.x) : null,
+              bushY: player.bush ? Math.round(player.bush.y) : null,
+              bushR: player.bush ? Math.round(player.bush.radius || 90) : null
             };
             emitTrainingOrOnline('playerUpdate', updatePayload);
           }, 16);
@@ -60073,7 +60292,6 @@
               }
               const prox = entities.find(e => e instanceof OnlinePlayerProxy && e.socketId === data.playerId);
               if (!prox) return;
-              prox.syncDirectStatusEffectsToServer();
               const nowMs = Date.now();
               if (!data.forcedPush && ((nowMs - (prox._lastLocalPushAt || 0)) < 320 || Math.hypot(prox._localKbVx || 0, prox._localKbVy || 0) > 5)) return;
               const dt = (nowMs - (prox.lastServerUpdate || nowMs)) / 1000;
@@ -60190,13 +60408,29 @@
               const myId = (onlineSocket && onlineSocket.id) || mySocketId || window.mySocketId;
               if (data.effect && data.socketId) {
                 let eff = data.effect;
+                // Deduplicate rapid identical status effect broadcasts within 220ms per (target, type, attacker)
+                const nowEffMs = Date.now();
+                window._recentOnlineEffectsMap = window._recentOnlineEffectsMap || new Map();
+                if (eff.type !== 'push' && eff.type !== 'pull' && eff.type !== 'knockback' && eff.type !== 'summonDamaged') {
+                  const dedupKey = `${data.socketId}:${eff.type}:${data.attackerSocketId || 'any'}`;
+                  const lastTime = window._recentOnlineEffectsMap.get(dedupKey) || 0;
+                  if ((nowEffMs - lastTime) < 220) return;
+                  window._recentOnlineEffectsMap.set(dedupKey, nowEffMs);
+                }
                 let attackerProxy = (data.attackerSocketId && entities.find(e => e instanceof OnlinePlayerProxy && e.socketId === data.attackerSocketId)) || null;
                 let proxy = entities.find(e => e instanceof OnlinePlayerProxy && e.socketId === data.socketId);
                 if (proxy && data.attackerSocketId !== myId) {
                   proxy._suppressEffectEmit = true;
-                  try { safeApplyStatus(proxy, eff.type, eff.value, attackerProxy); } finally { proxy._suppressEffectEmit = false; }
+                  try {
+                    safeApplyStatus(proxy, eff.type, eff.value, attackerProxy);
+                    if (typeof proxy.refreshSyncedStatusSnapshot === 'function') {
+                      proxy.refreshSyncedStatusSnapshot();
+                    }
+                  } finally {
+                    proxy._suppressEffectEmit = false;
+                  }
                 }
-                if (data.socketId === myId && player && !player.dead) {
+                if (data.socketId === myId && player && !player.dead && data.attackerSocketId !== myId) {
                   safeApplyStatus(player, eff.type, eff.value, attackerProxy);
                 }
                 return;
@@ -60280,6 +60514,7 @@
                 prox.team = baseEnemyTeam;
               }
               if (pd.heroType) prox.heroType = pd.heroType;
+              prox.isBot = !!(pd.isBot || /^Bot \d+/i.test(pd.name || ''));
               prox.applyServerState(pd);
               if (pd.color) {
                 prox.color = pd.color;
@@ -60382,6 +60617,17 @@
               }
 
               if (data.socketId === myId && player && !player.dead) {
+                const isAttackerServerBot = !!(
+                  (attackerEnt && (attackerEnt.isBot || /^Bot \d+/i.test(attackerEnt.name || ''))) ||
+                  /^Bot \d+/i.test(data.attacker || '')
+                );
+                if (isAttackerServerBot && player.bush && !(player.revealTimer > 0)) {
+                  const botInSameBush = !!(attackerEnt && (attackerEnt.bush === player.bush || Math.hypot((attackerEnt.x || 0) - player.bush.x, (attackerEnt.y || 0) - player.bush.y) <= (player.bush.radius || 95)));
+                  if (!botInSameBush) {
+                    emitTrainingOrOnline('playerHeal', { amount: Math.ceil(Number(data.damageApplied) || 200) });
+                    return;
+                  }
+                }
                 const currentHp = Number.isFinite(player.hp) ? player.hp : 0;
                 const serverHp = (typeof data.hp === 'number' && Number.isFinite(data.hp)) ? data.hp : currentHp;
                 const serverMaxHp = (typeof data.maxHp === 'number' && Number.isFinite(data.maxHp) && data.maxHp > 0) ? data.maxHp : (player.maxHp || currentHp || 1000);
@@ -60482,7 +60728,7 @@
                     }
                   }
                   player.hitFlash = 0.25;
-                  player.revealTimer = Math.max(player.revealTimer || 0, 0.7);
+                  player.revealTimer = Math.max(player.revealTimer || 0, 0.5);
                 }
 
                 // Single-entry death guard so rapid burst packets cannot invoke player.die() multiple times concurrently
@@ -62336,6 +62582,44 @@
             `) }
         ]);
         
+        registerSkins('yun', [
+            { name: 'default', rarity: 'default', icon: null },
+            {
+                name: 'Long Way Through',
+                rarity: 'epic',
+                icon: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+                      <defs>
+                        <radialGradient id="yunPinkBg" cx="50%" cy="45%" r="58%">
+                          <stop offset="0%" stop-color="#fbcfe8"/>
+                          <stop offset="48%" stop-color="#ec4899"/>
+                          <stop offset="100%" stop-color="#500724"/>
+                        </radialGradient>
+                        <linearGradient id="yunSpearBlade" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stop-color="#fdf2f8"/>
+                          <stop offset="55%" stop-color="#f472b6"/>
+                          <stop offset="100%" stop-color="#be185d"/>
+                        </linearGradient>
+                      </defs>
+                      <circle cx="60" cy="60" r="54" fill="url(#yunPinkBg)" stroke="#fbcfe8" stroke-width="4"/>
+                      <circle cx="60" cy="60" r="42" fill="none" stroke="#f9a8d4" stroke-width="1.8" stroke-dasharray="6,4"/>
+                      <!-- Flowing Pink Blossom Ribbon -->
+                      <path d="M 18 76 Q 44 48 64 68 T 104 46" fill="none" stroke="#fdf2f8" stroke-width="5" stroke-linecap="round" opacity="0.85"/>
+                      <path d="M 22 84 Q 50 58 70 76 T 102 58" fill="none" stroke="#f472b6" stroke-width="3.5" stroke-linecap="round"/>
+                      <!-- Diagonal Rose-Gold Dragon Spear -->
+                      <line x1="22" y1="98" x2="82" y2="38" stroke="#831843" stroke-width="6" stroke-linecap="round"/>
+                      <line x1="22" y1="98" x2="82" y2="38" stroke="#f9a8d4" stroke-width="2.5" stroke-linecap="round"/>
+                      <!-- Spearhead -->
+                      <polygon points="102,18 72,34 80,40 86,48" fill="url(#yunSpearBlade)" stroke="#fdf2f8" stroke-width="2"/>
+                      <!-- Sakura Petal Accents -->
+                      <circle cx="36" cy="36" r="5" fill="#fbcfe8"/>
+                      <circle cx="88" cy="82" r="4.5" fill="#f472b6"/>
+                      <circle cx="48" cy="24" r="3.5" fill="#fdf2f8"/>
+                    </svg>
+                `)
+            }
+        ]);
+
         // Register other heroes with default only
                 const heroNames = ['paul', 'noob', 'kaiser', 'tate', 'edgar', 'coolkidd', 'builderman', 'mamba', 'light', 'kai', 'acheron', 'noli', 'don', 'glace', 'ming', 'nos', 'carlos', 'gormo', 'ian', 'buster', 'ren', 'melvin', 'gamb', 'wesley', 'neo', 'chimera', 'li', 'lav', 'max', 'fred', 'kenshi', 'gigi', 'benjamin', 'zappa', 'cyrus', 'austin', 'ambrose', 'ash', 'yun', 'racingduo', 'monza', 'faik', 'fletcher', 'darrick', 'vival', 'aurora', 'bai', 'apollo', 'lune', 'everdawn', 'kujou', 'zeus', 'karen', 'caskrice', 'jeffrey', 'bruno', 'bounty', 'dayum', 'winston', 'amir', 'cornelius', 'twins', 'guest', 'jimeka', 'trent', 'cole', 'rico', 'steven', 'christian', 'gregory'];
         heroNames.forEach(hero => {
@@ -65103,6 +65387,296 @@ if (typeof module !== 'undefined' && module.exports) {
                 }
             }
         });
+
+
+
+        // Universal Bush Concealment Enforcement for all AI Bots & Summons (Offline + Online 5v5/FFA Bots)
+        (function installUniversalBushVisibilityGuards() {
+            function isTargetVisibleToActor(actor, target) {
+                if (!target || target.dead || target.del || target.isTargetable === false) return false;
+                const observer = (actor && actor.owner instanceof Entity) ? actor.owner : ((actor && actor.monza instanceof Entity) ? actor.monza : ((actor && actor.karen instanceof Entity) ? actor.karen : actor));
+                if (typeof target.isVisibleTo === 'function') {
+                    return !!target.isVisibleTo(observer);
+                }
+                if (target.bush && !(target.revealTimer > 0)) {
+                    if (observer && observer.bush === target.bush) return true;
+                    return false;
+                }
+                return true;
+            }
+            window.isTargetVisibleToActor = isTargetVisibleToActor;
+
+            // Wrap findTarget, findTargetForF, and findLowestHealthTarget on Entity and all subclasses so no bot or summon ever targets a player hidden in a bush
+            const wrapTargetFinder = (proto, methodName) => {
+                if (!proto || typeof proto[methodName] !== 'function' || proto[methodName].__bushWrapped) return;
+                const origFn = proto[methodName];
+                const wrapped = function(...args) {
+                    const res = origFn.apply(this, args);
+                    if (res && !isTargetVisibleToActor(this, res)) {
+                        // Fallback scan for nearest visible enemy
+                        let best = null, minD = 999999;
+                        const obs = (this.owner instanceof Entity) ? this.owner : this;
+                        const myTeam = (typeof this.team !== 'undefined') ? this.team : (obs ? obs.team : undefined);
+                        for (let i = 0; i < entities.length; i++) {
+                            const e = entities[i];
+                            if (!e || e === this || e === obs || e.dead || e.del || !(e instanceof Entity) || e.isTargetable === false) continue;
+                            if (myTeam !== undefined && e.team === myTeam) continue;
+                            if (!isTargetVisibleToActor(this, e)) continue;
+                            const d = Math.hypot(e.x - this.x, e.y - this.y);
+                            if (d < minD) { minD = d; best = e; }
+                        }
+                        return best;
+                    }
+                    return res;
+                };
+                wrapped.__bushWrapped = true;
+                proto[methodName] = wrapped;
+            };
+
+            if (typeof Entity !== 'undefined') {
+                wrapTargetFinder(Entity.prototype, 'findTarget');
+                wrapTargetFinder(Entity.prototype, 'findTargetForF');
+            }
+            // Also wrap all registered hero & summon classes on startup
+            setTimeout(() => {
+                for (let i = 0; i < entities.length; i++) {
+                    const ent = entities[i];
+                    if (ent && ent.constructor && ent.constructor.prototype) {
+                        wrapTargetFinder(ent.constructor.prototype, 'findTarget');
+                        wrapTargetFinder(ent.constructor.prototype, 'findTargetForF');
+                        wrapTargetFinder(ent.constructor.prototype, 'findLowestHealthTarget');
+                    }
+                }
+            }, 0);
+
+            // Hook Entity.prototype.updateCommon to clear stale AI target locks when a target steps into a bush unrevealed
+            const _origUpdateCommonBush = Entity.prototype.updateCommon;
+            Entity.prototype.updateCommon = function(dt) {
+                if (!this.isPlayer && !(typeof OnlinePlayerProxy !== 'undefined' && this instanceof OnlinePlayerProxy)) {
+                    if (this.constructor && this.constructor.prototype && !this.constructor.prototype.__bushFinderChecked) {
+                        this.constructor.prototype.__bushFinderChecked = true;
+                        wrapTargetFinder(this.constructor.prototype, 'findTarget');
+                        wrapTargetFinder(this.constructor.prototype, 'findTargetForF');
+                        wrapTargetFinder(this.constructor.prototype, 'findLowestHealthTarget');
+                    }
+                    if (this.currentTarget && !isTargetVisibleToActor(this, this.currentTarget)) {
+                        this.currentTarget = null;
+                    }
+                    if (this.target && !isTargetVisibleToActor(this, this.target)) {
+                        this.target = null;
+                    }
+                    if (this.bountyTarget && !isTargetVisibleToActor(this, this.bountyTarget)) {
+                        this.bountyTarget = null;
+                    }
+                }
+                return _origUpdateCommonBush.call(this, dt);
+            };
+        })();
+
+
+
+        // === BOUNTY HUNTER AFRAID MOVEMENT HIJACK & BALANCE CHANGES UI ===
+        (function installAfraidAndBalanceChangesSystem() {
+            // 1. Afraid effect: forces entity to run away automatically from afraidSource / (afraidFromX, afraidFromY) and blocks manual movement/input
+            const wrapAfraidLock = (proto) => {
+                if (!proto || proto.__afraidLockWrapped) return;
+                proto.__afraidLockWrapped = true;
+                if (typeof proto.input === 'function') {
+                    const origInput = proto.input;
+                    proto.input = function(dt, spd) {
+                        if (this.afraidTimer && this.afraidTimer > 0) return;
+                        return origInput.call(this, dt, spd);
+                    };
+                }
+                if (typeof proto.ai === 'function') {
+                    const origAi = proto.ai;
+                    proto.ai = function(dt, spd) {
+                        if (this.afraidTimer && this.afraidTimer > 0) return;
+                        return origAi.call(this, dt, spd);
+                    };
+                }
+            };
+
+            if (typeof Entity !== 'undefined') {
+                const _origUpdateCommonAfraid = Entity.prototype.updateCommon;
+                Entity.prototype.updateCommon = function(dt) {
+                    if (this.constructor && this.constructor.prototype && !this.constructor.prototype.__afraidLockWrapped) {
+                        wrapAfraidLock(this.constructor.prototype);
+                    }
+                    _origUpdateCommonAfraid.call(this, dt);
+                    if (this.afraidTimer && this.afraidTimer > 0) {
+                        this.afraidTimer = Math.max(0, this.afraidTimer - dt);
+                        if (this.afraidSource && !this.afraidSource.dead && typeof this.afraidSource.x === 'number') {
+                            this.afraidFromX = this.afraidSource.x;
+                            this.afraidFromY = this.afraidSource.y;
+                        }
+                        const srcX = (typeof this.afraidFromX === 'number') ? this.afraidFromX : (this.x - Math.cos(this.angle || 0) * 50);
+                        const srcY = (typeof this.afraidFromY === 'number') ? this.afraidFromY : (this.y - Math.sin(this.angle || 0) * 50);
+                        const awayAngle = Math.atan2(this.y - srcY, this.x - srcX);
+                        this.angle = awayAngle;
+                        const fleeSpd = (typeof this.getEffectiveSpeed === 'function' ? this.getEffectiveSpeed() : this.speed) || 235;
+                        if (fleeSpd > 0 && !(this.stunTimer > 0) && !(this.freezeTimer > 0)) {
+                            this.x = Math.max(20, Math.min(WORLD_SIZE - 20, this.x + Math.cos(awayAngle) * fleeSpd * dt));
+                            this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + Math.sin(awayAngle) * fleeSpd * dt));
+                        }
+                    }
+                };
+            }
+
+            // 2. Balance Changes Modal on Selection UI
+            // Empty list for now as requested ("do not add any changes yet").
+            // Each future item uses { hero: 'Hero Name', type: 'buff' | 'nerf' | 'rework', text: '...' }
+            // where 'buff' = green, 'nerf' = red, 'rework' = blue (with no color legend shown).
+            window.BALANCE_CHANGES_LIST = [];
+
+            function ensureBalanceChangesModal() {
+                let modal = document.getElementById('balanceChangesModal');
+                if (modal) return modal;
+                modal = document.createElement('div');
+                modal.id = 'balanceChangesModal';
+                modal.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,23,0.76);backdrop-filter:blur(8px);z-index:3000;display:none;align-items:center;justify-content:center;padding:20px;';
+                modal.onclick = (e) => {
+                    if (e.target === modal) closeBalanceChangesModal();
+                };
+                modal.innerHTML = `
+                    <div onclick="event.stopPropagation()" style="width:min(760px, 94vw);max-height:84vh;background:linear-gradient(165deg,#0f172a 0%,#1e293b 100%);border:1.5px solid rgba(148,163,184,0.35);border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,0.75);display:flex;flex-direction:column;overflow:hidden;color:#f8fafc;font-family:Inter,Segoe UI,sans-serif;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 22px;background:rgba(2,6,23,0.55);border-bottom:1px solid rgba(148,163,184,0.2);">
+                            <div style="font-size:19px;font-weight:900;letter-spacing:0.04em;">📋 BALANCE CHANGES</div>
+                            <button onclick="closeBalanceChangesModal()" style="padding:7px 14px;border-radius:8px;background:#ef4444;color:#fff;font-weight:800;border:none;cursor:pointer;">✕ CLOSE</button>
+                        </div>
+                        <div id="balanceChangesContent" style="padding:20px 22px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;"></div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                return modal;
+            }
+
+            window.renderBalanceChangesModal = function() {
+                ensureBalanceChangesModal();
+                const container = document.getElementById('balanceChangesContent');
+                if (!container) return;
+                const list = Array.isArray(window.BALANCE_CHANGES_LIST) ? window.BALANCE_CHANGES_LIST : [];
+                if (list.length === 0) {
+                    container.innerHTML = `<div style="text-align:center;color:#94a3b8;padding:36px 16px;font-size:14px;font-weight:600;">No balance changes listed yet.</div>`;
+                    return;
+                }
+                const colorMap = {
+                    buff: { border: '#22c55e', bg: 'rgba(34, 197, 94, 0.12)', text: '#4ade80' },
+                    nerf: { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)', text: '#f87171' },
+                    rework: { border: '#38bdf8', bg: 'rgba(56, 189, 248, 0.12)', text: '#7dd3fc' }
+                };
+                container.innerHTML = list.map(entry => {
+                    const style = colorMap[entry.type] || colorMap.rework;
+                    return `
+                        <div style="padding:12px 14px;border-radius:10px;border-left:4px solid ${style.border};background:${style.bg};color:${style.text};font-size:13.5px;font-weight:700;line-height:1.45;">
+                            ${entry.hero ? `<span style="font-weight:900;margin-right:6px;">[${entry.hero}]</span>` : ''}${entry.text || ''}
+                        </div>
+                    `;
+                }).join('');
+            };
+
+            window.openBalanceChangesModal = function() {
+                const modal = ensureBalanceChangesModal();
+                window.renderBalanceChangesModal();
+                modal.style.display = 'flex';
+            };
+
+            window.closeBalanceChangesModal = function() {
+                const modal = document.getElementById('balanceChangesModal');
+                if (modal) modal.style.display = 'none';
+            };
+        })();
+
+
+
+        class YunSpearDashEffect {
+            constructor(x, y, angle, length = 225, duration = 0.30, isPink = false) {
+                this.x = x;
+                this.y = y;
+                this.angle = angle || 0;
+                this.length = length;
+                this.maxLife = Math.max(0.1, duration);
+                this.life = this.maxLife;
+                this.isPink = !!isPink;
+            }
+            update(dt) {
+                this.life -= dt;
+                return this.life > 0;
+            }
+            draw(ctx) {
+                if (this.life <= 0) return;
+                const camXVal = (typeof camera !== 'undefined' ? camera.x : 0);
+                const camYVal = (typeof camera !== 'undefined' ? camera.y : 0);
+                const sx = this.x - camXVal;
+                const sy = this.y - camYVal;
+                const p = 1 - Math.max(0, this.life / this.maxLife);
+                const ease = 1 - Math.pow(1 - p, 3);
+                const alpha = Math.max(0, 1 - p * 0.88);
+
+                const mainCol = this.isPink ? '#ec4899' : '#f59e0b';
+                const accentCol = this.isPink ? '#f472b6' : '#ef4444';
+                const tipCol = this.isPink ? '#fdf2f8' : '#fef08a';
+
+                ctx.save();
+                ctx.translate(sx, sy);
+                ctx.rotate(this.angle);
+                ctx.globalAlpha = alpha;
+
+                const curLen = this.length * (0.45 + 0.55 * ease);
+
+                // 1. Piercing wind-cone slipstream
+                const grad = ctx.createLinearGradient(0, 0, curLen, 0);
+                grad.addColorStop(0, 'rgba(0,0,0,0)');
+                grad.addColorStop(0.45, accentCol + '44');
+                grad.addColorStop(0.85, mainCol + 'bb');
+                grad.addColorStop(1, tipCol);
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(curLen + 26, 0);
+                ctx.lineTo(curLen * 0.22, -34 * (1 - p * 0.35));
+                ctx.lineTo(curLen * 0.42, 0);
+                ctx.lineTo(curLen * 0.22, 34 * (1 - p * 0.35));
+                ctx.closePath();
+                ctx.fill();
+
+                // 2. Central Spear Shaft & Diamond Spearhead
+                ctx.strokeStyle = tipCol;
+                ctx.shadowColor = mainCol;
+                ctx.shadowBlur = 18;
+                ctx.lineWidth = Math.max(2, 6 * (1 - p * 0.45));
+                ctx.beginPath();
+                ctx.moveTo(10, 0);
+                ctx.lineTo(curLen, 0);
+                ctx.stroke();
+
+                ctx.fillStyle = tipCol;
+                ctx.strokeStyle = mainCol;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(curLen + 32, 0);
+                ctx.lineTo(curLen - 6, -13);
+                ctx.lineTo(curLen + 4, 0);
+                ctx.lineTo(curLen - 6, 13);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // 3. Sonic Vortex Rings along the Spear Shaft
+                for (let r = 0; r < 3; r++) {
+                    const rx = curLen * (0.32 + r * 0.24);
+                    const ry = (22 - r * 4) * (0.8 + 0.3 * ease);
+                    ctx.strokeStyle = r % 2 === 0 ? tipCol : mainCol;
+                    ctx.lineWidth = 2.2;
+                    ctx.beginPath();
+                    ctx.ellipse(rx, 0, 7, ry, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+        }
+        window.YunSpearDashEffect = YunSpearDashEffect;
 
 </script>
     
