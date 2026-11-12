@@ -802,11 +802,22 @@ let gameRooms = new Map();
 let matchmakingTimers = {};
 let playerActivityModes = new Map();
 
+function countQueueForBaseMode(baseMode) {
+  let total = 0;
+  for (let [qKey, arr] of queues.entries()) {
+    if (!Array.isArray(arr)) continue;
+    if (qKey === baseMode || qKey.startsWith(baseMode + "_")) {
+      total += arr.length;
+    }
+  }
+  return total;
+}
+
 function getModePopulationStats() {
   const modes = {
-    ffa_online: { playing: 0, inQueue: (queues.get('ffa') || []).length, activeRooms: 0 },
-    '5v5_online': { playing: 0, inQueue: (queues.get('5v5') || []).length, activeRooms: 0 },
-    duel_online: { playing: 0, inQueue: (queues.get('duel') || []).length, activeRooms: 0 },
+    ffa_online: { playing: 0, inQueue: countQueueForBaseMode('ffa'), activeRooms: 0 },
+    '5v5_online': { playing: 0, inQueue: countQueueForBaseMode('5v5'), activeRooms: 0 },
+    duel_online: { playing: 0, inQueue: countQueueForBaseMode('duel'), activeRooms: 0 },
     ffa: { playing: 0, inQueue: 0, activeRooms: 0 },
     squad: { playing: 0, inQueue: 0, activeRooms: 0 },
     '5v5': { playing: 0, inQueue: 0, activeRooms: 0 },
@@ -883,19 +894,38 @@ io.on('connection', (socket) => {
       return;
     }
     const rawMode = (data && data.gameMode) ? String(data.gameMode) : 'ffa';
-    const mode = rawMode.replace('_online', '');
-    const defaultMax = mode === '5v5' ? 10 : (mode === 'duel' ? 2 : 4);
+    const strippedMode = rawMode.replace('_online', '');
+    const modeParts = strippedMode.split('_');
+    const baseMode = (data && data.baseMode) ? String(data.baseMode).replace('_online', '') : (modeParts[0] || 'ffa');
+    const rawMap = (data && data.selectedMap) ? String(data.selectedMap) : (modeParts[1] || 'classic');
+    const chosenMap = ['classic', 'sakura', 'farmland', 'port'].includes(rawMap) ? rawMap : 'classic';
+    const queueKey = `${baseMode}_${chosenMap}`;
+    const defaultMax = baseMode === '5v5' ? 10 : (baseMode === 'duel' ? 2 : 4);
     const requestedMax = Number(data && data.maxPlayers) || defaultMax;
     const maxPlayers = Math.max(2, Math.min(50, requestedMax));
 
-    if (!queues.has(mode)) queues.set(mode, []);
-    const q = queues.get(mode);
+    // Remove this socket from any other map/mode queue before joining the chosen map lobby
+    for (let [otherKey, otherQ] of queues.entries()) {
+      if (otherKey !== queueKey && Array.isArray(otherQ)) {
+        const filtered = otherQ.filter(p => p.socketId !== socket.id);
+        if (filtered.length !== otherQ.length) {
+          queues.set(otherKey, filtered);
+          if (filtered.length === 0 && matchmakingTimers[otherKey] && matchmakingTimers[otherKey].timeoutId) {
+            clearTimeout(matchmakingTimers[otherKey].timeoutId);
+            matchmakingTimers[otherKey].timeoutId = null;
+          }
+        }
+      }
+    }
+
+    if (!queues.has(queueKey)) queues.set(queueKey, []);
+    const q = queues.get(queueKey);
 
     // Prevent duplicate queue entries from the same socket
     const existingIdx = q.findIndex(p => p.socketId === socket.id);
     if (existingIdx !== -1) q.splice(existingIdx, 1);
 
-    console.log(`🔵 ${data.playerName || 'Player'} joined matchmaking queue: mode=${mode} maxPlayers=${maxPlayers}`);
+    console.log(`🔵 ${data.playerName || 'Player'} joined map-separated queue: queueKey=${queueKey} (mode=${baseMode}, map=${chosenMap}) maxPlayers=${maxPlayers}`);
 
     q.push({
       socketId: socket.id,
@@ -903,10 +933,11 @@ io.on('connection', (socket) => {
       playerName: (data && data.playerName) || 'Player',
       heroType: (data && data.heroType) || 'paul',
       currentSkin: (data && data.currentSkin) || 'default',
-      selectedMap: (data && data.selectedMap) || 'classic',
+      selectedMap: chosenMap,
       joinedAt: Date.now(),
       maxPlayers: maxPlayers,
-      mode: mode
+      mode: baseMode,
+      queueKey: queueKey
     });
 
     const playerPosition = q.findIndex(p => p.socketId === socket.id) + 1;
@@ -916,7 +947,8 @@ io.on('connection', (socket) => {
       queuePosition: playerPosition,
       queueSize: q.length,
       estimatedWaitTime: 8,
-      gameMode: mode,
+      gameMode: baseMode,
+      selectedMap: chosenMap,
       message: `Queue position: ${playerPosition}`
     });
     broadcastModeStats();
@@ -927,39 +959,40 @@ io.on('connection', (socket) => {
           position: idx + 1,
           queuePosition: idx + 1,
           queueSize: q.length,
-          gameMode: mode
+          gameMode: baseMode,
+          selectedMap: chosenMap
         });
       } catch (_) {}
     });
 
     try {
-      if (matchmakingTimers[mode] && typeof matchmakingTimers[mode].fillListener === 'function') {
-        matchmakingTimers[mode].fillListener();
+      if (matchmakingTimers[queueKey] && typeof matchmakingTimers[queueKey].fillListener === 'function') {
+        matchmakingTimers[queueKey].fillListener();
       }
     } catch (_) {}
 
-    const targetToStart = mode === 'duel' ? 2 : (mode === '5v5' ? 10 : Math.min(maxPlayers, 4));
+    const targetToStart = baseMode === 'duel' ? 2 : (baseMode === '5v5' ? 10 : Math.min(maxPlayers, 4));
     if (q.length >= targetToStart) {
-      console.log(`✅ Queue for '${mode}' reached ${q.length}/${targetToStart} — creating match...`);
-      if (matchmakingTimers[mode] && matchmakingTimers[mode].timeoutId) {
-        clearTimeout(matchmakingTimers[mode].timeoutId);
-        matchmakingTimers[mode].timeoutId = null;
+      console.log(`✅ Queue for '${queueKey}' reached ${q.length}/${targetToStart} — creating match...`);
+      if (matchmakingTimers[queueKey] && matchmakingTimers[queueKey].timeoutId) {
+        clearTimeout(matchmakingTimers[queueKey].timeoutId);
+        matchmakingTimers[queueKey].timeoutId = null;
       }
-      createMatch(mode, false, maxPlayers, true);
+      createMatch(queueKey, false, maxPlayers, true);
     } else {
-      if (!matchmakingTimers[mode] || !matchmakingTimers[mode].timeoutId) {
-        if (!matchmakingTimers[mode]) matchmakingTimers[mode] = {};
-        const autoStartWaitMs = (mode === 'ffa' || mode === '5v5') ? 30000 : 8000;
-        console.log(`⏳ Queue for '${mode}' has ${q.length} player(s); starting ${autoStartWaitMs / 1000}s auto-start timer`);
-        matchmakingTimers[mode].timeoutId = setTimeout(() => {
-          const currentQ = queues.get(mode) || [];
+      if (!matchmakingTimers[queueKey] || !matchmakingTimers[queueKey].timeoutId) {
+        if (!matchmakingTimers[queueKey]) matchmakingTimers[queueKey] = {};
+        const autoStartWaitMs = (baseMode === 'ffa' || baseMode === '5v5') ? 30000 : 8000;
+        console.log(`⏳ Queue for '${queueKey}' has ${q.length} player(s); starting ${autoStartWaitMs / 1000}s auto-start timer`);
+        matchmakingTimers[queueKey].timeoutId = setTimeout(() => {
+          const currentQ = queues.get(queueKey) || [];
           if (currentQ.length > 0) {
-            const matchCap = mode === 'duel' ? 2 : (mode === '5v5' ? 10 : Math.min(maxPlayers, 6));
+            const matchCap = baseMode === 'duel' ? 2 : (baseMode === '5v5' ? 10 : Math.min(maxPlayers, 6));
             const needBots = currentQ.length < matchCap;
-            console.log(`⏱️ Auto-starting '${mode}' match with ${currentQ.length} human player(s) after ${autoStartWaitMs / 1000}s (fillWithBots=${needBots}, matchCap=${matchCap})`);
-            createMatch(mode, needBots, matchCap, true);
+            console.log(`⏱️ Auto-starting '${queueKey}' match with ${currentQ.length} human player(s) after ${autoStartWaitMs / 1000}s (fillWithBots=${needBots}, matchCap=${matchCap})`);
+            createMatch(queueKey, needBots, matchCap, true);
           }
-          if (matchmakingTimers[mode]) matchmakingTimers[mode].timeoutId = null;
+          if (matchmakingTimers[queueKey]) matchmakingTimers[queueKey].timeoutId = null;
         }, autoStartWaitMs);
       }
     }
@@ -1744,20 +1777,35 @@ io.on('connection', (socket) => {
   });
 });
 
-// Create match from queue
-function createMatch(mode = 'ffa', fillWithBots = false, maxPlayers = 4, forceStart = false) {
+// Create match from map-separated queue
+function createMatch(queueKey = 'ffa_classic', fillWithBots = false, maxPlayers = 4, forceStart = false) {
   console.log('\n=== CREATING MATCH ===');
-  const q = queues.get(mode) || [];
-  console.log(`Queue size for '${mode}':`, q.length);
+  const q = queues.get(queueKey) || [];
+  const keyParts = String(queueKey || 'ffa').split('_');
+  const mode = (q[0] && q[0].mode) || keyParts[0] || 'ffa';
+  const mapFromKey = ['classic', 'sakura', 'farmland', 'port'].includes(keyParts[1]) ? keyParts[1] : null;
+  console.log(`Queue size for '${queueKey}' (mode=${mode}):`, q.length);
 
   if (q.length === 0 && !fillWithBots) {
-    console.log('❌ Queue is empty for mode', mode, 'cannot create match!');
+    console.log('❌ Queue is empty for', queueKey, 'cannot create match!');
     return;
   }
 
-  const roomId = `${mode}-${Date.now()}`;
-  const players = q.splice(0, Math.min(maxPlayers, q.length));
-  queues.set(mode, q);
+  const chosenMap = mapFromKey || (q[0] && q[0].selectedMap) || 'classic';
+  // Filter only players who selected the same map so different maps never mix
+  const matchingPlayers = [];
+  const remainingPlayers = [];
+  for (const p of q) {
+    const pMap = (p && p.selectedMap) || chosenMap;
+    if (pMap === chosenMap && matchingPlayers.length < maxPlayers) {
+      matchingPlayers.push(p);
+    } else {
+      remainingPlayers.push(p);
+    }
+  }
+  queues.set(queueKey, remainingPlayers);
+  const players = matchingPlayers;
+  const roomId = `${mode}-${chosenMap}-${Date.now()}`;
 
   let botsAdded = 0;
   if (fillWithBots) {
@@ -1769,6 +1817,7 @@ function createMatch(mode = 'ffa', fillWithBots = false, maxPlayers = 4, forceSt
         socket: null,
         playerName: `Bot ${botsAdded + 1} (${botHero.charAt(0).toUpperCase() + botHero.slice(1)})`,
         heroType: botHero,
+        selectedMap: chosenMap,
         joinedAt: Date.now(),
         maxPlayers: targetBotFill,
         mode: mode,
@@ -1782,7 +1831,6 @@ function createMatch(mode = 'ffa', fillWithBots = false, maxPlayers = 4, forceSt
   }
 
   const effectiveMaxPlayers = Math.max(players.length, maxPlayers);
-  const chosenMap = (players[0] && players[0].selectedMap) || 'classic';
   const roomSeed = Date.now() % 1000000;
   const room = new GameRoom(roomId, effectiveMaxPlayers, mode, chosenMap, roomSeed);
   room.combatReadyAt = Date.now() + 5500;

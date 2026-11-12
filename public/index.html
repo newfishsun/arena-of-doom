@@ -4050,10 +4050,22 @@
             }
         }
         window.selectMap = function(map) {
+            const prevMap = selectedMap;
             selectedMap = ['classic', 'sakura', 'farmland', 'port'].includes(map) ? map : 'classic';
             document.querySelectorAll('[id^="map-"]').forEach(button => button.style.outline = 'none');
             const selected = document.getElementById('map-' + selectedMap);
             if (selected) selected.style.outline = '3px solid #fff';
+            // If currently searching in an online matchmaking queue and the player changes map, switch to the new map's separated lobby immediately!
+            if (prevMap !== selectedMap && typeof isInQueue !== 'undefined' && isInQueue && typeof onlineSocket !== 'undefined' && onlineSocket && onlineSocket.connected) {
+                try {
+                    onlineSocket.emit('leaveQueue');
+                    if (gameMode === '5v5_online' && typeof join5v5Queue === 'function') {
+                        join5v5Queue();
+                    } else if (typeof joinQueue === 'function') {
+                        joinQueue();
+                    }
+                } catch (_) {}
+            }
         };
         function fallenStatueIsActive() {
             return window.fallenStatueSpawned || entities.some(entity => entity instanceof FallenStatue && !entity.dead);
@@ -5038,7 +5050,7 @@
                     proj._boxExpanded = true;
                     window._suppressOnlineFxCapture = true;
                     try {
-                        const halfSize = 135;
+                        const halfSize = 115;
                         const ownerRef = proj.owner || null;
                         const dup = Array.isArray(ricoExpandedBoxes) && ricoExpandedBoxes.some(b => b && b.duration > 1.5 && Math.hypot(b.x - bx, b.y - by) < 40);
                         if (!dup && Array.isArray(ricoExpandedBoxes)) {
@@ -5287,7 +5299,7 @@
                         break;
                     case 'RicoExpandedBox':
                         if (Array.isArray(ricoExpandedBoxes)) {
-                            const halfSize = fx.halfSize || 135;
+                            const halfSize = fx.halfSize || 115;
                             const dup = ricoExpandedBoxes.some(b => b && b.duration > 1.5 && Math.hypot(b.x - fxX, b.y - fxY) < 40);
                             if (!dup) {
                                 ricoExpandedBoxes.push({
@@ -19497,7 +19509,7 @@
                             proj._pedalSpawned = true;
                             this.pedals.push({x: target.x, y: target.y, createTime: Date.now(), damageCD: 0});
                             safeApplyStatus(target, 'slow', 0.5, this);
-                            safeApplyStatus(target, 'stun', 0.15, this);
+                            safeApplyStatus(target, 'stun', 0.05, this);
                         };
                         proj.onExplode = () => {
                             if (!proj._pedalSpawned) {
@@ -20783,7 +20795,7 @@
                     this.refillTimer = 0;
                     this.chargeCD = 0;
                     this.doodlePlaceCD = 0;
-                    this.eChargeRechargeTime = (typeof Kai !== 'undefined' && chosen instanceof Kai) ? 7 : ((typeof Zappa !== 'undefined' && chosen instanceof Zappa) ? 3 : ((typeof Fletcher !== 'undefined' && chosen instanceof Fletcher) ? 10 : 4));
+                    this.eChargeRechargeTime = (typeof Kai !== 'undefined' && chosen instanceof Kai) ? 7 : ((typeof Zappa !== 'undefined' && chosen instanceof Zappa) ? 3 : ((typeof Fletcher !== 'undefined' && chosen instanceof Fletcher) ? 9 : 4));
                     if (typeof chosen.chargePool === 'number') {
                         this.chargePool = this.maxECharges;
                     }
@@ -22119,7 +22131,11 @@
                 this.swingCount = 0;
                 this.swingT = 0;
                 this.swingDelay = 0.3;
-                this.lungsForward = 300;
+                this.lungsForward = 28;
+                this.lungeTimer = 0;
+                this.lungeDuration = 0.14;
+                this.lungeSpeed = 0;
+                this.lungeAngle = 0;
                 // F ability: Shield field
                 this.shieldActive = false;
                 this.shieldTimer = 0;
@@ -22136,8 +22152,17 @@
                 if(this.eCD > 0) this.eCD -= dt;
                 if(this.fCD > 0) this.fCD -= dt;
                 if(this.rCD > 0) this.rCD -= dt;
-                // Q ability swing state
+                // Q ability swing state & smooth slight forward lunge
+                if(this.lungeTimer > 0 && this.stunTimer <= 0 && this.freezeTimer <= 0) {
+                    const step = Math.min(dt, this.lungeTimer);
+                    this.lungeTimer -= step;
+                    const dur = this.lungeDuration || 0.14;
+                    const ease = 0.6 + 0.8 * (this.lungeTimer / dur);
+                    this.x += Math.cos(this.lungeAngle) * (this.lungeSpeed || 200) * ease * step;
+                    this.y += Math.sin(this.lungeAngle) * (this.lungeSpeed || 200) * ease * step;
+                }
                 if(this.swinging) {
+                    if(this.isPlayer) this.angle = getMouseAimAngle(this.x, this.y);
                     this.swingT -= dt;
                     if(this.swingT <= 0) {
                         this.swingCount++;
@@ -22252,10 +22277,11 @@
                         }
                     }
                 }
-                // Lunge forward each swing (~45px burst)
-                this._blinkWallGrace = 0.12;
-                this.x += Math.cos(this.angle) * this.lungsForward * 0.45;
-                this.y += Math.sin(this.angle) * this.lungsForward * 0.45;
+                // Very slight smooth forward lunge (~28px over 0.14s, not a blink)
+                this.lungeDuration = 0.14;
+                this.lungeTimer = this.lungeDuration;
+                this.lungeAngle = this.angle;
+                this.lungeSpeed = (this.lungsForward || 28) / this.lungeDuration;
             }
             doubleSwing() {
                 if(this.swinging) return;
@@ -22327,7 +22353,7 @@
                 } else {
                     if(this.basicCD <= 0) this.basicAtk();
                     if(this.eCD <= 0 && d < 200) this.groundSlam();
-                    if(this.qCD <= 0 && d < 300) this.doubleSwing();
+                    if(this.qCD <= 0 && d < 185) this.doubleSwing();
                     if(this.fCD <= 0 && this.hp < this.maxHp * 0.4) this.ultimateShield();
                 }
             }
@@ -26120,7 +26146,8 @@
                         let rx = dx * Math.cos(-this.angle) - dy * Math.sin(-this.angle);
                         let ry = dx * Math.sin(-this.angle) + dy * Math.cos(-this.angle);
                         if (rx > -e.radius && rx < stabRange + e.radius && ry > -35 - e.radius && ry < 35 + e.radius) {
-                                e.takeDamage(1200, this);
+                            e.takeDamage(1200, this);
+                            safeApplyStatus(e, 'stun', 0.5, this);
                             this.hp = Math.min(this.maxHp, this.hp + 600);
                             this.lastEnemiesHit.push(e);
                             // Deadly hit particles and smear
@@ -34855,7 +34882,7 @@
                     this.hp = Math.min(this.maxHp, this.hp + heal);
                 } else {
                     this.basicCD = 1.5;
-                    let dmg = 200;
+                    let dmg = 250;
                     if (isPirate) {
                         particles.push(new Slash(this.x, this.y, this.angle, 165, Math.PI/1.45, '#0284c7'));
                         particles.push(new Slash(this.x, this.y, this.angle, 140, Math.PI/1.7, '#67e8f9'));
@@ -34908,9 +34935,9 @@
             }
 
             doE() {
-                // Sword energy: deals 650 damage, heal 40% of damage dealt
+                // Sword energy: base E deals 700 damage (while F ultimate is active, deals 650 + 50% second slash), heal 40% of damage dealt
                 this.revealTimer = 1.0;
-                const firstSlashDmg = 650;
+                const firstSlashDmg = this.fActive ? 650 : 700;
                 let totalDamage = 0;
                 const R = 220;
                 for (let e of entities) {
@@ -35135,11 +35162,11 @@
                 if (this.fCD > 0) this.fCD -= dt;
                 if (this.rCD > 0) this.rCD -= dt;
 
-                // regenerate E charges
+                // regenerate E charges (buffed by 1s: 9s)
                 if (this.eChargeCD > 0) this.eChargeCD -= dt;
                 if (this.eChargeCD <= 0 && this.eCharges < this.maxECharges) {
                     this.eCharges++;
-                    if (this.eCharges < this.maxECharges) this.eChargeCD = 10;
+                    if (this.eCharges < this.maxECharges) this.eChargeCD = 9;
                 }
 
                 if (this.cameraZoomTimer > 0) this.cameraZoomTimer -= dt;
@@ -35240,10 +35267,10 @@
                 // consume a charge
                 if (this.eCharges <= 0) return;
                 this.eCharges--;
-                if (this.eCharges < this.maxECharges) this.eChargeCD = 10;
+                if (this.eCharges < this.maxECharges) this.eChargeCD = 9;
 
-                // immediate use-lock so player must wait 2s before using next charge
-                this.eCD = Math.max(this.eCD || 0, 2.0);
+                // immediate use-lock buffed by 1s (1.0s before using next charge)
+                this.eCD = Math.max(this.eCD || 0, 1.0);
 
                 // capture aiming angle at release
                 const aimAngle = this.angle;
@@ -41982,7 +42009,7 @@
             }
 
             spawnExpandedBox(bx, by) {
-                const halfSize = 135;
+                const halfSize = 115;
                 const box = {
                     x: bx,
                     y: by,
@@ -49807,7 +49834,7 @@
                 if (p.gCharges >= p.maxGCharges) { c4 = 0; m4 = 3; } else { c4 = p.gChargeTimer; m4 = 3; }
             }
             else if(p instanceof Don){c1=p.qCD;m1=5;c2=p.eCD;m2=0.5;c3=p.fCD;m3=10;c4=0;m4=1;}
-            else if(p instanceof Fletcher){c1=p.qCD;m1=13;c2=p.eCD;m2=2;c3=p.fCD;m3=17;c4=0;m4=1;}
+            else if(p instanceof Fletcher){c1=p.qCD;m1=13;c2=p.eCD;m2=1;c3=p.fCD;m3=17;c4=0;m4=1;}
             else if(p instanceof Noli){c1=p.qCD;m1=8;c2=p.eCD;m2=15;c3=p.fCD;m3=11;c4=0;m4=1;}
             else if(p instanceof Glace){c1=p.qCD;m1=18;c2=p.eCD;m2=10;c3=p.fCD;m3=7;c4=0;m4=1;}
             else if(p instanceof Nos){c1=p.qCD;m1=3;c2=p.eCD;m2=7;c3=p.fCD;m3=25;c4=0;m4=1;}
@@ -52726,6 +52753,170 @@
             }
         }
 
+        class ZappaRealZapEffect {
+            constructor(startX, startY, targetX, targetY, duration = 0.55) {
+                this.startX = startX;
+                this.startY = startY;
+                this.targetX = targetX;
+                this.targetY = targetY;
+                this.duration = duration;
+                this.maxDuration = duration;
+                this.seed = Math.random() * 1000;
+                this.reseedTimer = 0;
+                this.chainPoints = [];
+                this.skyPoints = [];
+                this.forkArcs = [];
+                this.rebuildBolts();
+            }
+            rebuildBolts() {
+                // 1) Jagged high-voltage arc from Zappa to Target
+                const dx = this.targetX - this.startX;
+                const dy = this.targetY - this.startY;
+                const dist = Math.max(1, Math.hypot(dx, dy));
+                const nx = -dy / dist;
+                const ny = dx / dist;
+                const steps = Math.max(8, Math.min(22, Math.floor(dist / 26)));
+                this.chainPoints = [{ x: this.startX, y: this.startY }];
+                for (let i = 1; i < steps; i++) {
+                    const t = i / steps;
+                    const env = Math.sin(t * Math.PI);
+                    const jitter = (Math.random() - 0.5) * 2 * (34 * env + 8);
+                    this.chainPoints.push({
+                        x: this.startX + dx * t + nx * jitter,
+                        y: this.startY + dy * t + ny * jitter
+                    });
+                }
+                this.chainPoints.push({ x: this.targetX, y: this.targetY });
+
+                // 2) Towering vertical thunderbolt from the sky onto Target
+                const skyStartX = this.targetX + (Math.random() - 0.5) * 90;
+                const skyStartY = this.targetY - 460;
+                const skySteps = 14;
+                this.skyPoints = [{ x: skyStartX, y: skyStartY }];
+                for (let i = 1; i < skySteps; i++) {
+                    const t = i / skySteps;
+                    const jitterX = (Math.random() - 0.5) * 58;
+                    const jitterY = (Math.random() - 0.5) * 14;
+                    this.skyPoints.push({
+                        x: skyStartX + (this.targetX - skyStartX) * t + jitterX,
+                        y: skyStartY + (this.targetY - skyStartY) * t + jitterY
+                    });
+                }
+                this.skyPoints.push({ x: this.targetX, y: this.targetY });
+
+                // 3) Radial crackling forks around impact & off main bolt
+                this.forkArcs = [];
+                for (let f = 0; f < 7; f++) {
+                    const baseAng = (f / 7) * Math.PI * 2 + (Math.random() - 0.5) * 0.45;
+                    const len = 65 + Math.random() * 85;
+                    const pts = [{ x: this.targetX, y: this.targetY }];
+                    const segs = 5;
+                    for (let s = 1; s <= segs; s++) {
+                        const r = (s / segs) * len;
+                        const a = baseAng + (Math.random() - 0.5) * 0.55;
+                        pts.push({
+                            x: this.targetX + Math.cos(a) * r,
+                            y: this.targetY + Math.sin(a) * r
+                        });
+                    }
+                    this.forkArcs.push(pts);
+                }
+            }
+            update(dt) {
+                this.duration -= dt;
+                this.reseedTimer += dt;
+                if (this.reseedTimer >= 0.045) {
+                    this.reseedTimer = 0;
+                    this.rebuildBolts();
+                }
+            }
+            drawPolyline(ctx, pts, camX, camY) {
+                if (!pts || pts.length < 2) return;
+                ctx.beginPath();
+                ctx.moveTo(pts[0].x - camX, pts[0].y - camY);
+                for (let i = 1; i < pts.length; i++) {
+                    ctx.lineTo(pts[i].x - camX, pts[i].y - camY);
+                }
+                ctx.stroke();
+            }
+            draw(ctx) {
+                if (this.duration <= 0) return;
+                const progress = 1 - Math.max(0, this.duration) / this.maxDuration;
+                const alpha = Math.pow(1 - progress, 0.55);
+                const camX = camera.x;
+                const camY = camera.y;
+                const tx = this.targetX - camX;
+                const ty = this.targetY - camY;
+                const sx = this.startX - camX;
+                const sy = this.startY - camY;
+
+                ctx.save();
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                // Impact high-voltage plasma dome at target
+                const impactR = 35 + progress * 115;
+                const grad = ctx.createRadialGradient(tx, ty, 4, tx, ty, impactR);
+                grad.addColorStop(0, `rgba(255, 255, 255, ${0.95 * alpha})`);
+                grad.addColorStop(0.35, `rgba(250, 204, 21, ${0.75 * alpha})`);
+                grad.addColorStop(0.7, `rgba(0, 229, 255, ${0.45 * alpha})`);
+                grad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(tx, ty, impactR, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Source discharge flash on Zappa
+                ctx.fillStyle = `rgba(0, 229, 255, ${0.65 * alpha})`;
+                ctx.beginPath();
+                ctx.arc(sx, sy, 28 * (1 - progress * 0.5), 0, Math.PI * 2);
+                ctx.fill();
+
+                // Layer 1: Wide cyan electric plasma glow
+                ctx.shadowColor = '#00e5ff';
+                ctx.shadowBlur = 24;
+                ctx.strokeStyle = `rgba(0, 229, 255, ${0.75 * alpha})`;
+                ctx.lineWidth = 14 * (1 - progress * 0.45);
+                this.drawPolyline(ctx, this.chainPoints, camX, camY);
+                this.drawPolyline(ctx, this.skyPoints, camX, camY);
+
+                // Layer 2: Golden-yellow high-voltage thunderbolt body
+                ctx.shadowColor = '#facc15';
+                ctx.shadowBlur = 16;
+                ctx.strokeStyle = `rgba(250, 204, 21, ${0.92 * alpha})`;
+                ctx.lineWidth = 6.5 * (1 - progress * 0.35);
+                this.drawPolyline(ctx, this.chainPoints, camX, camY);
+                this.drawPolyline(ctx, this.skyPoints, camX, camY);
+                for (const fork of this.forkArcs) {
+                    ctx.lineWidth = 4.2 * (1 - progress * 0.4);
+                    this.drawPolyline(ctx, fork, camX, camY);
+                }
+
+                // Layer 3: Blinding white-hot core filament
+                ctx.shadowColor = '#ffffff';
+                ctx.shadowBlur = 8;
+                ctx.strokeStyle = `rgba(255, 255, 255, ${0.98 * alpha})`;
+                ctx.lineWidth = 2.6 * (1 - progress * 0.25);
+                this.drawPolyline(ctx, this.chainPoints, camX, camY);
+                this.drawPolyline(ctx, this.skyPoints, camX, camY);
+                for (const fork of this.forkArcs) {
+                    ctx.lineWidth = 1.6 * (1 - progress * 0.3);
+                    this.drawPolyline(ctx, fork, camX, camY);
+                }
+
+                // Expanding electric shock ring at impact
+                ctx.shadowBlur = 14;
+                ctx.shadowColor = '#00e5ff';
+                ctx.strokeStyle = `rgba(56, 189, 248, ${0.85 * alpha})`;
+                ctx.lineWidth = 3.5 * (1 - progress * 0.5);
+                ctx.beginPath();
+                ctx.arc(tx, ty, 24 + progress * 130, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
         class Zappa extends Entity {
             constructor(x, y, p) {
                 super(x, y, 18, p ? '#FFD700' : '#FFA500', 5800);
@@ -52991,15 +53182,15 @@
                     particles.push(new Particle(this.x + (Math.random()-0.5)*30, this.y + (Math.random()-0.5)*30, '#00C8FF', 3, 0.4));
                 }
                 
-                // Damage enemies in the path (once per dash - 600 damage)
+                // Damage enemies in the path (once per dash - 620 damage)
                 if (!this.dashHitSet) this.dashHitSet = new Set();
                 for (let e of entities) {
                     if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && !this.dashHitSet.has(e)) {
                         let d = Math.sqrt((e.x-this.x)**2 + (e.y-this.y)**2);
                         if (d < this.radius + e.radius + 30) {
                             this.dashHitSet.add(e);
-                            e.takeDamage(600, this);
-                            this.applyElectro(e, 600);
+                            e.takeDamage(620, this);
+                            this.applyElectro(e, 620);
                         }
                     }
                 }
@@ -53132,10 +53323,16 @@
                     closest.slowTimer = Math.max(closest.slowTimer, 6);
                     closest.slowMultiplier = 0.4; // Slowness III
                     
-                    // Particles
-                    for (let i = 0; i < 20; i++) {
-                        let angle = (i / 20) * Math.PI * 2;
-                        particles.push(new Particle(closest.x + Math.cos(angle)*100, closest.y + Math.sin(angle)*100, '#FFD700', 4, 0.6));
+                    // Real high-voltage lightning bolt & sky-zap visual effect!
+                    visualEffects.push(new ZappaRealZapEffect(this.x, this.y, closest.x, closest.y, 0.55));
+                    effectsAdd(new WaveShockwave(closest.x, closest.y, 165, 0.42, '#00e5ff', '#facc15'));
+                    effectsAdd(new ImpactFlash(closest.x, closest.y, Math.atan2(closest.y - this.y, closest.x - this.x), 140, 0.35, '#ffffff'));
+                    if (this.isPlayer) screenShake(12);
+                    for (let i = 0; i < 28; i++) {
+                        let angle = (i / 28) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
+                        let spd = 140 + Math.random() * 220;
+                        let col = i % 3 === 0 ? '#ffffff' : (i % 3 === 1 ? '#00e5ff' : '#facc15');
+                        particles.push(new Particle(closest.x, closest.y, col, 5, 0.55, Math.cos(angle) * spd, Math.sin(angle) * spd));
                     }
                     
                     if (this.isPlayer) addKillMsg(`${this.hasTeammateOfType('Neo') ? "You're so serious. I love it." : 'Zap! You\'re done.'} (+${zapDamage + electroDamage} damage)`);
@@ -56636,6 +56833,8 @@
             doMagnitudeBreak() {
                 if (this.fCD > 0) return; this.fCD = 24;
                 
+                // Grant small damage immunity window on F activation
+                this.invulnerableTimer = Math.max(this.invulnerableTimer || 0, 1.2);
                 this.fWindupSlowTimer = 0.6;
                 this.speed = this.baseSpd;
                 
@@ -56681,10 +56880,10 @@
                     clearInterval(windupInterval);
                     if (this.dead) return;
                     
-                    // Clear all immobilizing effects
+                    // Clear all immobilizing effects and grant brief post-break damage immunity
                     this.stunTimer = 0;
                     this.freezeTimer = 0;
-                    // Clear any other immobilizing effects here
+                    this.invulnerableTimer = Math.max(this.invulnerableTimer || 0, 0.8);
                     
                     this.magnitudeBreakActive = true;
                     
@@ -57148,14 +57347,18 @@
           console.log('   mySocketId:', mySocketId);
           isInQueue = true;
           showQueueUI();
-          // Emit join queue event
+          // Emit join queue event scoped to the chosen map lobby so players only match with the same chosen map
+          const chosenMapLobby = ['classic', 'sakura', 'farmland', 'port'].includes(selectedMap) ? selectedMap : 'classic';
+          window._queuedMapLobby = chosenMapLobby;
+          const mapScopedMode = `${currentMatchmakingMode}_${chosenMapLobby}`;
           const payload = {
               playerName: 'Player',
               heroType: selectedHeroType || 'paul',
               currentSkin: (typeof selectedSkins !== 'undefined' && selectedSkins[selectedHeroType]) ? selectedSkins[selectedHeroType] : 'default',
-              gameMode: currentMatchmakingMode,
+              gameMode: mapScopedMode,
+              baseMode: currentMatchmakingMode,
               maxPlayers: currentMatchmakingMaxPlayers,
-              selectedMap: selectedMap || 'classic'
+              selectedMap: chosenMapLobby
           };
           if (currentMatchmakingMode === 'duel') {
               payload.minPlayers = 2;
@@ -57240,8 +57443,10 @@
           
           const randomMessage = funnyMessages[Math.floor(Math.random() * funnyMessages.length)];
           
+          const activeMapLabel = String(selectedMap || 'classic').toUpperCase();
           modal.innerHTML = `
-            <h1 style="font-size:24px;letter-spacing:0.14em;margin-bottom:10px;color:#38bdf8;">MATCHMAKING</h1>
+            <h1 style="font-size:24px;letter-spacing:0.14em;margin-bottom:6px;color:#38bdf8;">MATCHMAKING</h1>
+            <div style="display:inline-block;margin-bottom:8px;padding:4px 12px;border-radius:999px;background:rgba(56,189,248,0.16);border:1px solid rgba(56,189,248,0.45);color:#bae6fd;font-size:12px;font-weight:800;letter-spacing:0.1em;">🗺️ MAP LOBBY: ${activeMapLabel}</div>
             <p id="funnyMessage" style="font-size:18px;color:#00bcd4;margin:15px 0;font-weight:bold;min-height:25px;">${randomMessage}</p>
             
             <div id="queueVisual" style="margin:20px 0;font-size:24px;">
@@ -57328,6 +57533,11 @@
           // adjust map size for duel mode
           if (gameMode === 'duel_online') {
               WORLD_SIZE = 2000;
+              if (playerData && (playerData.x > 1800 || playerData.y > 1800)) {
+                  const idx = (matchMeta && typeof matchMeta.assignedIndex === 'number') ? matchMeta.assignedIndex : 0;
+                  playerData.x = (idx % 2 === 1) ? 1500 : 500;
+                  playerData.y = 1000;
+              }
               console.log('📏 Duel mode: world size set to', WORLD_SIZE);
               safeZoneRadius = 0; // no safe zone in 1v1 online
           } else {
@@ -57526,12 +57736,19 @@
               clearInterval(window._activeCountdownTimer);
               window._activeCountdownTimer = null;
           }
-          // set gameMode based on server info
+          // set gameMode based on server info (strip map lobby suffix if present)
           if (data && data.mode) {
-              if (data.mode === 'ffa') gameMode = 'ffa_online';
-              else if (data.mode === '5v5') gameMode = '5v5_online';
-              else if (data.mode === 'duel') gameMode = 'duel_online';
+              const baseMode = String(data.mode).replace('_online', '').split('_')[0];
+              if (baseMode === 'ffa') gameMode = 'ffa_online';
+              else if (baseMode === '5v5') gameMode = '5v5_online';
+              else if (baseMode === 'duel') gameMode = 'duel_online';
               else gameMode = data.mode;
+          }
+          if (window._queuedMapLobby && ['classic', 'sakura', 'farmland', 'port'].includes(window._queuedMapLobby)) {
+              selectedMap = window._queuedMapLobby;
+              if (data && data.mapLayout && typeof data.mapLayout === 'object') {
+                  data.mapLayout.selectedMap = window._queuedMapLobby;
+              }
           }
           if (gameMode === 'duel_online') {
               disableHealthCubes = true;
@@ -57597,9 +57814,10 @@
                 return;
             }
             if (data && data.mode) {
-                if (data.mode === 'ffa') gameMode = 'ffa_online';
-                else if (data.mode === '5v5') gameMode = '5v5_online';
-                else if (data.mode === 'duel') gameMode = 'duel_online';
+                const baseMode = String(data.mode).replace('_online', '').split('_')[0];
+                if (baseMode === 'ffa') gameMode = 'ffa_online';
+                else if (baseMode === '5v5') gameMode = '5v5_online';
+                else if (baseMode === 'duel') gameMode = 'duel_online';
                 else gameMode = data.mode;
             }
             if (window._activeCountdownTimer) clearInterval(window._activeCountdownTimer);
@@ -60882,13 +61100,17 @@
             }
             isInQueue = true;
             showQueueUI();
-            // Ask server for 5v5 match (maxPlayers:10)
+            // Ask server for map-separated 5v5 match (maxPlayers:10)
+            const chosenMapLobby = ['classic', 'sakura', 'farmland', 'port'].includes(selectedMap) ? selectedMap : 'classic';
+            window._queuedMapLobby = chosenMapLobby;
             onlineSocket.emit('joinMatchmaking', {
                 playerName: 'Player',
                 heroType: selectedHeroType || 'paul',
                 currentSkin: (typeof selectedSkins !== 'undefined' && selectedSkins[selectedHeroType]) ? selectedSkins[selectedHeroType] : 'default',
-                gameMode: '5v5',
-                maxPlayers: 10
+                gameMode: `5v5_${chosenMapLobby}`,
+                baseMode: '5v5',
+                maxPlayers: 10,
+                selectedMap: chosenMapLobby
             });
 
             onlineSocket.on('queueStatus', (data) => {
@@ -63136,12 +63358,16 @@ class FFAMultiplayer {
 
     const resolvedHero = heroType || (typeof selectedHeroType !== 'undefined' ? selectedHeroType : 'paul');
     const resolvedSkin = (typeof selectedSkins !== 'undefined' && selectedSkins[resolvedHero]) ? selectedSkins[resolvedHero] : 'default';
+    const chosenMapLobby = (typeof selectedMap !== 'undefined' && ['classic', 'sakura', 'farmland', 'port'].includes(selectedMap)) ? selectedMap : 'classic';
+    const baseMode = String(gameMode || 'ffa').replace('_online', '').split('_')[0];
     this.multiplayer.socket.emit('joinMatchmaking', {
-      gameMode: gameMode,
+      gameMode: `${baseMode}_${chosenMapLobby}`,
+      baseMode: baseMode,
       heroType: resolvedHero,
       currentSkin: resolvedSkin,
       playerName: playerName || 'Player',
-      maxPlayers: maxPlayers
+      maxPlayers: maxPlayers,
+      selectedMap: chosenMapLobby
     });
 
     this.multiplayer.socket.off('queueStatus');
