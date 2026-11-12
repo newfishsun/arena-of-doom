@@ -2875,7 +2875,7 @@
                     <div class="gear-card" data-gear="visiongoggles" role="button" tabindex="0" onclick="setSelectedGearCard('visiongoggles')">
                         <div class="gear-title"><span>Vision Goggles</span><span class="gear-code">🥽</span></div>
                         <div class="gear-backstory">You can run but you cant hide,reminder:do not go in a shower with these people!</div>
-                        <div class="gear-effect"><ul class="gear-bullets"><li>Reveal bushes within 1200 radius for 3 seconds</li><li>Cooldown: 90s</li></ul></div>
+                        <div class="gear-effect"><ul class="gear-bullets"><li>Reveal bushes within 1200 radius for 4 seconds</li><li>Cooldown: 90s</li></ul></div>
                     </div>
 
                     <div class="gear-card" data-gear="electrico" role="button" tabindex="0" onclick="setSelectedGearCard('electrico')">
@@ -2899,7 +2899,7 @@
                     <div class="gear-card" data-gear="soundblast" role="button" tabindex="0" onclick="setSelectedGearCard('soundblast')">
                         <div class="gear-title"><span>Sound Blast</span><span class="gear-code">🔊</span></div>
                         <div class="gear-backstory">Someone with a broken microphone invented this idea</div>
-                        <div class="gear-effect"><ul class="gear-bullets"><li>Deal 150 true damage, knockback enemies, and apply 3s injury</li><li>Cooldown: 75s</li></ul></div>
+                        <div class="gear-effect"><ul class="gear-bullets"><li>Deal 150 true damage, knockback enemies, and apply 4s injury</li><li>Cooldown: 75s</li></ul></div>
                     </div>
 
                     <div class="gear-card" data-gear="terminator" role="button" tabindex="0" onclick="setSelectedGearCard('terminator')">
@@ -11087,18 +11087,18 @@
                     if (this.isPlayer) addKillMsg('Bandage Gear! (+10% Max HP)');
                 }
                 else if (this.gear === 'visiongoggles') {
-                    this.visionGogglesTimer = 3.0;
+                    this.visionGogglesTimer = 4.0;
                     this.rCD = 90;
                     this.maxRCD = 90;
                     for (let e of entities) {
                         if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                             if (Math.hypot(e.x - this.x, e.y - this.y) <= 1200) {
-                                e.revealTimer = Math.max(e.revealTimer || 0, 3.0);
+                                e.revealTimer = Math.max(e.revealTimer || 0, 4.0);
                             }
                         }
                     }
                     effectsAdd(new WaveShockwave(this.x, this.y, 320, 0.45, '#38bdf8', '#bae6fd'));
-                    if (this.isPlayer) addKillMsg('Vision Goggles! (Revealing 1200r)');
+                    if (this.isPlayer) addKillMsg('Vision Goggles! (Revealing 1200r for 4s)');
                 }
                 else if (this.gear === 'electrico') {
                     this.rCD = 80;
@@ -11190,8 +11190,8 @@
                         if (d < radius) {
                             e.hp -= 150;
                             if (e.hp <= 0) { e.hp = 0; e.die && e.die(this); }
-                            safeApplyStatus(e, 'injure', 3.0, this);
-                            e.injuredTimer = Math.max(e.injuredTimer || 0, 3.0);
+                            safeApplyStatus(e, 'injure', 4.0, this);
+                            e.injuredTimer = Math.max(e.injuredTimer || 0, 4.0);
                             let ang = Math.atan2(e.y - this.y, e.x - this.x);
                             let knockback = 2000;
                             e.kbx = Math.cos(ang) * knockback;
@@ -11201,7 +11201,7 @@
                         }
                     }
                     effectsAdd(new WaveShockwave(this.x, this.y, radius, 0.45, '#00e5ff', '#ff66ff'));
-                    if (this.isPlayer) addKillMsg('Sound Blast! (3s Injury)');
+                    if (this.isPlayer) addKillMsg('Sound Blast! (4s Injury)');
                 }
                 else if (this.gear === 'execution') {
                     this.rCD = 60;
@@ -18583,7 +18583,7 @@
                         // Fire projectiles at 0.1s intervals
                         if(this.qFireTimer <= 0 && this.qProjectilesLeft > 0) {
                             let angle = this.qLockedDir;
-                            let proj = new Projectile(this, this.x, this.y, angle, 800, 85, 1200, '#00ff00', 8);
+                            let proj = new Projectile(this, this.x, this.y, angle, 800, 90, 1200, '#00ff00', 8);
                             proj.maxDistance = 1200;
                             entities.push(proj);
                             this.qProjectilesLeft--;
@@ -18701,7 +18701,7 @@
             }
             
             doE() {
-                this.eCD = 12;
+                this.eCD = 11;
                 this.eActive = true;
                 this.eTimer = 2;
                 this.eAbilityLocked = true;
@@ -23197,6 +23197,10 @@
             spearStabs() {
                 this.revealTimer = 0.5;
                 this.qCD = 10;
+                if (this._stabLoopId) {
+                    clearInterval(this._stabLoopId);
+                    this._stabLoopId = null;
+                }
                 this.stabbing = true;
                 this.stabTimer = 0;
                 let stabCount = 0;
@@ -23207,6 +23211,7 @@
                 const stabLoop = setInterval(() => {
                     if (this.dead || !this.stabbing || stabCount >= maxStabs) {
                         clearInterval(stabLoop);
+                        if (this._stabLoopId === stabLoop) this._stabLoopId = null;
                         this.stabbing = false;
                         return;
                     }
@@ -23226,6 +23231,7 @@
                     }
                     
                     // Deal damage to nearby enemies
+                    let hitAnyEnemy = false;
                     for (let e of entities) {
                         if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team) {
                             let d = Math.sqrt((e.x-this.x)**2 + (e.y-this.y)**2);
@@ -23236,15 +23242,19 @@
                                 e.takeDamage(stabDmg, this);
                                 e.slowTimer = Math.max(e.slowTimer, 0.3); // Slow enemies
                                 if (this.skyscraperActive) this.totalDamageDealtInScraper += stabDmg;
+                                hitAnyEnemy = true;
                             }
                         }
                     }
                     
-                    // Heal Yun slightly less to keep sustain in check without a heavy nerf
-                    this.hp = Math.min(this.maxHp, this.hp + 20);
+                    // Heal Yun ONLY when hitting an enemy, and flat 20 HP per stab (cannot stack across multiple enemies hit)
+                    if (hitAnyEnemy) {
+                        this.hp = Math.min(this.maxHp, this.hp + 20);
+                    }
                     
                     stabCount++;
                 }, stabInterval * 1000);
+                this._stabLoopId = stabLoop;
                 
                 if (this.isPlayer) addKillMsg('Spear Stabs!');
             }
@@ -36713,7 +36723,7 @@
                 ],
                 neo: [
                     '<strong>Basic - Neon Shot:</strong> Fires rapid neon energy bolts dealing 45 damage per shot. <em>(0.2s cooldown)</em>',
-                    '<strong>Q - Neon Burst:</strong> Fires a concentrated stream of 12 neon bolts dealing 85 damage each while locking aim direction. <em>(4s cooldown)</em>',
+                    '<strong>Q - Neon Burst:</strong> Fires a concentrated stream of neon bolts dealing 90 damage each while locking aim direction. <em>(4s cooldown)</em>',
                     '<strong>E - Sector Burst:</strong> Unleashes sweeping neon volleys across a wide frontal cone while granting 1.35x movement speed. <em>(10s cooldown)</em>',
                     '<strong>F - Neon Hook:</strong> Launches a cyber hook up to 650 range that deals 550 damage, stuns for 1s, and pulls the target to Neo. <em>(13s cooldown)</em>',
                     '<strong>G - Cyber Skating:</strong> Gains 2.2x movement speed for 5s and generates +250 shield each time Neo skates through an enemy. <em>(25s cooldown)</em>'
@@ -49853,7 +49863,7 @@
             else if(p instanceof Austin){c1=p.qCD;m1=12;c2=p.eCD;m2=7.5;c3=p.fCD;m3=20;c4=0;m4=1;}
             else if(p instanceof Ambrose){c1=p.qCD;m1=10;c2=p.eCD;m2=5;c3=p.fCD;m3=22;c4=0;m4=1;}
             else if(p instanceof Ash){c1=p.qCD;m1=4;c2=p.eCD;m2=5;c3=p.fCD;m3=40;c4=0;m4=1;}
-            else if(p instanceof Neo){c1=p.qCD;m1=4;c2=p.eCD;m2=12;c3=p.fCD;m3=13;c4=p.gCD;m4=25;}
+            else if(p instanceof Neo){c1=p.qCD;m1=4;c2=p.eCD;m2=11;c3=p.fCD;m3=13;c4=p.gCD;m4=25;}
             else if(p instanceof Li){c1=p.qCD;m1=9;c2=p.eCD;m2=6;c3=p.fCD;m3=24;c4=0;m4=1;}
             else if(p instanceof Lav){c1=p.qCD;m1=12;c2=p.eCD;m2=2.5;c3=p.fCD;m3=14;c4=0;m4=1;}
             else if(p instanceof Max){c1=p.qCD;m1=6;c2=p.eCD;m2=12;c3=p.fCD;m3=16.5;c4=p.gCD;m4=9.9;}
@@ -53061,7 +53071,13 @@
                     return d.timer > 0;
                 });
                 
-                // Check if standing on doodle
+                // Check if standing completely still on doodle (teleportation only occurs if Zappa does not move at all, and keeps teleporting while stationary)
+                const movedDistSinceLastCheck = (typeof this._lastDoodleCheckX === 'number' && typeof this._lastDoodleCheckY === 'number')
+                    ? Math.hypot(this.x - this._lastDoodleCheckX, this.y - this._lastDoodleCheckY)
+                    : 0;
+                const isMovingInput = this.isPlayer && !!(keys.w || keys.s || keys.a || keys.d);
+                const isZappaStationary = !isMovingInput && !this.bikeActive && !this.isDashing && movedDistSinceLastCheck <= 0.15;
+
                 if (this.doodles.length > 0) {
                     let onDoodle = null;
                     for (let d of this.doodles) {
@@ -53072,7 +53088,7 @@
                         }
                     }
                     
-                    if (onDoodle) {
+                    if (onDoodle && isZappaStationary) {
                         this.doodleStandTimer += dt;
                         this.standingOnDoodle = onDoodle;
                         if (this.doodleStandTimer >= 0.5) {
@@ -53096,10 +53112,15 @@
                         }
                     } else {
                         this.doodleStandTimer = 0;
-                        this.standingOnDoodle = null;
+                        this.standingOnDoodle = onDoodle || null;
                         // Don't clear canUseDash here - let the timer handle it
                     }
+                } else {
+                    this.doodleStandTimer = 0;
+                    this.standingOnDoodle = null;
                 }
+                this._lastDoodleCheckX = this.x;
+                this._lastDoodleCheckY = this.y;
                 
                 // Update electro effects
                 for (let [e, data] of this.electroEnemies) {
@@ -53337,7 +53358,8 @@
                     
                     if (this.isPlayer) addKillMsg(`${this.hasTeammateOfType('Neo') ? "You're so serious. I love it." : 'Zap! You\'re done.'} (+${zapDamage + electroDamage} damage)`);
                 } else {
-                    if (this.isPlayer) addKillMsg('No electro targets! Build electro first.');
+                    this.fCD = 3;
+                    if (this.isPlayer) addKillMsg('No electro targets! Build electro first. (3s CD)');
                 }
             }
             
