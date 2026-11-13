@@ -1083,6 +1083,10 @@
                         <span>Basic Attack</span>
                         <span class="key">CLICK/HOLD</span>
                     </div>
+                    <div class="control-line">
+                        <span>Auto Aim</span>
+                        <span class="key">RIGHT CLICK</span>
+                    </div>
                 </div>
                 
                 <div class="control-section">
@@ -3108,16 +3112,73 @@
             };
         }
 
+        window.autoAimEnabled = false;
+        window.AUTO_AIM_CLOSE_RANGE = 420;
+        window._currentAutoAimTarget = null;
+
+        function findCloseRangeAutoAimTarget(ox, oy, maxRange = window.AUTO_AIM_CLOSE_RANGE || 420) {
+            if (!window.autoAimEnabled || typeof player === 'undefined' || !player || player.dead) {
+                window._currentAutoAimTarget = null;
+                return null;
+            }
+            if (typeof entities === 'undefined' || !Array.isArray(entities)) {
+                window._currentAutoAimTarget = null;
+                return null;
+            }
+            let bestHero = null, bestHeroDist = maxRange;
+            let bestOther = null, bestOtherDist = maxRange;
+            for (let i = 0; i < entities.length; i++) {
+                const e = entities[i];
+                if (!e || e === player || e.dead || e.del || !(e instanceof Entity)) continue;
+                if (e.team !== undefined && player.team !== undefined && e.team === player.team) continue;
+                if (e.isTargetable === false) continue;
+                if (typeof e.isVisibleTo === 'function' && !e.isVisibleTo(player)) continue;
+                const d = Math.hypot(e.x - ox, e.y - oy);
+                if (d <= maxRange + (e.radius || 20)) {
+                    const isHeroOrDummy = !!(e.countsAsFFAHero || e.isTrainingDummy || (typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy));
+                    if (isHeroOrDummy) {
+                        if (d < bestHeroDist) {
+                            bestHeroDist = d;
+                            bestHero = e;
+                        }
+                    } else if (d < bestOtherDist) {
+                        bestOtherDist = d;
+                        bestOther = e;
+                    }
+                }
+            }
+            const chosen = bestHero || bestOther || null;
+            window._currentAutoAimTarget = chosen;
+            return chosen;
+        }
+
         function getMouseAimAngle(fromX, fromY) {
             const worldPos = getMouseWorldPosition();
             const ox = (typeof fromX === 'number') ? fromX : (player ? player.x : 0);
             const oy = (typeof fromY === 'number') ? fromY : (player ? player.y : 0);
+            if (window.autoAimEnabled && typeof player !== 'undefined' && player && !player.dead && Math.hypot(ox - player.x, oy - player.y) < 120) {
+                const autoTarget = findCloseRangeAutoAimTarget(ox, oy, window.AUTO_AIM_CLOSE_RANGE || 420);
+                if (autoTarget) {
+                    return Math.atan2(autoTarget.y - oy, autoTarget.x - ox);
+                }
+            } else {
+                window._currentAutoAimTarget = null;
+            }
             return Math.atan2(worldPos.y - oy, worldPos.x - ox);
         }
 
         function getEntityAimPosition(entity, defaultDist = 300, maxDist = Infinity) {
             if (!entity) return getMouseWorldPosition();
             if (entity.isPlayer) {
+                if (window.autoAimEnabled && !entity.dead) {
+                    const autoTarget = findCloseRangeAutoAimTarget(entity.x, entity.y, Math.min(window.AUTO_AIM_CLOSE_RANGE || 420, Number.isFinite(maxDist) ? maxDist : 420));
+                    if (autoTarget) {
+                        return {
+                            x: Math.max(20, Math.min(WORLD_SIZE - 20, autoTarget.x)),
+                            y: Math.max(20, Math.min(WORLD_SIZE - 20, autoTarget.y))
+                        };
+                    }
+                }
                 const worldPos = getMouseWorldPosition();
                 if (Number.isFinite(maxDist)) {
                     const dx = worldPos.x - entity.x;
@@ -31774,7 +31835,7 @@
                     const playerDx = src.x - this.x;
                     const playerDy = src.y - this.y;
                     const playerDist = Math.sqrt(playerDx * playerDx + playerDy * playerDy);
-                    const dragonInterceptRadius = 170;
+                    const dragonInterceptRadius = 135;
 
                     if (dragonDist <= dragonInterceptRadius && dragonDist < playerDist) {
                         this.deathDragon.hp = Math.max(0, Number(this.deathDragon.maxHp) || 0);
@@ -32251,7 +32312,7 @@
                 let dragX = this.x + Math.cos(this.angle) * 120;
                 let dragY = this.y + Math.sin(this.angle) * 120;
                 this.applySelfDamage(this.maxHp * 0.25);
-                const dragon = new Entity(dragX, dragY, 28, '#c084fc', 1800);
+                const dragon = new Entity(dragX, dragY, 21, '#c084fc', 1800);
                 dragon.owner = this;
                 dragon.team = this.team;
                 dragon.name = 'Death Dragon';
@@ -42171,7 +42232,7 @@
             // E Ability: scatters 8 bouncing balls directly from the center of Rico, each dealing 325 damage (4s cooldown)
             abilityE() {
                 if (this.eCD > 0) return;
-                this.eCD = 6.0;
+                this.eCD = 4.0;
                 this.revealTimer = 0.6;
                 for (let i = 0; i < 8; i++) {
                     const ang = this.angle + (i * Math.PI * 2) / 8;
@@ -45749,7 +45810,7 @@
             getEffectiveSpeed() {
                 if (this.enhancedKBTimer > 0 || (this.movementLockdownTimer && this.movementLockdownTimer > 0) || (this.fightingTimer && this.fightingTimer > 0)) return 0;
                 let s = this.speed;
-                if (this.passiveSpeedTimer > 0) s *= 1.38; // Passive short speed boost on ball pickup
+                if (this.passiveSpeedTimer > 0) s *= 1.30; // Passive short speed boost on ball pickup
                 if (this.forceOfNatureTimer > 0) s *= 1.15;
                 if (this.qCharging) s *= 0.65;
                 if (this.slowTimer > 0) s *= (this.slowMultiplier || 0.6);
@@ -45774,11 +45835,11 @@
                     const a = (Math.PI * 2 * i) / 8;
                     particles.push(new Particle(target.x, target.y, i % 2 === 0 ? '#ef4444' : '#22c55e', 4.2, 0.36, Math.cos(a) * 140, Math.sin(a) * 140));
                 }
-                // Force of Nature empowerment: ankle breaking enemies deals 180 extra damage and heals Ronald for 90% of extra damage dealt (162 HP)
+                // Force of Nature empowerment: ankle breaking enemies deals 155 extra damage and heals Ronald for 90% of extra damage dealt (140 HP)
                 if (this.forceOfNatureTimer > 0 && !target.dead) {
-                    const extraDmg = 180;
+                    const extraDmg = 155;
                     target.takeDamage(extraDmg, this);
-                    const healAmt = Math.round(extraDmg * 0.90); // 162 HP (90% heal)
+                    const healAmt = Math.round(extraDmg * 0.90); // 140 HP (90% heal)
                     this.hp = Math.min(this.maxHp, this.hp + healAmt);
                     for (let i = 0; i < 6; i++) {
                         particles.push(new Particle(this.x + (Math.random() - 0.5) * 26, this.y + (Math.random() - 0.5) * 26, i % 2 === 0 ? '#22c55e' : '#ef4444', 4, 0.42));
@@ -45791,9 +45852,9 @@
                 const wasOffBallDash = this.offBallRunTimer > 0;
                 this.hasBall = true;
                 this.ballObj = null;
-                this.passiveSpeedTimer = 1.6;
+                this.passiveSpeedTimer = 1.3;
                 const lostHp = Math.max(0, this.maxHp - this.hp);
-                const healAmt = Math.round(lostHp * 0.12);
+                const healAmt = Math.round(lostHp * 0.10);
                 if (healAmt > 0) {
                     this.hp = Math.min(this.maxHp, this.hp + healAmt);
                 }
@@ -45932,7 +45993,7 @@
                                     b.angle = normalAng + (Math.random() - 0.5) * 0.7;
                                 }
                                 b.bounces = (b.bounces || 0) + 1;
-                                b.damage = Math.max(220, Math.round(b.damage * 0.78));
+                                b.damage = Math.max(180, Math.round(b.damage * 0.72));
                                 b.speed *= 0.80;
                                 if (b.speed < 110 || b.bounces >= 7) {
                                     b.speed = 0;
@@ -46042,7 +46103,7 @@
                     if (Math.random() < 0.85) {
                         particles.push(new Particle(this.x, this.y, Math.random() < 0.5 ? '#ef4444' : '#22c55e', 4.2, 0.28));
                     }
-                    const runDmg = this.forceOfNatureTimer > 0 ? 820 : 680;
+                    const runDmg = this.forceOfNatureTimer > 0 ? 740 : 620;
                     for (let e of entities) {
                         if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && !this.offBallRunHitSet.has(e)) {
                             if (Math.hypot(e.x - this.x, e.y - this.y) <= this.radius + (e.radius || 20) + 26) {
@@ -46149,8 +46210,8 @@
                             let ad = Math.abs(Math.atan2(dy, dx) - this.angle);
                             if (ad > Math.PI) ad = Math.PI * 2 - ad;
                             if (d <= range + (e.radius || 20) && ad <= Math.PI * 0.42) {
-                                e.takeDamage(135, this);
-                                this.applyAnkleBreak(e, 0.30, this.angle);
+                                e.takeDamage(120, this);
+                                this.applyAnkleBreak(e, 0.26, this.angle);
                             }
                         }
                     }
@@ -46176,7 +46237,7 @@
                             let ad = Math.abs(Math.atan2(dy, dx) - this.angle);
                             if (ad > Math.PI) ad = Math.PI * 2 - ad;
                             if (d <= range + (e.radius || 20) && ad <= Math.PI * 0.44) {
-                                e.takeDamage(115, this);
+                                e.takeDamage(105, this);
                             }
                         }
                     }
@@ -46189,7 +46250,7 @@
                 this.revealTimer = 0.6;
                 this.qCD = 0;
                 const ratio = Math.max(0, Math.min(1, (chargeDur || 0) / this.maxQChargeTime));
-                const shotDamage = Math.round(950 + ratio * 900); // 950 min -> 1850 max
+                const shotDamage = Math.round(850 + ratio * 800); // 850 min -> 1650 max
                 const shotSpeed = 1100 + ratio * 650;
 
                 this.hasBall = false;
@@ -46229,7 +46290,7 @@
                     this.stepoversBaseAngle = this.angle;
                     this.stunImmuneTimer = Math.max(this.stunImmuneTimer || 0, 0.65);
 
-                    const dmg = this.forceOfNatureTimer > 0 ? 920 : 750;
+                    const dmg = this.forceOfNatureTimer > 0 ? 820 : 680;
                     const range = 215;
 
                     visualEffects.push(new RonaldPitchEffect('stepover_lightning', this.x, this.y, this.angle, { range: range, duration: 0.42 }));
@@ -46242,7 +46303,7 @@
                             if (ad > Math.PI) ad = Math.PI * 2 - ad;
                             if (d <= range + (e.radius || 20) && ad <= Math.PI * 0.48) {
                                 e.takeDamage(dmg, this);
-                                this.applyAnkleBreak(e, 0.78, this.angle);
+                                this.applyAnkleBreak(e, 0.65, this.angle);
                             }
                         }
                     }
@@ -46278,7 +46339,7 @@
             abilityF() {
                 this.revealTimer = 0.8;
                 this.fCD = 18.0;
-                this.forceOfNatureTimer = 7.0;
+                this.forceOfNatureTimer = 6.0;
 
                 // Return the ball back to Ronald's feet immediately
                 this.pickupBall(true);
@@ -46966,7 +47027,7 @@
             // excluding Speedster gear so walkspeed buffs grant Inou extra ability damage!
             getBuffedBaseWalkspeed() {
                 const base = (this.absoluteTimer > 0) ? 380 : 330;
-                const stackBonus = (Array.isArray(this.projSpeedStacks) ? Math.min(5, this.projSpeedStacks.length) : 0) * 24;
+                const stackBonus = (Array.isArray(this.projSpeedStacks) ? Math.min(5, this.projSpeedStacks.length) : 0) * 20;
                 let s = base + stackBonus;
                 if (this.evadedTimer && this.evadedTimer > 0) s *= 1.20;
                 if (this.witherBuff && this.witherBuffTimer > 0) s *= 1.25;
@@ -46977,7 +47038,7 @@
             getEffectiveSpeed() {
                 if (this.enhancedKBTimer > 0 || (this.movementLockdownTimer && this.movementLockdownTimer > 0) || (this.fightingTimer && this.fightingTimer > 0)) return 0;
                 this.baseSpd = (this.absoluteTimer > 0) ? 380 : 330;
-                const stackBonus = (Array.isArray(this.projSpeedStacks) ? Math.min(5, this.projSpeedStacks.length) : 0) * 24;
+                const stackBonus = (Array.isArray(this.projSpeedStacks) ? Math.min(5, this.projSpeedStacks.length) : 0) * 20;
                 this.speed = this.baseSpd + stackBonus;
                 let s = this.speed;
                 if (this.evadedTimer && this.evadedTimer > 0) s *= 1.20;
@@ -47003,7 +47064,7 @@
 
             applyMaxSpeedBarTrueDamageAndHeal(target) {
                 if (!target || target.dead) return;
-                const bonusTrue = Math.max(1, Math.floor(this.getSpeedForDamage() * 0.18));
+                const bonusTrue = Math.max(1, Math.floor(this.getSpeedForDamage() * 0.15));
                 target.takeDamage(bonusTrue, this, { isTrue: true, trueDamage: true });
                 this.hp = Math.min(this.maxHp, this.hp + bonusTrue);
             }
@@ -47015,7 +47076,7 @@
                 }
                 this.projSpeedStacks.push(5.0);
                 this.baseSpd = (this.absoluteTimer > 0) ? 380 : 330;
-                this.speed = this.baseSpd + this.projSpeedStacks.length * 24;
+                this.speed = this.baseSpd + this.projSpeedStacks.length * 20;
             }
 
             // Deal 50 AoE damage in a small range (135px radius) during each E dash hop
@@ -47269,7 +47330,7 @@
                     const fwd = dx * cosA + dy * sinA;
                     const lat = Math.abs(-dx * sinA + dy * cosA);
                     if (fwd >= -e.radius * 0.45 && fwd <= sliceRange + e.radius && lat <= sliceHalfWidth + e.radius) {
-                        e.takeDamage(90, this);
+                        e.takeDamage(80, this);
                         if (hadMaxSpeedBar) {
                             this.applyMaxSpeedBarTrueDamageAndHeal(e);
                         }
@@ -47286,7 +47347,7 @@
                 this.basicCD = 0.35;
                 this.revealTimer = 0.5;
                 const hadMaxSpeedBar = this.speedBar >= 0.999;
-                const dmg = Math.floor(this.getBuffedBaseWalkspeed() * 2);
+                const dmg = Math.floor(this.getBuffedBaseWalkspeed() * 1.8);
                 const spawnX = this.x + Math.cos(this.angle) * (this.radius + 14);
                 const spawnY = this.y + Math.sin(this.angle) * (this.radius + 14);
                 const projSpd = 760;
@@ -47321,7 +47382,7 @@
                         }
                     }
                     if (totalCrowdDmg > 0) {
-                        const healAmt = Math.floor(totalCrowdDmg * 0.50);
+                        const healAmt = Math.floor(totalCrowdDmg * 0.40);
                         this.hp = Math.min(this.maxHp, this.hp + healAmt);
                     }
                     try {
@@ -47369,7 +47430,7 @@
                     if (!enemy || enemy.dead) return;
                     if (shuriken._firstEnemyHitDist === undefined) shuriken._firstEnemyHitDist = shuriken.dist;
                     const actualShurikenDmg = shuriken.dmg || dmgPerShuriken;
-                    const healAmt = Math.floor(actualShurikenDmg * 0.20);
+                    const healAmt = Math.floor(actualShurikenDmg * 0.16);
                     this.hp = Math.min(this.maxHp, this.hp + healAmt);
                     if (this.absoluteTimer > 0) {
                         this.eCD = Math.max(0, this.eCD - 0.4);
@@ -47388,7 +47449,7 @@
             // when pushed with E, shurikens auto-aim to the closest enemy so damage is maximized through skill!
             abilityQ() {
                 if (this.qCD > 0) return;
-                this.qCD = 4.0;
+                this.qCD = 4.5;
                 this.revealTimer = 0.45;
 
                 if (this.absoluteTimer > 0) {
@@ -47483,7 +47544,7 @@
             // and chains dashes if another projectile is nearby until all nearby projectiles are touched in that brief moment!
             abilityE() {
                 if (this.eCD > 0) return;
-                this.eCD = 6.0;
+                this.eCD = 6.5;
                 this.eDashing = true;
                 this.inouDashDRTimer = 0.45;
                 this._eTouchedProjectiles = new Set();
@@ -47519,7 +47580,7 @@
                 if (typeof proj.origInouDmg !== 'number') {
                     proj.origInouDmg = proj.dmg;
                 }
-                proj.dmg = Math.floor(proj.origInouDmg * 0.70);
+                proj.dmg = Math.floor(proj.origInouDmg * 0.65);
                 proj.inouLingering = false;
                 proj.inouLingerTimer = 0;
                 delete proj._firstEnemyHitDist;
@@ -47581,11 +47642,11 @@
                 this.absoluteTimer = 12.0;
                 this.absoluteMaxTimer = 12.0;
                 this.baseSpd = 380;
-                this.speed = this.baseSpd + (Array.isArray(this.projSpeedStacks) ? this.projSpeedStacks.length * 24 : 0);
+                this.speed = this.baseSpd + (Array.isArray(this.projSpeedStacks) ? this.projSpeedStacks.length * 20 : 0);
 
-                // Grant +900 Yellow Shield (takes priority over white shield & blocks true damage)
-                this.yellowShield = (this.yellowShield || 0) + 900;
-                this.shield = (this.shield || 0) + 900;
+                // Grant +750 Yellow Shield (takes priority over white shield & blocks true damage)
+                this.yellowShield = (this.yellowShield || 0) + 750;
+                this.shield = (this.shield || 0) + 750;
                 this.hasMechArmor = true;
 
                 ringEffects.push({ x: this.x, y: this.y, life: 0.65, duration: 0.65, maxRadius: 140, color: '#facc15' });
@@ -47875,7 +47936,7 @@
 
             getEffectiveSpeed() {
                 if (this.qPunchingTimer > 0 || this.eCharging || this.soulFlightTimer > 0) return 0;
-                let s = this.ascended ? 325 : 260;
+                let s = this.ascended ? 310 : 260;
                 if (this.enhancedKBTimer > 0 || (this.movementLockdownTimer && this.movementLockdownTimer > 0) || (this.fightingTimer && this.fightingTimer > 0)) return 0;
                 if (this.evadedTimer && this.evadedTimer > 0) s *= 1.20;
                 if (this.mindControlledBy && !this.mindControlledBy.dead) s *= 1.35;
@@ -47948,9 +48009,9 @@
                 // Keep permanent Soul Flame passive stats active once ascended
                 if (this.ascended) {
                     this.form = 'soul_flame';
-                    this.baseSpd = 325;
-                    this.penetration = 0.25;
-                    const expectedBaseMax = 6000;
+                    this.baseSpd = 310;
+                    this.penetration = 0.20;
+                    const expectedBaseMax = 5750;
                     if (!(this.fadingSoulTimer > 0) && this.maxHp < expectedBaseMax) {
                         this.maxHp = expectedBaseMax;
                     }
@@ -47997,8 +48058,8 @@
                     }
                     this.soulZoneHasEnemy = enemyInside;
                     if (enemyInside) {
-                        this.qCD = Math.max(0, this.qCD - dt * 1.0);
-                        this.fCD = Math.max(0, this.fCD - dt * 1.0);
+                        this.qCD = Math.max(0, this.qCD - dt * 0.75);
+                        this.fCD = Math.max(0, this.fCD - dt * 0.75);
                     }
                 } else {
                     this.soulZoneHasEnemy = false;
@@ -48043,7 +48104,7 @@
                         const closestY = preY + segDy * tSeg;
                         if (Math.hypot(e.x - closestX, e.y - closestY) <= 95 + (e.radius || 20)) {
                             if (this.soulFlightHitSet) this.soulFlightHitSet.add(e);
-                            e.takeDamage(500, this, { isTrue: true, ignoreKnockback: true });
+                            e.takeDamage(420, this, { isTrue: true, ignoreKnockback: true });
                         }
                     }
 
@@ -48123,15 +48184,15 @@
                 }
             }
 
-            // Basic Attack: Straight-in-front punch (250 damage, 2.0s CD in Base Form, 1.0s CD in Soul Flame Form)
+            // Basic Attack: Straight-in-front punch (250 damage & 2.0s CD in Base Form, 275 damage & 0.8s CD in Soul Flame Form)
             basicAtk() {
                 this.revealTimer = 0.5;
-                this.basicCD = this.ascended ? 1.0 : 2.0;
+                this.basicCD = this.ascended ? 0.8 : 2.0;
                 this.punchAnimTimer = 0.24;
                 this.punchHandSide *= -1;
                 const range = 210;
                 const halfWidth = 46;
-                const dmg = 250;
+                const dmg = this.ascended ? 275 : 250;
 
                 // Spawn straight-in-front pile-bunker punch visual (no arcs!)
                 visualEffects.push(new MeccaPolygonAttackEffect('front_punch', this.x, this.y, this.angle, {
@@ -48312,21 +48373,21 @@
                 const isFirstTimeG = !this._hasUsedGOnce;
                 this._hasUsedGOnce = true;
                 if (this._fadingSoulOrigMaxHp) {
-                    this._fadingSoulOrigMaxHp = 6000;
-                    this.maxHp = Math.round(6000 * 0.90);
+                    this._fadingSoulOrigMaxHp = 5750;
+                    this.maxHp = Math.round(5750 * 0.90);
                 } else {
-                    this.maxHp = 6000;
+                    this.maxHp = 5750;
                 }
-                const healGiven = isFirstTimeG ? this.maxHp : 1200;
-                this.hp = isFirstTimeG ? this.maxHp : Math.min(this.maxHp, this.hp + 1200);
+                const healGiven = isFirstTimeG ? this.maxHp : 1100;
+                this.hp = isFirstTimeG ? this.maxHp : Math.min(this.maxHp, this.hp + 1100);
                 const existingWhite = Math.max(0, (this.shield || 0) - (this.yellowShield || 0));
-                this.maxShield = 1200;
-                this.yellowShield = 1200;
-                this.shield = existingWhite + 1200;
+                this.maxShield = 1100;
+                this.yellowShield = 1100;
+                this.shield = existingWhite + 1100;
                 this.hasMechArmor = true;
-                this.baseSpd = 325;
-                this.speed = 325;
-                this.penetration = 0.25;
+                this.baseSpd = 310;
+                this.speed = 310;
+                this.penetration = 0.20;
                 this.color = this.isPlayer ? '#00f5d4' : '#10b981';
 
                 // Refresh Q/E/F cooldowns on ascension
@@ -48442,7 +48503,7 @@
                         for (let idx = 0; idx < hitEnemies.length; idx++) {
                             const target = hitEnemies[idx];
                             if (target && !target.dead) {
-                                target.takeDamage(100, this, { ignoreKnockback: true });
+                                target.takeDamage(95, this, { ignoreKnockback: true });
                                 if (target === mainTarget && s === 2) {
                                     safeApplyStatus(target, 'stun', 0.65, this);
                                 }
@@ -48463,7 +48524,7 @@
                     for (let idx = 0; idx < hitEnemies.length; idx++) {
                         const target = hitEnemies[idx];
                         if (target && !target.dead) {
-                            target.takeDamage(1000, this); // Buffed from 750 to 1000!
+                            target.takeDamage(900, this);
                             safeApplyStatus(target, 'fadingSoul', 5.0, this);
                         }
                     }
@@ -48488,7 +48549,7 @@
             // Soul Flame F: High-speed flight decided by mouse location (up to the 650 max range instead of fixed distance),
             // immediately showing a landing indicator circle at the destination so enemies know where Mecca will land!
             doSoulFlameF() {
-                this.fCD = 15.0;
+                this.fCD = 14.0;
                 this.revealTimer = 1.0;
                 const maxFlightRange = 650; // Same 650 max range as before, now decided by mouse location!
                 let tx = this.x + Math.cos(this.angle) * maxFlightRange;
@@ -48552,8 +48613,8 @@
                     const e = entities[i];
                     if (!e || e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
                     if (Math.hypot(e.x - this.x, e.y - this.y) <= impactRadius + (e.radius || 20)) {
-                        e.takeDamage(500, this, { isTrue: true, ignoreKnockback: true });
-                        e.takeDamage(1500, this);
+                        e.takeDamage(450, this, { isTrue: true, ignoreKnockback: true });
+                        e.takeDamage(1425, this);
                         safeApplyStatus(e, 'slow', 2.5, this);
                         safeApplyStatus(e, 'fadingSoul', 5.0, this);
                     }
@@ -50847,6 +50908,7 @@
 
         function updateHUD(p) {
             if (typeof updateInGameShopHud === 'function') updateInGameShopHud();
+            if (typeof window.updateAutoAimHudBadge === 'function') window.updateAutoAimHudBadge();
             // First, set hero-specific icons for Q, E, F abilities
             setHeroAbilityIcons(p);
             // hide qCharge by default
@@ -51040,8 +51102,8 @@
             else if(p instanceof Guest){c1=p.qCD;m1=7;c2=p.eCD;m2=4;c3=p.fCD;m3=20;c4=0;m4=1;}
             else if(p instanceof Cole){c1=p.qCD;m1=6;c2=p.eCD;m2=8;c3=p.fCharges>0?0:p.fCD;m3=4;c4=0;m4=1;}
             else if(p instanceof Rico){c1=p.qCD;m1=10;c2=p.eCD;m2=4;c3=p.fCD;m3=15;c4=0;m4=1;}
-            else if(typeof Mecca !== 'undefined' && p instanceof Mecca){c1=p.qCD;m1=5;c2=p.eCD;m2=p.ascended?12:6;c3=p.fCD;m3=15;c4=p.ascended?0:Math.max(0,(100-(p.gCharge||0))/100);m4=1;}
-            else if(typeof Inou !== 'undefined' && p instanceof Inou){c1=p.qCD;m1=4;c2=p.eCD;m2=6;c3=p.fCD;m3=45;c4=0;m4=1;}
+            else if(typeof Mecca !== 'undefined' && p instanceof Mecca){c1=p.qCD;m1=5;c2=p.eCD;m2=p.ascended?12:6;c3=p.fCD;m3=p.ascended?14:15;c4=p.ascended?0:Math.max(0,(100-(p.gCharge||0))/100);m4=1;}
+            else if(typeof Inou !== 'undefined' && p instanceof Inou){c1=p.qCD;m1=4.5;c2=p.eCD;m2=6.5;c3=p.fCD;m3=45;c4=0;m4=1;}
             else if(typeof Branson !== 'undefined' && p instanceof Branson){c1=p.qCD;m1=3;c2=p.eCD;m2=9;c3=p.fCD;m3=22;c4=0;m4=1;}
             else if(typeof Ronald !== 'undefined' && p instanceof Ronald){c1=p.hasBall?0:1;m1=1;c2=p.eCD;m2=3;c3=p.fCD;m3=18;c4=0;m4=1;}
             else{c1=0;m1=1;c2=0;m2=1;c3=0;m3=1;c4=0;m4=1;}
@@ -56741,8 +56803,32 @@
                 });
             }
             window.addEventListener('mousemove', e => { updateMouseFromClient(e.clientX, e.clientY); });
+            window.updateAutoAimHudBadge = function() {
+                let badge = document.getElementById('autoAimHudBadge');
+                if (!badge) {
+                    badge = document.createElement('div');
+                    badge.id = 'autoAimHudBadge';
+                    document.body.appendChild(badge);
+                }
+                badge.style.cssText = 'position:fixed;bottom:184px;right:20px;left:auto;top:auto;transform:none;padding:5px 12px;border-radius:999px;font-family:Inter,Segoe UI,sans-serif;font-size:12px;font-weight:800;letter-spacing:0.06em;z-index:950;pointer-events:none;transition:all 0.15s ease;display:none;';
+                if (!gameRunning) {
+                    badge.style.display = 'none';
+                    return;
+                }
+                if (window.autoAimEnabled) {
+                    badge.style.display = 'block';
+                    badge.style.background = 'rgba(22, 163, 74, 0.88)';
+                    badge.style.border = '1.5px solid #4ade80';
+                    badge.style.color = '#ffffff';
+                    badge.style.boxShadow = '0 0 14px rgba(34, 197, 94, 0.55)';
+                    badge.textContent = '🎯 AUTO AIM: ON (Right Click)';
+                } else {
+                    badge.style.display = 'none';
+                }
+            };
+
             window.addEventListener('contextmenu', e => {
-                if (gameRunning && isTeamSpectateMode() && player && player.dead) {
+                if (gameRunning || (e.target && e.target.tagName === 'CANVAS')) {
                     e.preventDefault();
                 }
             });
@@ -56751,9 +56837,16 @@
                     return;
                 }
                 if (e.button === 2) {
+                    e.preventDefault();
                     if (gameRunning && isTeamSpectateMode() && player && player.dead) {
-                        e.preventDefault();
                         switchSpectateTeammate(1);
+                        return;
+                    }
+                    window.autoAimEnabled = !window.autoAimEnabled;
+                    if (!window.autoAimEnabled) window._currentAutoAimTarget = null;
+                    if (typeof window.updateAutoAimHudBadge === 'function') window.updateAutoAimHudBadge();
+                    if (typeof addKillMsg === 'function' && gameRunning) {
+                        addKillMsg(window.autoAimEnabled ? '🎯 Auto Aim: ON' : '🎯 Auto Aim: OFF');
                     }
                     return;
                 }
@@ -59991,7 +60084,7 @@
                         if (ht === 'caskrice' && this.deathDragon && !this.deathDragon.dead && src && typeof src.x === 'number' && typeof src.y === 'number') {
                             const dDist = Math.hypot(src.x - this.deathDragon.x, src.y - this.deathDragon.y);
                             const pDist = Math.hypot(src.x - this.x, src.y - this.y);
-                            if (dDist <= 170 && dDist < pDist) {
+                            if (dDist <= 135 && dDist < pDist) {
                                 baseAmt *= 0.40;
                             }
                         }
@@ -60996,7 +61089,7 @@
                   type: 'moonOrb',
                   x: Math.round(e.x), y: Math.round(e.y),
                   vx: tr.vx, vy: tr.vy,
-                  radius: e.radius || 28, trail: (e.trail || []).slice(-6)
+                  radius: e.radius || 21, trail: (e.trail || []).slice(-6)
                 });
               }
               else if (typeof EnergyBall !== 'undefined' && e instanceof EnergyBall && e.owner === player) {
@@ -61148,7 +61241,7 @@
                     ownerX: Math.round(player.x), ownerY: Math.round(player.y),
                     angle: Number((e.angle || 0).toFixed(3)),
                     hp: Math.round(e.hp || 1800), maxHp: Math.round(e.maxHp || 1800),
-                    radius: e.radius || 28,
+                    radius: e.radius || 21,
                     attackAnim: Number((e.attackAnim || 0).toFixed(2)),
                     hitFlash: Number((e.hitFlash || 0).toFixed(2))
                   });
@@ -61189,7 +61282,7 @@
                 ownerX: Math.round(player.x), ownerY: Math.round(player.y),
                 angle: Number((dd.angle || 0).toFixed(3)),
                 hp: Math.round(dd.hp || 1800), maxHp: Math.round(dd.maxHp || 1800),
-                radius: dd.radius || 28,
+                radius: dd.radius || 21,
                 attackAnim: Number((dd.attackAnim || 0).toFixed(2)),
                 hitFlash: Number((dd.hitFlash || 0).toFixed(2))
               });
