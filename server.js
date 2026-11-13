@@ -143,6 +143,7 @@ function getHeroBaseHp(heroType) {
     mecca: 5200,
   inou: 4500,
   branson: 5400,
+    ronald: 7750,
     guest: 7200,
     jimeka: 5600,
     dayum: 69420,
@@ -169,7 +170,7 @@ const BOT_HERO_TYPES = [
   'vival', 'gregory', 'aurora', 'apollo', 'lune', 'everdawn', 'bruno', 'zeus',
   'kujou', 'karen', 'caskrice', 'jeffrey', 'christian', 'bounty', 'jimeka',
   'guest', 'trent', 'cole', 'rico', 'twins', 'faik', 'fletcher', 'darrick', 'winston',
-  'amir', 'steven', 'cornelius', 'bai'
+  'amir', 'steven', 'cornelius', 'bai', 'ronald'
 ];
 
 function createServerSeededRng(seedVal) {
@@ -394,6 +395,23 @@ class GameRoom {
     console.log(`⏹️ Game loop stopped for room ${this.id}`);
   }
 
+  getContainingBush(x, y) {
+    if (!this.mapLayout || !Array.isArray(this.mapLayout.bushes)) return null;
+    const isPort = this.selectedMap === 'port';
+    for (let i = 0; i < this.mapLayout.bushes.length; i++) {
+      const b = this.mapLayout.bushes[i];
+      if (!b) continue;
+      if (isPort) {
+        const cw = b.cw || (b.r * 2.15);
+        const ch = b.ch || (b.r * 1.35);
+        if (Math.abs(x - b.x) <= cw * 0.5 && Math.abs(y - b.y) <= ch * 0.5) return b;
+      } else {
+        if (Math.hypot(x - b.x, y - b.y) < (b.r || 90)) return b;
+      }
+    }
+    return null;
+  }
+
   // Bot AI updater called before each broadcast when room has bots
   updateBots() {
     const now = Date.now();
@@ -409,13 +427,33 @@ class GameRoom {
         p.slashes = [];
         continue;
       }
+      // Ronald Ankle Break on server bots: move opposite Ronald's direction and cannot attack!
+      if (p.ankleBreakUntil && now < p.ankleBreakUntil) {
+        const abDir = typeof p.ankleBreakDir === 'number' ? p.ankleBreakDir : ((p.angle || 0) + Math.PI);
+        p.angle = abDir;
+        p.x = Math.max(60, Math.min(this.worldSize - 60, p.x + Math.cos(abDir) * 195 * dt));
+        p.y = Math.max(60, Math.min(this.worldSize - 60, p.y + Math.sin(abDir) * 195 * dt));
+        p.slashes = [];
+        continue;
+      }
+      const botBush = this.getContainingBush(p.x, p.y);
 
-      // Find nearest living opponent
+      // Find nearest living VISIBLE opponent (bots cannot see players hidden in bushes unless in the same bush or revealed!)
       let closest = null;
       let cd = Infinity;
       for (let q of this.players.values()) {
         if (q.socketId === p.socketId || q.hp <= 0) continue;
         if (this.mode === '5v5' && q.team === p.team) continue;
+        const targetBush = this.getContainingBush(q.x, q.y);
+        const targetReportedHidden = !!(q.isConcealedInBush);
+        const isRevealed = !!(q.revealUntil && now < q.revealUntil);
+        if ((targetBush || targetReportedHidden) && !isRevealed) {
+          const sameServerBush = !!(botBush && targetBush && botBush === targetBush);
+          const sameReportedBush = !!(typeof q.bushX === 'number' && typeof q.bushY === 'number' && Math.hypot(p.x - q.bushX, p.y - q.bushY) <= (q.bushR || 95));
+          if (!sameServerBush && !sameReportedBush) {
+            continue;
+          }
+        }
         const d = Math.hypot(q.x - p.x, q.y - p.y);
         if (d < cd) {
           cd = d;
@@ -770,6 +808,14 @@ class GameRoom {
     }
     if (typeof data.angle === 'number' && Number.isFinite(data.angle)) {
       player.angle = data.angle;
+    }
+    if (typeof data.inBush === 'boolean') player.inBush = data.inBush;
+    if (typeof data.isConcealedInBush === 'boolean') player.isConcealedInBush = data.isConcealedInBush;
+    if (typeof data.bushX === 'number') player.bushX = data.bushX;
+    if (typeof data.bushY === 'number') player.bushY = data.bushY;
+    if (typeof data.bushR === 'number') player.bushR = data.bushR;
+    if (typeof data.revealTimer === 'number' && data.revealTimer > 0) {
+      player.revealUntil = Math.max(player.revealUntil || 0, Date.now() + data.revealTimer * 1000);
     }
 
     if (!player.entities) player.entities = [];
@@ -1633,8 +1679,13 @@ io.on('connection', (socket) => {
       }
       victim.lastPushedAt = now;
     } else if (eff.type === 'pull' && eff.value) {
-      if (typeof eff.value.dx === 'number') victim.x = Math.max(40, Math.min(room.worldSize - 40, victim.x + eff.value.dx));
-      if (typeof eff.value.dy === 'number') victim.y = Math.max(40, Math.min(room.worldSize - 40, victim.y + eff.value.dy));
+      if (typeof eff.value.x === 'number' && typeof eff.value.y === 'number' && Math.hypot(eff.value.x - victim.x, eff.value.y - victim.y) < 950) {
+        victim.x = Math.max(40, Math.min(room.worldSize - 40, eff.value.x));
+        victim.y = Math.max(40, Math.min(room.worldSize - 40, eff.value.y));
+      } else {
+        if (typeof eff.value.dx === 'number') victim.x = Math.max(40, Math.min(room.worldSize - 40, victim.x + eff.value.dx));
+        if (typeof eff.value.dy === 'number') victim.y = Math.max(40, Math.min(room.worldSize - 40, victim.y + eff.value.dy));
+      }
       victim.lastPushedAt = now;
       displaced = true;
     } else if (eff.type === 'knockback' && eff.value) {
@@ -1672,6 +1723,11 @@ io.on('connection', (socket) => {
       if (eff.type === 'stun' || eff.type === 'freeze' || eff.type === 'fightingTimer' || eff.type === 'movementLockdownTimer') {
         const durMs = Math.max(0, (Number(eff.value) || 0) * 1000);
         victim.stunUntil = Math.max(victim.stunUntil || 0, now + durMs);
+      } else if (eff.type === 'ankleBreak') {
+        const durSec = (eff.value && typeof eff.value === 'object') ? (Number(eff.value.duration) || 0.5) : (Number(eff.value) || 0.5);
+        const dirVal = (eff.value && typeof eff.value === 'object' && typeof eff.value.dir === 'number') ? eff.value.dir : ((victim.angle || 0) + Math.PI);
+        victim.ankleBreakUntil = Math.max(victim.ankleBreakUntil || 0, now + Math.min(3000, durSec * 1000));
+        victim.ankleBreakDir = dirVal;
       } else if (eff.type === 'slow' || eff.type === 'bransonSlow') {
         const durMs = Math.max(0, (Number(eff.value) || 0) * 1000);
         victim.slowUntil = Math.max(victim.slowUntil || 0, now + durMs);
