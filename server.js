@@ -871,19 +871,32 @@ function getModePopulationStats() {
     training: { playing: 0, inQueue: 0, activeRooms: 0 }
   };
 
+  const trainingRoomSockets = new Set();
   for (let [, room] of gameRooms) {
     if (!room) continue;
-    const humanCount = Array.from(room.players.values()).filter(p => !p.isBot && p.hp > 0).length;
+    const activeHumans = Array.from(room.players.values()).filter(p => !p.isBot && p.hp > 0);
+    const humanCount = activeHumans.length;
     if (humanCount <= 0) continue;
-    const key = room.mode === '5v5' ? '5v5_online' : (room.mode === 'duel' ? 'duel_online' : 'ffa_online');
-    if (modes[key]) {
+    let key = null;
+    if (room.mode === 'training') {
+      key = 'training';
+      for (const h of activeHumans) trainingRoomSockets.add(h.socketId);
+    } else if (room.mode === '5v5') {
+      key = '5v5_online';
+    } else if (room.mode === 'duel') {
+      key = 'duel_online';
+    } else if (room.mode === 'ffa') {
+      key = 'ffa_online';
+    }
+    if (key && modes[key]) {
       modes[key].playing += humanCount;
       modes[key].activeRooms += 1;
     }
   }
 
-  for (let [, act] of playerActivityModes) {
+  for (let [sid, act] of playerActivityModes) {
     if (!act || act.status !== 'playing') continue;
+    if (act.mode === 'training' && trainingRoomSockets.has(sid)) continue;
     if (act.mode && modes[act.mode] && !String(act.mode).includes('online')) {
       modes[act.mode].playing += 1;
     }
@@ -1175,6 +1188,7 @@ io.on('connection', (socket) => {
       maxPlayers: 4,
       friendlyFire: !!room.friendlyFire
     });
+    broadcastModeStats();
   });
 
   socket.on('joinTrainingInviteRoom', (data) => {
@@ -1220,6 +1234,7 @@ io.on('connection', (socket) => {
       maxPlayers: 4,
       friendlyFire: !!room.friendlyFire
     });
+    broadcastModeStats();
   });
 
   socket.on('setTrainingFriendlyFire', (data) => {
@@ -1428,7 +1443,7 @@ io.on('connection', (socket) => {
     player.hp = player.maxHp;
     player.lastClientReportedHp = player.maxHp;
     if (isMecca) {
-      const meccaShield = (data && data.ascended) || player.maxHp >= 6000 ? 1200 : 1000;
+      const meccaShield = (data && data.ascended) || player.maxHp >= 5750 ? 1100 : 1000;
       player.shield = meccaShield;
       player.maxShield = meccaShield;
       player.lastClientReportedShield = meccaShield;
