@@ -9586,11 +9586,15 @@
                 // Active Karen mind-control attribution (only while mind control is active; stops once target breaks free)
                 const srcMindController = this.getActiveKarenMindController(src);
                 const victimMindController = this.getActiveKarenMindController(this);
-                const unwrappedSrc = (src && src.proxyRef instanceof Entity) ? src.proxyRef
+                let unwrappedSrc = (src && src.proxyRef instanceof Entity) ? src.proxyRef
+                    : ((src && src._chimeraOwner instanceof Entity) ? src._chimeraOwner
                     : ((src && src.owner instanceof Entity) ? src.owner
                     : ((src && src.caster instanceof Entity) ? src.caster
                     : ((src && src.monza instanceof Entity) ? src.monza
-                    : ((src && src.karen instanceof Entity) ? src.karen : src))));
+                    : ((src && src.karen instanceof Entity) ? src.karen : src)))));
+                if (unwrappedSrc && unwrappedSrc._chimeraOwner instanceof Entity) {
+                    unwrappedSrc = unwrappedSrc._chimeraOwner;
+                }
                 const unwrappedMindCtrl = (unwrappedSrc && typeof this.getActiveKarenMindController === 'function') ? this.getActiveKarenMindController(unwrappedSrc) : null;
                 const creditAttacker = srcMindController || unwrappedMindCtrl || unwrappedSrc;
                 
@@ -20245,115 +20249,289 @@
                 super(x, y, 20, p ? '#a335ee' : '#6b1fa8', 7000);
                 this.isPlayer = p; this.countsAsFFAHero = true;
                 this.name = p ? "Player (Chimera)" : "Enemy Chimera";
-                this.basicCD = 0; this.qCD = 0; this.eCD = 0; this.fCD = 0; this.gCD = 0;
+                this.basicCD = 0; this.qCD = 0; this.eCD = 0; this.fCD = 0; this.gCD = 0; this.rCD = 0;
                 this.baseSpd = 240;
                 this.speed = this.baseSpd;
-                // Chimera mode
+
+                // Future-proof Live-Shell Copy System
                 this.chimeraMode = false;
                 this.gKeyPressed = false;
-                this.qKeyPressed = false;
-                this.eKeyPressed = false;
-                this.copiedQFunc = null;
-                this.copiedEFunc = null;
+                this.copiedAvatar = null;
+                this.copiedHeroClass = null;
                 this.copiedEnemyRef = null;
                 this.copiedEnemyName = null;
-                this.copiedQCooldown = 0;
-                this.copiedECooldown = 0;
+                this.copiedQCooldown = 5.0;
+                this.copiedECooldown = 6.0;
                 this.copiedUsesQCharges = false;
                 this.copiedUsesECharges = false;
-                this.copiedTemplate = null;
-                this.copyPoolIndex = -1;
-                // Copied buffs
-                this.drinkBuff = false;
-                this.drinkTimer = 0;
-                this.enhancedBasic = false;
-                this.enhancedBasicTimer = 0;
-                this.speedBuff = false;
-                this.speedBuffTimer = 0;
-                this.damageBuff = false;
-                this.damageBuffTimer = 0;
-                this.empMode = false;
-                this.empTimer = 0;
-                // Tornado (Q)
+                this.copiedSpeedMult = 1.0;
+                this.copiedDamageMult = 1.0;
+                this._hudAutoMaxCD = { c1: 0, c2: 0, c3: 0, c4: 0, r: 0 };
+
+                // Tornado (Q - Normal Form)
                 this.tornadoActive = false;
                 this.tornadoX = 0; this.tornadoY = 0;
                 this.tornadoVelX = 0; this.tornadoVelY = 0;
                 this.tornadoTimer = 0;
                 this.tornadoDuration = 4;
-                // Dash (E)
+
+                // Dash (E - Normal Form)
                 this.dashing = false;
                 this.dashT = 0;
                 this.dashDir = 0;
                 this.dashHitEnemies = new Set();
-                // Subject mark
+
+                // Subject mark & Heal conversion
                 this.markedEnemies = new Map();
-                // Heal conversion
                 this.damageIncoming = 0;
                 this.healCooldown = 0;
-                // Chimera burst link
+
+                // Chimera burst link (F)
                 this.linkedEnemies = new Set();
                 this.linkTimer = 0;
                 this.basicAttackCounter = 0;
             }
+
+            isForbiddenCopyTarget(e) {
+                if (!e || !(e instanceof Entity)) return true;
+                if (typeof Dayum !== 'undefined' && e instanceof Dayum) return true;
+                const ctorName = e.constructor && e.constructor.name ? String(e.constructor.name).toLowerCase() : '';
+                const hType = e.heroType ? String(e.heroType).toLowerCase() : '';
+                const nm = e.name ? String(e.name).toLowerCase() : '';
+                if (ctorName === 'dayum' || hType === 'dayum' || nm.includes('dayum')) return true;
+                return false;
+            }
+
+            resolveHeroClassForCopy(target) {
+                if (!target || this.isForbiddenCopyTarget(target)) return null;
+                if (typeof OnlinePlayerProxy !== 'undefined' && target instanceof OnlinePlayerProxy) {
+                    if (typeof getHeroClassByType === 'function' && target.heroType) {
+                        const cls = getHeroClassByType(target.heroType);
+                        if (cls && cls !== Dayum && cls !== Chimera) return cls;
+                    }
+                    return null;
+                }
+                const ctor = target.constructor;
+                if (typeof ctor === 'function' && ctor !== Entity && ctor !== Chimera && (typeof Dayum === 'undefined' || ctor !== Dayum)) {
+                    return ctor;
+                }
+                if (typeof getHeroClassByType === 'function' && target.heroType) {
+                    const cls = getHeroClassByType(target.heroType);
+                    if (cls && cls !== Dayum && cls !== Chimera) return cls;
+                }
+                return null;
+            }
+
+            getDamageMult() {
+                let m = this.dmgMult || 1.0;
+                if (this.chimeraMode && this.copiedDamageMult > 1.0) {
+                    m *= this.copiedDamageMult;
+                }
+                return m;
+            }
+
+            getEffectiveSpeed() {
+                if (this.enhancedKBTimer > 0 || (this.movementLockdownTimer && this.movementLockdownTimer > 0) || (this.fightingTimer && this.fightingTimer > 0)) return 0;
+                let s = this.speed;
+                if (this.chimeraMode && this.copiedSpeedMult > 1.0) {
+                    s *= this.copiedSpeedMult;
+                }
+                if (this.slowTimer > 0) s *= (this.slowMultiplier || 0.6);
+                if (this.speedsterTimer > 0) s *= 1.5;
+                if (this.witherBuff && this.witherBuffTimer > 0) s *= 1.25;
+                return s;
+            }
+
+            cleanupCopiedAvatar() {
+                if (this.copiedAvatar) {
+                    try {
+                        this.copiedAvatar.dead = true;
+                        this.copiedAvatar.del = true;
+                        if (typeof cleanupEntityVisualsAndEffects === 'function') {
+                            cleanupEntityVisualsAndEffects(this.copiedAvatar);
+                        }
+                    } catch (_) {}
+                }
+                this.copiedAvatar = null;
+                this.copiedHeroClass = null;
+                this.copiedEnemyRef = null;
+                this.copiedEnemyName = null;
+                this.copiedSpeedMult = 1.0;
+                this.copiedDamageMult = 1.0;
+                this.clearCopiedChargeState();
+                this._hudAutoMaxCD = { c1: 0, c2: 0, c3: 0, c4: 0, r: 0 };
+            }
+
+            die(src) {
+                this.cleanupCopiedAvatar();
+                this.chimeraMode = false;
+                return super.die(src);
+            }
+
+            // Drive the live copied hero shell so Chimera gets the EXACT Q, E, Basic/Melee attacks,
+            // dashes, speed buffs, damage buffs, heals, shields, and state machines of ANY hero (future-proof!)
+            tickCopiedAvatar(dt) {
+                const av = this.copiedAvatar;
+                if (!av || !this.chimeraMode) return;
+
+                // Sync Chimera's live state into the shell before updating
+                av.dead = false;
+                av.del = false;
+                av.x = this.x;
+                av.y = this.y;
+                av.angle = this.angle;
+                av.team = this.team;
+                av.name = this.name;
+                av.bush = this.bush;
+                av.maxHp = this.maxHp;
+                av.hp = this.hp;
+                av.shield = this.shield || 0;
+                av.yellowShield = this.yellowShield || 0;
+                av.stunTimer = this.stunTimer || 0;
+                av.freezeTimer = this.freezeTimer || 0;
+                av.slowTimer = this.slowTimer || 0;
+                av.isPlayer = this.isPlayer;
+                av._isChimeraShell = true;
+                av._chimeraOwner = this;
+                av.owner = this;
+
+                const preX = av.x, preY = av.y;
+                const preHp = av.hp;
+                const preShield = av.shield || 0;
+                const preStun = av.stunTimer || 0;
+                const preQCD = Number(av.qCD) || 0;
+                const preECD = Number(av.eCD) || 0;
+
+                // Mask WASD, F, G, R so Chimera retains its own movement, F Ultimate, G Toggle, and R Gear,
+                // while passing mouse.down (exact basic/melee), keys.q (exact Q), and keys.e (exact E) directly to the copied hero!
+                const savedW = keys.w, savedA = keys.a, savedS = keys.s, savedD = keys.d;
+                const savedF = keys.f, savedG = keys.g, savedR = keys.r;
+                const savedQ = keys.q, savedE = keys.e, savedMouseDown = mouse.down;
+
+                window._suppressHudForChimeraShell = true;
+                try {
+                    keys.w = false; keys.a = false; keys.s = false; keys.d = false;
+                    keys.f = false; keys.g = false; keys.r = false;
+
+                    if (!this.isPlayer) {
+                        // AI Chimera: drive copied hero's Q/E/basic attacks cleanly against target
+                        const t = this.findTarget();
+                        const d = t ? Math.hypot(t.x - this.x, t.y - this.y) : 9999;
+                        av.isPlayer = true;
+                        keys.q = !!(t && d < 460 && (av.qCD || 0) <= 0);
+                        keys.e = !!(t && d < 320 && (av.eCD || 0) <= 0);
+                        mouse.down = !!(t && d < 260 && (av.basicCD || 0) <= 0);
+                    }
+
+                    // Temporarily patch av.useGear & av.updateHUD no-ops so shell never triggers Chimera's gear or flickers HUD
+                    av.useGear = function() {};
+                    if (typeof av.update === 'function') {
+                        av.update(dt);
+                    }
+                } catch (err) {
+                    console.warn('Chimera live-shell tick warning:', this.copiedEnemyName, err);
+                } finally {
+                    keys.w = savedW; keys.a = savedA; keys.s = savedS; keys.d = savedD;
+                    keys.f = savedF; keys.g = savedG; keys.r = savedR;
+                    keys.q = savedQ; keys.e = savedE; mouse.down = savedMouseDown;
+                    window._suppressHudForChimeraShell = false;
+                }
+
+                // 1. Transfer exact dash / lunge / blink / teleport / stepover movement deltas to Chimera
+                const dx = av.x - preX;
+                const dy = av.y - preY;
+                if (Number.isFinite(dx) && Number.isFinite(dy) && (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001)) {
+                    this.x = Math.max(20, Math.min(WORLD_SIZE - 20, this.x + dx));
+                    this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + dy));
+                }
+
+                // 2. Transfer heals, shields, stun cleanses, and temporary immunities granted by the copied abilities
+                if (av.hp > preHp + 0.5) {
+                    this.hp = Math.min(this.maxHp, this.hp + (av.hp - preHp));
+                }
+                if ((av.shield || 0) > preShield + 0.5) {
+                    this.shield = (this.shield || 0) + ((av.shield || 0) - preShield);
+                }
+                if (preStun > 0 && (av.stunTimer || 0) <= 0) {
+                    this.stunTimer = 0;
+                    this.freezeTimer = 0;
+                }
+                if (av.stunImmuneTimer && av.stunImmuneTimer > (this.stunImmuneTimer || 0)) {
+                    this.stunImmuneTimer = av.stunImmuneTimer;
+                }
+                if (av.invulnerableTimer && av.invulnerableTimer > (this.invulnerableTimer || 0)) {
+                    this.invulnerableTimer = av.invulnerableTimer;
+                }
+                if (av.revealTimer && av.revealTimer > (this.revealTimer || 0)) {
+                    this.revealTimer = av.revealTimer;
+                }
+
+                // 3. Automatically mirror ANY speed buff or damage buff active on the copied hero!
+                const avBase = Math.max(100, Number(av.baseSpd) || 240);
+                let avEffSpd = avBase;
+                try {
+                    const savedAvSlow = av.slowTimer;
+                    av.slowTimer = 0;
+                    avEffSpd = (typeof av.getEffectiveSpeed === 'function') ? av.getEffectiveSpeed() : (av.speed || avBase);
+                    av.slowTimer = savedAvSlow;
+                } catch (_) {
+                    avEffSpd = av.speed || avBase;
+                }
+                const spdRatio = (avEffSpd > avBase) ? Math.min(2.6, avEffSpd / avBase) : 1.0;
+                this.copiedSpeedMult = Number.isFinite(spdRatio) ? Math.max(1.0, spdRatio) : 1.0;
+
+                let avDmgMult = Number(av.dmgMult) || 1.0;
+                if (typeof av.getDamageMult === 'function') {
+                    try { avDmgMult = Math.max(avDmgMult, Number(av.getDamageMult()) || 1.0); } catch (_) {}
+                }
+                this.copiedDamageMult = Number.isFinite(avDmgMult) ? Math.max(1.0, Math.min(3.0, avDmgMult)) : 1.0;
+
+                // 4. Sync exact cooldowns & charges directly from the copied hero for auto-adjusting HUD!
+                const newQCD = Math.max(0, Number(av.qCD) || 0);
+                const newECD = Math.max(0, Number(av.eCD) || 0);
+                if (newQCD > preQCD + 0.2) this.copiedQCooldown = newQCD;
+                if (newECD > preECD + 0.2) this.copiedECooldown = newECD;
+                this.qCD = newQCD;
+                this.eCD = newECD;
+                this.basicCD = Math.max(0, Number(av.basicCD) || 0);
+
+                if (typeof av.qCharges === 'number') {
+                    this.copiedUsesQCharges = true;
+                    this.qCharges = av.qCharges;
+                    this.maxQCharges = av.maxQCharges || 2;
+                    if (av.qCharges <= 0 && typeof av.qChargeTimer === 'number' && this.qCD <= 0) {
+                        this.qCD = Math.max(0, av.qChargeTimer);
+                    }
+                } else {
+                    this.copiedUsesQCharges = false;
+                }
+                if (typeof av.eCharges === 'number') {
+                    this.copiedUsesECharges = true;
+                    this.eCharges = av.eCharges;
+                    this.maxECharges = av.maxECharges || 2;
+                    if (av.eCharges <= 0 && this.eCD <= 0) {
+                        const remE = Math.max(Number(av.eChargeCD) || 0, Number(av.refillTimer) || 0);
+                        if (remE > 0) this.eCD = remE;
+                    }
+                } else {
+                    this.copiedUsesECharges = false;
+                }
+            }
+
             update(dt) {
                 if(this.dead) return;
                 this.updateCommon(dt);
-                if(this.basicCD > 0) this.basicCD -= dt;
-                if(this.qCD > 0) this.qCD -= dt;
-                if(this.eCD > 0) this.eCD -= dt;
-                if(this.fCD > 0) this.fCD -= dt;
-                if(this.gCD > 0) this.gCD -= dt;
-                if(this.rCD > 0) this.rCD -= dt;
-                if(this.healCooldown > 0) this.healCooldown -= dt;
-
-                // Update copied charge regeneration while in Chimera mode
-                if (this.chimeraMode) {
-                    if (this.copiedUsesQCharges && typeof this.qCharges === 'number') {
-                        const maxQ = this.maxQCharges || 2;
-                        if (this.qCharges < maxQ) {
-                            this.qChargeTimer = (this.qChargeTimer || 0) + dt;
-                            const qRech = this.qChargeRechargeTime || 5;
-                            if (this.qChargeTimer >= qRech) {
-                                this.qChargeTimer -= qRech;
-                                this.qCharges = Math.min(maxQ, this.qCharges + 1);
-                            }
-                        } else {
-                            this.qChargeTimer = 0;
-                        }
-                    }
-                    if (this.copiedUsesECharges && typeof this.eCharges === 'number') {
-                        const maxE = this.maxECharges || 2;
-                        if (typeof this.chargeCD === 'number' && this.chargeCD > 0) this.chargeCD = Math.max(0, this.chargeCD - dt);
-                        if (typeof this.doodlePlaceCD === 'number' && this.doodlePlaceCD > 0) this.doodlePlaceCD = Math.max(0, this.doodlePlaceCD - dt);
-                        if (typeof this.refillTimer === 'number' && this.refillTimer > 0) {
-                            this.refillTimer -= dt;
-                            if (this.refillTimer <= 0) {
-                                this.eCharges = Math.min(maxE, this.eCharges + 1);
-                                this.refillTimer = this.eCharges < maxE ? (this.eChargeRechargeTime || 7) : 0;
-                            }
-                        } else if (this.eCharges < maxE) {
-                            if (typeof this.eChargeCD !== 'number' || this.eChargeCD <= 0) {
-                                this.eChargeCD = this.eChargeRechargeTime || 4;
-                            }
-                            this.eChargeCD -= dt;
-                            if (this.eChargeCD <= 0) {
-                                this.eCharges = Math.min(maxE, this.eCharges + 1);
-                                this.eChargeCD = this.eCharges < maxE ? (this.eChargeRechargeTime || 4) : 0;
-                            }
-                        } else {
-                            this.eChargeCD = 0;
-                        }
-                        if (typeof this.chargePool === 'number') {
-                            this.chargePool = this.eCharges;
-                        }
-                        if (this.eCharges <= 0) {
-                            const rem = Math.max(this.eChargeCD || 0, this.refillTimer || 0);
-                            if (rem > 0) this.eCD = rem;
-                        }
-                    }
+                if(!this.chimeraMode) {
+                    if(this.basicCD > 0) this.basicCD = Math.max(0, this.basicCD - dt);
+                    if(this.qCD > 0) this.qCD = Math.max(0, this.qCD - dt);
+                    if(this.eCD > 0) this.eCD = Math.max(0, this.eCD - dt);
                 }
+                if(this.fCD > 0) this.fCD = Math.max(0, this.fCD - dt);
+                if(this.gCD > 0) this.gCD = Math.max(0, this.gCD - dt);
+                if(this.rCD > 0) this.rCD = Math.max(0, this.rCD - dt);
+                if(this.healCooldown > 0) this.healCooldown = Math.max(0, this.healCooldown - dt);
 
-                // Tornado update (tick damage every 0.2s = 90 dmg instead of every frame)
+                // Tornado update (Normal Form Q)
                 if(this.tornadoActive) {
                     this.tornadoTimer -= dt;
                     this.tornadoX += this.tornadoVelX * dt;
@@ -20380,11 +20558,12 @@
                     }
                     if(this.tornadoTimer <= 0) this.tornadoActive = false;
                 }
-                // Dash update (supports Chimera's native dash AND all copied hero dash abilities)
+
+                // Normal Form Dash update (E)
                 if(this.dashing) {
                     if (typeof this.dashT === 'number' && this.dashT > 0) {
                         this.dashT -= dt;
-                        const dAng = typeof this.dashDir === 'number' ? this.dashDir : (typeof this.startDashAngle === 'number' ? this.startDashAngle : this.angle);
+                        const dAng = typeof this.dashDir === 'number' ? this.dashDir : this.angle;
                         this.x += Math.cos(dAng) * 1200 * dt;
                         this.y += Math.sin(dAng) * 1200 * dt;
                         for(let e of entities) {
@@ -20399,138 +20578,12 @@
                             this.dashing = false;
                             this.dashHitEnemies.clear();
                         }
-                    } else if (typeof this.dashTimer === 'number' && this.dashTimer > 0) {
-                        this.dashTimer -= dt;
-                        const dSpd = this.dashSpeed || 950;
-                        const dAng = typeof this.dashAngle === 'number' ? this.dashAngle : this.angle;
-                        this.x += Math.cos(dAng) * dSpd * dt;
-                        this.y += Math.sin(dAng) * dSpd * dt;
-                        if (this.dashTimer <= 0) this.dashing = false;
                     } else {
                         this.dashing = false;
                     }
                 }
-                // Copied hero dash & mobility state machines (Faik, Ian, Zeus, Caskrice, Jeffrey, Darrick, Winston, Carlos, Guest, Kujou, Noli, Zappa)
-                if (this.qDashTimer && this.qDashTimer > 0) {
-                    this.qDashTimer = Math.max(0, this.qDashTimer - dt);
-                    if (this.qDashDirX || this.qDashDirY) {
-                        const zSpd = this.qDashSpeed || 550;
-                        this.x += (this.qDashDirX || 0) * zSpd * dt;
-                        this.y += (this.qDashDirY || 0) * zSpd * dt;
-                    } else {
-                        const qAng = typeof this.qDashAngle === 'number' ? this.qDashAngle : (typeof this.qDashDir === 'number' ? this.qDashDir : this.angle);
-                        const qSpd = this.qDashSpeed || 980;
-                        this.x += Math.cos(qAng) * qSpd * dt;
-                        this.y += Math.sin(qAng) * qSpd * dt;
-                    }
-                    if (this.qDashTimer <= 0) this.qDashing = false;
-                }
-                if (this.qLungeTimer && this.qLungeTimer > 0) {
-                    this.qLungeTimer = Math.max(0, this.qLungeTimer - dt);
-                    const lAng = typeof this.qLungeAngle === 'number' ? this.qLungeAngle : this.angle;
-                    this.x += Math.cos(lAng) * 950 * dt;
-                    this.y += Math.sin(lAng) * 950 * dt;
-                    this.qLungeHits = this.qLungeHits || new Set();
-                    for (let e of entities) {
-                        if (e !== this && !e.dead && e instanceof Entity && e.team !== this.team && !this.qLungeHits.has(e)) {
-                            if (Math.hypot(e.x - this.x, e.y - this.y) < 95 + (e.radius || 20)) {
-                                this.qLungeHits.add(e);
-                                e.takeDamage(650, this);
-                            }
-                        }
-                    }
-                }
-                if (!this.dashing && this.dashTimer && this.dashTimer > 0) {
-                    this.dashTimer = Math.max(0, this.dashTimer - dt);
-                    if (this.dashDir && typeof this.dashDir === 'object' && ('x' in this.dashDir)) {
-                        this.x += (this.dashDir.x || 0) * 900 * dt;
-                        this.y += (this.dashDir.y || 0) * 900 * dt;
-                    } else {
-                        const dAng = typeof this.dashAngle === 'number' ? this.dashAngle : this.angle;
-                        this.x += Math.cos(dAng) * (this.dashSpeed || 900) * dt;
-                        this.y += Math.sin(dAng) * (this.dashSpeed || 900) * dt;
-                    }
-                }
-                if (this.dashBurst && this.dashBurst > 0) {
-                    this.dashBurst = Math.max(0, this.dashBurst - dt);
-                    this.x += (this.dashBurstVx || Math.cos(this.angle) * 950) * dt;
-                    this.y += (this.dashBurstVy || Math.sin(this.angle) * 950) * dt;
-                }
-                if (this.eDashing && this.eDashTimer > 0) {
-                    this.eDashTimer = Math.max(0, this.eDashTimer - dt);
-                    const eAng = typeof this.eDashDir === 'number' ? this.eDashDir : this.angle;
-                    this.x += Math.cos(eAng) * 720 * dt;
-                    this.y += Math.sin(eAng) * 720 * dt;
-                    if (this.eDashTimer <= 0) this.eDashing = false;
-                }
-                if (this.eRushing && this.eRushTimer > 0) {
-                    this.eRushTimer = Math.max(0, this.eRushTimer - dt);
-                    const rAng = typeof this.eRushDir === 'number' ? this.eRushDir : this.angle;
-                    this.x += Math.cos(rAng) * 850 * dt;
-                    this.y += Math.sin(rAng) * 850 * dt;
-                    if (this.eRushTimer <= 0) this.eRushing = false;
-                }
-                if (this.rushing && this.rushTimer > 0) {
-                    this.rushTimer = Math.max(0, this.rushTimer - dt);
-                    this.x += Math.cos(this.angle) * 850 * dt;
-                    this.y += Math.sin(this.angle) * 850 * dt;
-                    if (this.rushTimer <= 0) this.rushing = false;
-                }
-                if (this.stutterSteps && this.stutterSteps > 0) {
-                    this.stutterDelay = (this.stutterDelay || 0) - dt;
-                    if (this.stutterDelay <= 0) {
-                        this.stutterSteps--;
-                        this.stutterDelay = 0.06;
-                        this.x += Math.cos(this.angle) * 55;
-                        this.y += Math.sin(this.angle) * 55;
-                    }
-                }
-                if (this.bikeActive && this.bikeTimer > 0) {
-                    this.bikeTimer = Math.max(0, this.bikeTimer - dt);
-                    this.x += Math.cos(this.angle) * (this.baseSpd * 1.8) * dt;
-                    this.y += Math.sin(this.angle) * (this.baseSpd * 1.8) * dt;
-                    if (this.bikeTimer <= 0) this.bikeActive = false;
-                }
-                if (this.speedBoostTimer && this.speedBoostTimer > 0) this.speedBoostTimer = Math.max(0, this.speedBoostTimer - dt);
-                if (this.revolverBoostTimer && this.revolverBoostTimer > 0) this.revolverBoostTimer = Math.max(0, this.revolverBoostTimer - dt);
-                if (this.hologramTimer && this.hologramTimer > 0) {
-                    this.hologramTimer = Math.max(0, this.hologramTimer - dt);
-                    if (this.hologramTimer <= 0) this.hologramActive = false;
-                }
-                if(this.pullTarget) {
-                    const pt = this.pullTarget;
-                    pt.progress = Math.min(1, (pt.progress || 0) + dt / (pt.duration || 0.3));
-                    let t = pt.progress;
-                    let ease = t * (2 - t);
-                    this.x = pt.startX + (pt.x - pt.startX) * ease;
-                    this.y = pt.startY + (pt.y - pt.startY) * ease;
-                    if(pt.progress >= 1) {
-                        this.pullTarget = null;
-                        if(typeof this.performSickleSwing === 'function') this.performSickleSwing();
-                    }
-                }
-                if(this.dash) {
-                    this.dashT -= dt;
-                    if(this.dd) {
-                        this.x += (this.dd.x || 0) * 1000 * dt;
-                        this.y += (this.dd.y || 0) * 1000 * dt;
-                    }
-                    this.dh = this.dh || [];
-                    for(let e of entities) {
-                        if(e !== this && !e.dead && e instanceof Entity && e.team !== this.team && !this.dh.includes(e)) {
-                            if(Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2) < (this.radius + (e.radius||0) + 10)) {
-                                this.dh.push(e);
-                                try { e.takeDamage(600, this); } catch(_){}
-                                for(let i = 0; i < 5; i++) particles.push(new Particle(e.x, e.y, '#a335ee', 3, 0.5));
-                            }
-                        }
-                    }
-                    if(this.dashT <= 0) {
-                        this.dash = false;
-                        this.dh = [];
-                    }
-                }
-                // Link update
+
+                // Link update (F - Chimera Burst)
                 for(let e of this.linkedEnemies) {
                     if(e.dead) this.linkedEnemies.delete(e);
                     else if(e.hp < e.maxHp * 0.07) {
@@ -20543,51 +20596,28 @@
                     this.linkTimer -= dt;
                     if(this.linkTimer <= 0) this.linkedEnemies.clear();
                 }
+
                 // Update marked enemies
                 for(let [e, timer] of this.markedEnemies) {
                     let newTimer = timer - dt;
                     if(newTimer <= 0) this.markedEnemies.delete(e);
                     else this.markedEnemies.set(e, newTimer);
                 }
-                if(this.stunTimer > 0) { if(this.isPlayer) updateHUD(this); return; }
-                // Update copied buffs
-                if(this.drinkBuff) {
-                    this.drinkTimer -= dt;
-                    if(this.drinkTimer <= 0) this.drinkBuff = false;
+
+                // Tick the live copied hero shell (even while stunned, so stun-cleansing copied E abilities like Ronald's work!)
+                if (this.chimeraMode && this.copiedAvatar) {
+                    this.tickCopiedAvatar(dt);
                 }
-                if(this.enhancedBasic) {
-                    this.enhancedBasicTimer -= dt;
-                    if(this.enhancedBasicTimer <= 0) this.enhancedBasic = false;
+
+                if(this.stunTimer > 0 || this.freezeTimer > 0) {
+                    if(this.isPlayer) updateHUD(this);
+                    return;
                 }
-                if(this.speedBuff) {
-                    this.speedBuffTimer -= dt;
-                    if(this.speedBuffTimer <= 0) this.speedBuff = false;
-                }
-                if(this.damageBuff) {
-                    this.damageBuffTimer -= dt;
-                    if(this.damageBuffTimer <= 0) this.damageBuff = false;
-                }
-                if(this.empMode) {
-                    this.empTimer -= dt;
-                    if(this.empTimer <= 0) this.empMode = false;
-                }
+
                 let spd = this.getEffectiveSpeed();
-                if(this.drinkBuff) spd *= 1.5;
-                if(this.speedBuff || (this.speedBoostTimer && this.speedBoostTimer > 0) || (this.revolverBoostTimer && this.revolverBoostTimer > 0) || (this.hologramActive && this.hologramTimer > 0)) spd *= 1.5;
-                if (Array.isArray(this.carEffects) && this.carEffects.length > 0) {
-                    for (let i = this.carEffects.length - 1; i >= 0; i--) {
-                        const c = this.carEffects[i];
-                        if (c && typeof c.update === "function") c.update(dt);
-                        if (!c || c.timer <= 0) {
-                            if (c === this.activeAbsolut) this.activeAbsolut = null;
-                            this.carEffects.splice(i, 1);
-                        }
-                    }
-                }
-                if (this.activeAbsolut && this.activeAbsolut.timer > 0) spd *= 2.5;
-                if(this.bikeActive && this.bikeTimer > 0) spd *= 2.2;
                 if(this.isPlayer) { this.input(dt, spd); updateHUD(this); } else this.ai(dt, spd);
             }
+
             input(dt, spd) {
                 if(this.dashing) return;
                 let dx = 0, dy = 0;
@@ -20597,61 +20627,19 @@
                 if(keys.d) dx++;
                 if(dx||dy) {
                     let m = new Vector2(dx, dy).norm().mult(spd*dt);
-                    this.x += m.x;
-                    this.y += m.y;
+                    this.x = Math.max(20, Math.min(WORLD_SIZE - 20, this.x + m.x));
+                    this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + m.y));
                 }
                 this.angle = getMouseAimAngle(this.x, this.y);
-                if(mouse.down && this.basicCD <= 0) this.basicAtk();
-                if(this.chimeraMode) {
-                    // Do NOT auto-change abilities; abilities only change when pressing G
-                    const canCastQ = this.copiedUsesQCharges ? ((this.qCharges || 0) > 0 && this.qCD <= 0) : (this.qCD <= 0);
-                    if(keys.q && canCastQ && this.copiedQFunc && !this.qKeyPressed) {
-                        const prevQCharges = this.qCharges;
-                        this.copiedQFunc();
-                        if (this.copiedUsesQCharges && typeof this.qCharges === 'number') {
-                            if (this.qCharges === prevQCharges) this.qCharges = Math.max(0, this.qCharges - 1);
-                            this.qCD = this.qCharges > 0 ? 0.25 : ((this.qChargeRechargeTime || 5) - (this.qChargeTimer || 0));
-                        } else {
-                            this.qCD = this.copiedQCooldown;
-                        }
-                        this.qKeyPressed = true;
-                        this.applyBuffsFromCopiedAbility('q');
-                        if(this.isPlayer) {
-                            addKillMsg('Copied Q (' + this.copiedEnemyName + ')');
-                        }
-                    }
-                    if(!keys.q) this.qKeyPressed = false;
-                    const canCastE = this.copiedUsesECharges
-                        ? ((this.eCharges || 0) > 0 && this.eCD <= 0 && (this.chargeCD || 0) <= 0 && (this.doodlePlaceCD || 0) <= 0)
-                        : (this.eCD <= 0);
-                    if(keys.e && canCastE && this.copiedEFunc && !this.eKeyPressed) {
-                        const prevECharges = this.eCharges;
-                        this.copiedEFunc();
-                        if (this.copiedUsesECharges && typeof this.eCharges === 'number') {
-                            if (this.eCharges === prevECharges) {
-                                this.eCharges = Math.max(0, this.eCharges - 1);
-                            }
-                            if (this.eCharges < (this.maxECharges || 2) && (this.eChargeCD || 0) <= 0 && (this.refillTimer || 0) <= 0) {
-                                this.eChargeCD = this.eChargeRechargeTime || 4;
-                            }
-                            if (typeof this.chargePool === 'number') this.chargePool = this.eCharges;
-                            this.eCD = this.eCharges > 0
-                                ? Math.max(0.4, this.chargeCD || 0, this.doodlePlaceCD || 0)
-                                : Math.max(0.5, this.eChargeCD || 0, this.refillTimer || 0, this.eChargeRechargeTime || 4);
-                        } else {
-                            this.eCD = this.copiedECooldown;
-                        }
-                        this.eKeyPressed = true;
-                        this.applyBuffsFromCopiedAbility('e');
-                        if(this.isPlayer) {
-                            addKillMsg('Copied E (' + this.copiedEnemyName + ')');
-                        }
-                    }
-                    if(!keys.e) this.eKeyPressed = false;
-                } else {
+
+                // In Normal Form, Chimera uses its native Basic, Q (Tornado), and E (Dash).
+                // In Chimera Mode, mouse.down, Q, and E are executed by the live copied hero shell in tickCopiedAvatar(dt)!
+                if(!this.chimeraMode) {
+                    if(mouse.down && this.basicCD <= 0) this.basicAtk();
                     if(keys.q && this.qCD <= 0) this.doTornado();
                     if(keys.e && this.eCD <= 0) this.doDash();
                 }
+
                 if(keys.f && this.fCD <= 0) this.chimmeraBurst();
                 if(keys.g && this.gCD <= 0 && !this.gKeyPressed) {
                     this.toggleChimeraMode();
@@ -20660,15 +20648,12 @@
                 if(!keys.g) this.gKeyPressed = false;
                 if(keys.r && this.rCD <= 0) this.useGear();
             }
+
             basicAtk() {
                 this.revealTimer = 0.5;
                 this.basicCD = 0.65;
                 particles.push(new Slash(this.x, this.y, this.angle, 140, Math.PI/2, "#a335ee"));
-                let baseDamage = 120;
-                let dmg = baseDamage;
-                if(this.enhancedBasic) dmg = baseDamage * 3;
-                if(this.damageBuff) dmg = baseDamage * 1.3;
-                if(this.enhancedBasic && this.damageBuff) dmg = baseDamage * 3.9;
+                let dmg = 120;
                 for(let e of entities) {
                     if(e !== this && !e.dead && e instanceof Entity && e.team !== this.team && Math.sqrt((e.x-this.x)**2+(e.y-this.y)**2) < 140) {
                         let ad = Math.abs(Math.atan2(e.y-this.y, e.x-this.x) - this.angle);
@@ -20690,6 +20675,7 @@
                     if (this.isPlayer) addKillMsg("Chimera enhanced shot!");
                 }
             }
+
             doTornado() {
                 this.qCD = 11;
                 this.tornadoActive = true;
@@ -20700,6 +20686,7 @@
                 this.tornadoVelY = Math.sin(this.angle) * 200;
                 for(let i = 0; i < 20; i++) particles.push(new Particle(this.tornadoX + (Math.random()-0.5)*100, this.tornadoY + (Math.random()-0.5)*100, "#a335ee", 4, 1));
             }
+
             doDash() {
                 this.eCD = 4;
                 this.dashing = true;
@@ -20708,7 +20695,7 @@
                 this.dashHitEnemies.clear();
                 for(let i = 0; i < 10; i++) particles.push(new Particle(this.x, this.y, "#a335ee", 3, 0.5));
                 setTimeout(()=>{
-                    if(!this.dead) {
+                    if(!this.dead && !this.chimeraMode) {
                         this.dashDir = this.dashDir + Math.PI/2;
                         this.dashT = 0.25;
                         this.dashing = true;
@@ -20716,6 +20703,7 @@
                     }
                 }, 100);
             }
+
             chimmeraBurst() {
                 this.fCD = 13;
                 this.linkTimer = 7;
@@ -20737,27 +20725,7 @@
                 }
                 for(let i = 0; i < 40; i++) particles.push(new Particle(this.x + Math.cos(this.angle)*i*30, this.y + Math.sin(this.angle)*i*30, "#ff00ff", 5, 1));
             }
-            applyBuffsFromCopiedAbility(abilityKey) {
-                if(!this.copiedEnemyRef) return;
-                const enemy = this.copiedEnemyRef;
-                let copiedAbilityName = this.findAbilityByPosition(enemy, abilityKey);
-                if(!copiedAbilityName) return;
-                if(copiedAbilityName === "doDrink" || copiedAbilityName === "necroSurge") {
-                    this.drinkBuff = true;
-                    this.drinkTimer = 5.0;
-                    this.enhancedBasic = true;
-                    this.enhancedBasicTimer = 5.0;
-                } else if(["energyBurst", "voidFormAbility", "rocket", "laser"].includes(copiedAbilityName)) {
-                    this.damageBuff = true;
-                    this.damageBuffTimer = 6.0;
-                } else if(["doubleSwing", "lightCircle", "buildSentry", "groundSlam", "doFlurry"].includes(copiedAbilityName)) {
-                    this.enhancedBasic = true;
-                    this.enhancedBasicTimer = 5.0;
-                } else if(["doOverclock", "curvedDash", "inkPen", "suiEnergy", "vibrate", "doStunt", "useQ", "useE", "abilityE", "lightCircle", "revolverBoost", "abilityQ", "doQ", "startBike", "createRoad", "darkCircle", "cycleBurst", "calmedConfidence", "loveBoost", "redBullCan", "divineSwift", "quickDash", "doDash", "doWarRush", "_performDash", "scytheSwing", "dashAttack", "dashAbility", "startRush", "shadowDash"].includes(copiedAbilityName)) {
-                    this.speedBuff = true;
-                    this.speedBuffTimer = 4.0;
-                }
-            }
+
             takeDamage(amt, src, meta) {
                 super.takeDamage(amt, src, meta);
                 if (this.dead) return;
@@ -20769,35 +20737,24 @@
                     this.healCooldown = 4;
                 }
             }
+
             clearCopiedChargeState() {
                 this.copiedUsesQCharges = false;
                 this.copiedUsesECharges = false;
                 delete this.qCharges;
                 delete this.maxQCharges;
-                delete this.qChargeTimer;
-                delete this.qChargeRechargeTime;
                 delete this.eCharges;
                 delete this.maxECharges;
-                delete this.eChargeCD;
-                delete this.eChargeRechargeTime;
-                delete this.refillTimer;
-                delete this.chargeCD;
-                delete this.doodlePlaceCD;
-                delete this.chargePool;
-                delete this.gCharges;
-                delete this.maxGCharges;
             }
+
             toggleChimeraMode() {
                 this.gCD = 1.5;
                 if(this.chimeraMode) {
                     this.chimeraMode = false;
-                    this.copiedQFunc = null;
-                    this.copiedEFunc = null;
-                    this.copiedEnemyRef = null;
-                    this.copiedEnemyName = null;
-                    this.clearCopiedChargeState();
+                    this.cleanupCopiedAvatar();
                     this.qCD = 0;
                     this.eCD = 0;
+                    this.basicCD = 0;
                     for(let i = 0; i < 20; i++) {
                         particles.push(new Particle(this.x, this.y, "#a335ee", 5, 0.6));
                     }
@@ -20808,15 +20765,21 @@
                     return;
                 }
 
+                // Find nearest copyable hero (EVERY hero works automatically — EXCEPT Dayum!)
                 let candidates = [];
+                let sawOnlyDayum = false;
                 for(let e of entities) {
                     if(e === this || e.dead || !(e instanceof Entity)) continue;
-                    let isHero = (e.countsAsFFAHero === true) || (typeof OnlinePlayerProxy !== "undefined" && e instanceof OnlinePlayerProxy);
-                    let hasAbilities = false;
-                    try { hasAbilities = !!this.findAbilityByPosition(e, "q") || !!this.findAbilityByPosition(e, "e"); } catch(_) {}
-                    if(isHero || (e.countsAsFFAHero !== false && hasAbilities)) {
+                    if(this.isForbiddenCopyTarget(e)) {
+                        sawOnlyDayum = true;
+                        continue;
+                    }
+                    const heroCls = this.resolveHeroClassForCopy(e);
+                    if(!heroCls) continue;
+                    const isHero = (e.countsAsFFAHero === true) || (typeof OnlinePlayerProxy !== "undefined" && e instanceof OnlinePlayerProxy);
+                    if(isHero) {
                         let d = Math.hypot(e.x - this.x, e.y - this.y);
-                        candidates.push({ enemy: e, dist: d, isEnemyTeam: e.team !== this.team });
+                        candidates.push({ enemy: e, heroCls: heroCls, dist: d, isEnemyTeam: e.team !== this.team });
                     }
                 }
                 candidates.sort((a, b) => {
@@ -20826,217 +20789,79 @@
 
                 if(!candidates.length) {
                     this.chimeraMode = false;
-                    this.copiedQFunc = null;
-                    this.copiedEFunc = null;
-                    this.copiedEnemyRef = null;
-                    this.copiedEnemyName = null;
-                    this.clearCopiedChargeState();
+                    this.cleanupCopiedAvatar();
                     if(this.isPlayer) {
                         updateHUD(this);
-                        addKillMsg("No hero nearby to copy!");
+                        addKillMsg(sawOnlyDayum ? "Cannot copy Dayum!" : "No hero nearby to copy!");
                     }
                     return;
                 }
 
-                this.clearCopiedChargeState();
+                this.cleanupCopiedAvatar();
+                const pick = candidates[0];
+                const chosen = pick.enemy;
+                const HeroCls = pick.heroCls;
+
+                // Instantiate a real live shell of the copied hero!
+                let avatar = null;
+                try {
+                    avatar = new HeroCls(this.x, this.y, false);
+                } catch (err) {
+                    console.warn("Chimera failed to instantiate copied hero shell:", HeroCls && HeroCls.name, err);
+                    if (this.isPlayer) addKillMsg("Failed to copy hero!");
+                    return;
+                }
+
+                avatar._isChimeraShell = true;
+                avatar._chimeraOwner = this;
+                avatar.owner = this;
+                avatar.countsAsFFAHero = false;
+                avatar.noKillCredit = true;
+                avatar.team = this.team;
+                avatar.name = this.name;
+                avatar.currentSkin = chosen.currentSkin || 'default';
+                avatar.angle = this.angle;
+                avatar.qCD = 0;
+                avatar.eCD = 0;
+                avatar.basicCD = 0;
+
+                // Mirror active form / stance state from the copied target (e.g. Ascended Mecca, Ash stance, Twins, Gregory timeline, etc.)
+                if (typeof chosen.ascended === 'boolean') avatar.ascended = chosen.ascended;
+                if (typeof chosen.form === 'string') avatar.form = chosen.form;
+                if (typeof chosen.mode === 'string') avatar.mode = chosen.mode;
+                if (typeof chosen.twinState === 'string') avatar.twinState = chosen.twinState;
+                if (typeof chosen.futureTimeline === 'boolean') avatar.futureTimeline = chosen.futureTimeline;
+
                 this.chimeraMode = true;
-                let chosen = candidates[0].enemy;
+                this.copiedAvatar = avatar;
+                this.copiedHeroClass = HeroCls;
                 this.copiedEnemyRef = chosen;
-                this.copiedEnemyName = (chosen.name || chosen.constructor.name).replace(/^Player \(|^Enemy |\)$/g, "");
-
-                let qAbility = this.findAbilityByPosition(chosen, "q");
-                this.copiedQCooldown = qAbility ? this.getAbilityCooldown(qAbility, "q") : 6.0;
-                this.copiedQFunc = qAbility ? () => { this.executeWrappedAbility(chosen, qAbility, "q"); } : null;
-
-                let eAbility = this.findAbilityByPosition(chosen, "e");
-                this.copiedECooldown = eAbility ? this.getAbilityCooldown(eAbility, "e") : 6.0;
-                this.copiedEFunc = eAbility ? () => { this.executeWrappedAbility(chosen, eAbility, "e"); } : null;
-
-                // If the copied hero uses charges on Q or E (e.g. 2-charge heroes like Kai, Melvin, Don, Zappa, or multi-charge heroes),
-                // initialize the charges on Chimera so they immediately appear in the HUD and clear on revert/non-charge hero copy.
-                if (typeof chosen.qCharges === 'number' && !(typeof Builderman !== 'undefined' && chosen instanceof Builderman)) {
-                    this.copiedUsesQCharges = true;
-                    this.maxQCharges = chosen.maxQCharges || 2;
-                    this.qCharges = this.maxQCharges;
-                    this.qChargeTimer = 0;
-                    this.qChargeRechargeTime = 5;
-                }
-                if (typeof chosen.eCharges === 'number') {
-                    this.copiedUsesECharges = true;
-                    this.maxECharges = chosen.maxECharges || 2;
-                    this.eCharges = this.maxECharges;
-                    this.eChargeCD = 0;
-                    this.refillTimer = 0;
-                    this.chargeCD = 0;
-                    this.doodlePlaceCD = 0;
-                    this.eChargeRechargeTime = (typeof Kai !== 'undefined' && chosen instanceof Kai) ? 7 : ((typeof Zappa !== 'undefined' && chosen instanceof Zappa) ? 3 : ((typeof Fletcher !== 'undefined' && chosen instanceof Fletcher) ? 9 : 4));
-                    if (typeof chosen.chargePool === 'number') {
-                        this.chargePool = this.maxECharges;
-                    }
-                }
-
+                this.copiedEnemyName = (chosen.name || HeroCls.name).replace(/^Player \(|^Enemy |^Practice Dummy \(|^1v1 |\)$/g, "");
                 this.qCD = 0;
                 this.eCD = 0;
+                this.basicCD = 0;
+                this._hudAutoMaxCD = { c1: 0, c2: 0, c3: 0, c4: 0, r: 0 };
+
+                if (typeof avatar.qCharges === 'number') {
+                    this.copiedUsesQCharges = true;
+                    this.qCharges = avatar.qCharges;
+                    this.maxQCharges = avatar.maxQCharges || 2;
+                }
+                if (typeof avatar.eCharges === 'number') {
+                    this.copiedUsesECharges = true;
+                    this.eCharges = avatar.eCharges;
+                    this.maxECharges = avatar.maxECharges || 2;
+                }
+
                 for(let i = 0; i < 24; i++) {
                     particles.push(new Particle(this.x, this.y, "#ff00ff", 5, 0.7));
                 }
                 if(this.isPlayer) {
                     updateHUD(this);
-                    addKillMsg("Copied " + this.copiedEnemyName + " abilities! (Press G for Normal Form)");
+                    addKillMsg("Copied " + this.copiedEnemyName + " (Exact Q / E / Basic)! Press G to revert");
                 }
             }
-            executeWrappedAbility(enemy, abilityName, slotKey) {
-                if(!enemy) return;
-                try {
-                    if(typeof abilityName === "function") {
-                        abilityName.call(this);
-                        return;
-                    }
-                    if(enemy instanceof Chimera && (abilityName === "copiedQFunc" || abilityName === "copiedEFunc")) {
-                        if(typeof enemy[abilityName] === "function") enemy[abilityName]();
-                        return;
-                    }
-                    const defaults = {
-                        skillPoints: Math.max(this.skillPoints || 0, 4), maxSkillPoints: 8,
-                        passiveStacks: Math.max(this.passiveStacks || 0, 1), maxPassiveStacks: 3,
-                        resolve: Math.max(this.resolve || 0, 2), maxResolve: 5,
-                        stacks: Math.max(this.stacks || 0, 1),
-                        necroswordStacks: this.necroswordStacks || 0,
-                        necroswordBaseBonus: this.necroswordBaseBonus || 50,
-                        mode: this.mode || enemy.mode || "attacker",
-                        twinState: this.twinState || enemy.twinState || "ken",
-                        lewisMode: typeof this.lewisMode === "boolean" ? this.lewisMode : true,
-                        form: this.form || enemy.form || "collar",
-                        ascended: typeof this.ascended === "boolean" ? this.ascended : !!enemy.ascended,
-                        futureTimeline: typeof this.futureTimeline === "boolean" ? this.futureTimeline : !!enemy.futureTimeline,
-                        sunMarkedEnemies: this.sunMarkedEnemies || new Set(),
-                        electroEnemies: this.electroEnemies || new Map(),
-                        zappedTargets: this.zappedTargets || new Map(),
-                        markedEnemies: this.markedEnemies || new Map(),
-                        doodles: this.doodles || [],
-                        roads: this.roads || [],
-                        pedals: this.pedals || [],
-                        northernLights: this.northernLights || [],
-                        stormTraps: this.stormTraps || [],
-                        bananaPeels: this.bananaPeels || [],
-                        vibrateTrails: this.vibrateTrails || [],
-                        carEffects: this.carEffects || [],
-                        pixelBots: this.pixelBots || [],
-                        qGoons: this.qGoons || [],
-                        mines: this.mines || [],
-                        energyBalls: this.energyBalls || [],
-                        inkPens: this.inkPens || [],
-                        hackZones: this.hackZones || [],
-                        podiumFlags: this.podiumFlags || [],
-                        slowPedals: this.slowPedals || [],
-                        linkedTargets: this.linkedTargets || [],
-                        qHitSet: this.qHitSet || new Set(),
-                        eDashHits: this.eDashHits || new Set(),
-                        qLungeHits: this.qLungeHits || new Set(),
-                        hitEnemies: this.hitEnemies || new Set(),
-                        curvedHit: this.curvedHit || new Set(),
-                        rushHitEntities: this.rushHitEntities || new Set(),
-                        fHitSet: this.fHitSet || new Set(),
-                        fPushedEnemies: this.fPushedEnemies || new Set(),
-                        hallucinatedEnemies: this.hallucinatedEnemies || new Set(),
-                        dashDuration: this.dashDuration || 0.4,
-                        sectorVisuals: this.sectorVisuals || [],
-                        darkCircles: this.darkCircles || [],
-                        abilityVisuals: this.abilityVisuals || { faik: {}, fletcher: {}, cyrus: {} }
-                    };
-                    for(const [k, v] of Object.entries(defaults)) {
-                        if(typeof this[k] === "undefined") this[k] = v;
-                    }
-                    this.dashHitEnemies = this.dashHitEnemies || new Set();
-                    let proto = Object.getPrototypeOf(enemy);
-                    const coreProps = new Set(["constructor", "update", "draw", "input", "ai", "basicAtk", "basicAttack", "takeDamage", "die", "getEffectiveSpeed", "getDamageMult", "findTarget", "wander"]);
-                    while(proto && proto !== Entity.prototype && proto !== Object.prototype) {
-                        for(const prop of Object.getOwnPropertyNames(proto)) {
-                            if(coreProps.has(prop)) continue;
-                            if(typeof Chimera.prototype[prop] === "undefined" && typeof enemy[prop] === "function") {
-                                this[prop] = enemy[prop].bind(this);
-                            }
-                        }
-                        proto = Object.getPrototypeOf(proto);
-                    }
-                    if(typeof enemy[abilityName] === "function") {
-                        enemy[abilityName].call(this);
-                    }
-                } catch(err) {
-                    console.warn("Copied ability execution fallback:", abilityName, err);
-                }
-            }
-            findAbilityByPosition(enemy, abilityType) {
-                if(!enemy || !(enemy instanceof Entity)) return null;
-                const heroQMap = {
-                    Paul: "skill1", Noob: "doDrink", Kaiser: "impact", Tate: "doKick",
-                    Edgar: "shadowDash", Builderman: "buildSentry", LightHero: "lightCircle",
-                    Kai: "energyBurst", Mamba: "fireQ", Ming: "doQ", Nos: "doQ",
-                    Acheron: "summonBlackhole", Coolkidd: "firePizza", Don: "fireArrows",
-                    Faik: "_performDash", Darrick: "revolverBoost", Fletcher: "doQ",
-                    Noli: "voidFormAbility", Glace: "createIceberg", Wesley: "waterClaw",
-                    Ash: "throwSword", Gamb: "doQ", Gregory: "skill1", Neo: "doQ",
-                    Li: "waterFlowPunch", Lav: "loveBoost", Max: "redBullCan",
-                    Fred: "suiEnergy", Winston: "skill1", Amir: "skill1", Steven: "skill1",
-                    Kenshi: "swordEnergy", Kujou: "abilityQ", Gigi: "summonPixelBots",
-                    Yun: "spearStabs", RacingDuo: "calmedConfidence", Benjamin: "doubleSwing",
-                    Ren: "doQ", Melvin: "doQ", Carlos: "doQ", Gormo: "necroSurge", Ian: "abilityQ",
-                    Buster: "doQ", Zappa: "startBike", Cyrus: "doQ", Ambrose: "darkSelf",
-                    Austin: "createRoad", Monza: "bossCommand", Vival: "cycleBurst",
-                    Aurora: "northernLight", Christian: "useQ", Bai: "freshIdeas",
-                    Lune: "abilityQ", BrunoAlexander: "abilityQ", Apollo: "firePunchEnergy",
-                    Zeus: "divineSwift", Caskrice: "scytheSwing", BountyHunter: "doubleSlash",
-                    Cornelius: "fireQ", Twins: "abilityQ", Trent: "abilityQ",
-                    Guest: "doBlock", Jimeka: "doJestersToss", Everdawn: "abilityQ", Dayum: "bombaclat",
-                    Karen: "abilityQ", Jeffrey: "abilityQ", Cole: "abilityQ", Rico: "abilityQ"
-                };
-                const heroEMap = {
-                    Paul: "skill2", Noob: "rocket", Kaiser: "doDash", Tate: "doFlurry",
-                    Edgar: "knifeSwing", Builderman: "doOverclock", LightHero: "curvedDash",
-                    Kai: "inkPen", Mamba: "fireE", Ming: "doE", Nos: "doE",
-                    Acheron: "nihilityform", Coolkidd: "hackNearby", Don: "dashAttack",
-                    Faik: "doE", Darrick: "quickDash", Fletcher: "fireE",
-                    Noli: "startRush", Glace: "summonBlizzard", Wesley: "startHeal",
-                    Ash: "heavySwing", Gamb: "doE", Gregory: "doE", Neo: "doE",
-                    Li: "dragonKick", Lav: "loveBall", Max: "healBoost",
-                    Fred: "vibrate", Winston: "doDash", Amir: "doStunt", Steven: "doQuantumShot",
-                    Kenshi: "dashAbility", Kujou: "abilityE", Gigi: "excessiveGrinding",
-                    Yun: "immunityMode", RacingDuo: "tireMadness", Benjamin: "groundSlam",
-                    Ren: "doE", Melvin: "doE", Carlos: "doE", Gormo: "necroBarrage", Ian: "abilityE",
-                    Buster: "doE", Zappa: "placeDoodle", Cyrus: "doE", Ambrose: "darkCircle",
-                    Austin: "sectorBuilding", Monza: "executeGotchaCircleSwing", Vival: "lifeAndDeath",
-                    Aurora: "stormTrap", Christian: "useE", Bai: "inkZone",
-                    Lune: "abilityE", BrunoAlexander: "abilityE", Apollo: "judgementCut",
-                    Zeus: "sphereOfStormness", Caskrice: "executionStrike", BountyHunter: "throwSickle",
-                    Cornelius: "doE", Twins: "abilityE", Trent: "abilityE",
-                    Guest: "doWarRush", Jimeka: "doPrankstersPlay", Everdawn: "abilityE", Dayum: "fahhhhhh",
-                    Karen: "abilityE", Jeffrey: "abilityE", Cole: "abilityE", Rico: "abilityE"
-                };
-                const ctorName = enemy.constructor && enemy.constructor.name;
-                const map = abilityType === "q" ? heroQMap : heroEMap;
-                if(ctorName && map[ctorName] && typeof enemy[map[ctorName]] === "function") {
-                    return map[ctorName];
-                }
-                const qFallback = ["abilityQ", "doQ", "skill1", "necroSurge", "useQ", "fireQ"];
-                const eFallback = ["abilityE", "doE", "skill2", "necroBarrage", "useE", "fireE", "doDash"];
-                const list = abilityType === "q" ? qFallback : eFallback;
-                for(const name of list) {
-                    if(typeof enemy[name] === "function") return name;
-                }
-                return null;
-            }
-            getAbilityCooldown(abilityName, slotKey) {
-                const cooldownMap = {
-                    "necroSurge": 4, "necroBarrage": 7, "doQ": 5, "impact": 10.0, "skill1": 4.0,
-                    "shadowDash": 8.0, "doKick": 7.0, "lightCircle": 4.0, "doDrink": 11.0,
-                    "fireArrows": 5.0, "summonBlackhole": 10, "buildSentry": 10.0, "energyBurst": 6.0,
-                    "doubleSwing": 8.0, "voidFormAbility": 8.0, "doTornado": 11.0,
-                    "doE": 6, "doDash": 4.0, "skill2": 9.0, "knifeSwing": 6.0, "doFlurry": 6.0,
-                    "curvedDash": 5, "rocket": 7.0, "dashAttack": 4.0, "nihilityform": 10,
-                    "doOverclock": 12.0, "inkPen": 3.0, "groundSlam": 12.0
-                };
-                return cooldownMap[abilityName] || (slotKey === "q" ? 5.0 : 6.0);
-            }
+
             ai(dt, spd) {
                 if(this.handleSafeZone(dt)) return;
                 let t = this.findTarget();
@@ -21044,28 +20869,20 @@
                 let dx = t.x - this.x, dy = t.y - this.y;
                 this.angle = Math.atan2(dy, dx);
                 let d = Math.sqrt(dx*dx + dy*dy);
-                if(d > 250) {
+                if(d > 220) {
                     this.x += Math.cos(this.angle) * spd * dt;
                     this.y += Math.sin(this.angle) * spd * dt;
                 } else {
                     if(!this.chimeraMode && this.gCD <= 0 && d < 500) this.toggleChimeraMode();
-                    if(this.basicCD <= 0) this.basicAtk();
-                    if(this.chimeraMode && this.copiedQFunc && this.copiedEFunc) {
-                        if(d < 400 && this.qCD <= 0) {
-                            this.copiedQFunc();
-                            this.qCD = this.copiedQCooldown;
-                        }
-                        if(d < 200 && this.eCD <= 0) {
-                            this.copiedEFunc();
-                            this.eCD = this.copiedECooldown;
-                        }
-                    } else {
+                    if(!this.chimeraMode) {
+                        if(this.basicCD <= 0) this.basicAtk();
                         if(d < 400 && this.qCD <= 0) this.doTornado();
                         if(d < 200 && this.eCD <= 0) this.doDash();
                     }
                     if(d < 600 && this.fCD <= 0) this.chimmeraBurst();
                 }
             }
+
             findTarget() {
                 let c = null, md = 9999;
                 for(let e of entities) {
@@ -21076,12 +20893,25 @@
                 }
                 return c;
             }
+
             wander(dt, spd) {
                 if(Math.random() < 0.05) this.angle += (Math.random()-0.5)*1;
                 this.x += Math.cos(this.angle) * spd * 0.5 * dt;
                 this.y += Math.sin(this.angle) * spd * 0.5 * dt;
             }
+
             draw(ctx) {
+                // Render copied hero's world visuals (e.g. Ronald's ball, Zappa's doodles, Melvin's puddles, charge bars)
+                if (this.chimeraMode && this.copiedAvatar && typeof this.copiedAvatar.draw === 'function') {
+                    try {
+                        ctx.save();
+                        this.copiedAvatar.x = this.x;
+                        this.copiedAvatar.y = this.y;
+                        this.copiedAvatar.angle = this.angle;
+                        this.copiedAvatar.draw(ctx);
+                        ctx.restore();
+                    } catch (_) {}
+                }
                 super.draw(ctx);
                 if(this.tornadoActive) {
                     ctx.strokeStyle = "#a335ee";
@@ -21110,11 +20940,13 @@
                     }
                 }
                 if(this.chimeraMode) {
+                    ctx.save();
                     ctx.strokeStyle = "#ff00ff";
                     ctx.lineWidth = 3;
                     ctx.beginPath();
                     ctx.arc(this.x - camera.x, this.y - camera.y, this.radius + 10, 0, Math.PI*2);
                     ctx.stroke();
+                    ctx.restore();
                 }
             }
         }
@@ -50907,6 +50739,7 @@
         }
 
         function updateHUD(p) {
+            if (window._suppressHudForChimeraShell || (p && p._isChimeraShell)) return;
             if (typeof updateInGameShopHud === 'function') updateInGameShopHud();
             if (typeof window.updateAutoAimHudBadge === 'function') window.updateAutoAimHudBadge();
             // First, set hero-specific icons for Q, E, F abilities
@@ -51046,7 +50879,7 @@
             else if(p instanceof Ren){c1=p.qCD;m1=7;c2=p.eCD;m2=12;c3=p.fCD;m3=20;c4=0;m4=1;}
             else if(p instanceof Gamb){c1=p.qCD;m1=3;c2=p.eCD;m2=8;c3=p.fCD;m3=12;c4=p.gCD;m4=8;}
             else if(p instanceof Wesley){c1=p.qCD;m1=6;c2=p.eCD;m2=8;c3=p.fCD;m3=14;c4=0;m4=1;}
-            else if(p instanceof Chimera){c1=p.qCD;m1=11;c2=p.eCD;m2=4;c3=p.fCD;m3=13;c4=p.gCD;m4=3;}
+            else if(p instanceof Chimera){c1=p.qCD;m1=p.chimeraMode?(p.copiedQCooldown||5):11;c2=p.eCD;m2=p.chimeraMode?(p.copiedECooldown||6):4;c3=p.fCD;m3=13;c4=p.gCD;m4=1.5;}
             else if(p instanceof Benjamin){c1=p.qCD;m1=8;c2=p.eCD;m2=12;c3=p.fCD;m3=14;c4=0;m4=1;}
             else if(p instanceof Melvin){c1=p.qCD;m1=10;c2=p.eCD;m2=4;c3=p.fCD;m3=15;c4=0;m4=1;}
             else if(p instanceof Zappa){c1=p.qCD;m1=14;c2=p.eCD;m2=3;c3=p.fCD;m3=15;c4=0;m4=1;}
@@ -51348,16 +51181,39 @@
                 if (eIcon) eIcon.innerText = '💚';
             }
 
+            // Universal auto-adjusting cooldown tracker so NO ability HUD cooldown overlay EVER exceeds 100% (including Chimera copies & dynamic CDs!)
+            p._hudAutoMaxCD = p._hudAutoMaxCD || { c1: 0, c2: 0, c3: 0, c4: 0, r: 0 };
+            const computeAutoCdPct = (slotKey, curVal, baseMax) => {
+                const c = Math.max(0, Number(curVal) || 0);
+                if (c <= 0.001) {
+                    p._hudAutoMaxCD[slotKey] = 0;
+                    return { c: 0, pct: 0 };
+                }
+                const safeBase = Math.max(0.1, Number(baseMax) || 1);
+                if (!p._hudAutoMaxCD[slotKey] || p._hudAutoMaxCD[slotKey] <= 0) {
+                    p._hudAutoMaxCD[slotKey] = Math.max(safeBase, c);
+                } else if (c > p._hudAutoMaxCD[slotKey]) {
+                    p._hudAutoMaxCD[slotKey] = c;
+                }
+                const denom = Math.max(0.1, p._hudAutoMaxCD[slotKey]);
+                return { c, pct: Math.max(0, Math.min(100, (c / denom) * 100)) };
+            };
+
+            const cd1 = computeAutoCdPct('c1', c1, m1);
             let s1=document.getElementById('skill1CD'),b1=document.getElementById('skill1Box'),t1=document.getElementById('skill1Timer');
-            if(s1){s1.style.height=((c1/m1)*100)+'%';b1.className=c1<=0?'ability-box ready':'ability-box';if(c1>0){t1.style.display='block';t1.innerText=c1.toFixed(1);}else t1.style.display='none';}
+            if(s1){s1.style.height=cd1.pct+'%';b1.className=cd1.c<=0?'ability-box ready':'ability-box';if(cd1.c>0){t1.style.display='block';t1.innerText=cd1.c.toFixed(1);}else t1.style.display='none';}
+            const cd2 = computeAutoCdPct('c2', c2, m2);
             let s2=document.getElementById('skill2CD'),b2=document.getElementById('skill2Box'),t2=document.getElementById('skill2Timer');
-            if(s2){s2.style.height=((c2/m2)*100)+'%';b2.className=c2<=0?'ability-box ready':'ability-box';if(c2>0){t2.style.display='block';t2.innerText=c2.toFixed(1);}else t2.style.display='none';}
+            if(s2){s2.style.height=cd2.pct+'%';b2.className=cd2.c<=0?'ability-box ready':'ability-box';if(cd2.c>0){t2.style.display='block';t2.innerText=cd2.c.toFixed(1);}else t2.style.display='none';}
+            const cd3 = computeAutoCdPct('c3', c3, m3);
             let s3=document.getElementById('ultCD'),b3=document.getElementById('ultBox'),t3=document.getElementById('ultTimer');
-            if(s3){s3.style.height=((c3/m3)*100)+'%';b3.className=c3<=0?'ability-box ready':'ability-box';if(c3>0){t3.style.display='block';t3.innerText=c3.toFixed(1);}else t3.style.display='none';}
+            if(s3){s3.style.height=cd3.pct+'%';b3.className=cd3.c<=0?'ability-box ready':'ability-box';if(cd3.c>0){t3.style.display='block';t3.innerText=cd3.c.toFixed(1);}else t3.style.display='none';}
+            const cd4 = computeAutoCdPct('c4', c4, m4);
             let s4=document.getElementById('skill4CD'),b4=document.getElementById('skill4Box'),t4=document.getElementById('skill4Timer');
-            if(s4){s4.style.height=((c4/m4)*100)+'%';b4.className=c4<=0?'ability-box ready':'ability-box';if(c4>0){t4.style.display='block';t4.innerText=c4.toFixed(1);}else t4.style.display='none';}
+            if(s4){s4.style.height=cd4.pct+'%';b4.className=cd4.c<=0?'ability-box ready':'ability-box';if(cd4.c>0){t4.style.display='block';t4.innerText=cd4.c.toFixed(1);}else t4.style.display='none';}
+            const cdR = computeAutoCdPct('r', p.rCD, p.maxRCD || 60);
             let sR=document.getElementById('skillRCD'),bR=document.getElementById('skillRBox'),tR=document.getElementById('skillRTimer');
-            if(sR){let mR=p.maxRCD||60;sR.style.height=Math.min(100,(p.rCD/mR)*100)+'%';bR.className=p.rCD<=0?'ability-box ready':'ability-box';if(p.rCD>0){tR.style.display='block';tR.innerText=p.rCD.toFixed(1);}else tR.style.display='none';}
+            if(sR){sR.style.height=cdR.pct+'%';bR.className=cdR.c<=0?'ability-box ready':'ability-box';if(cdR.c>0){tR.style.display='block';tR.innerText=cdR.c.toFixed(1);}else tR.style.display='none';}
             
             // Update passive bar for Li and other hero-specific bars
             let passiveBar = document.getElementById('passiveBarFill');
