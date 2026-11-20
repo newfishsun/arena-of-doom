@@ -2873,7 +2873,7 @@
                 </div>
                 <!-- Branson Demo Card (Unlocked via D+E+V+M+O+D) -->
                 <div class="hero-card dev-demo-card" id="card-branson" onclick="selectHero('branson')" style="display:none; background:linear-gradient(145deg,#1e1b4b,#500724); color:#fff; border-color:#ec4899;">
-                    <div class="hero-icon" style="background:linear-gradient(135deg,#ec4899,#38bdf8); color:#fff;">🎸</div><h3 style="color:#f472b6;">BRANSON</h3><p style="color:#bae6fd;">Pure Support (DEMO)</p>
+                    <div class="hero-icon" style="background:linear-gradient(135deg,#ec4899,#38bdf8); color:#fff;">🎸</div><h3 style="color:#f472b6;">BRANSON</h3><p style="color:#bae6fd;">Support (DEMO)</p>
                     <div class="hero-stats">
                         <div class="ability-row"><span>Survival</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:55%; background:#4caf50;"></div></div></div>
                         <div class="ability-row"><span>Damage</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:65%; background:#e74c3c;"></div></div></div>
@@ -2915,6 +2915,26 @@
                         <p><strong>Q:</strong> 3 straight-in-front piston punches (Ascended: Soul Flame dash + 5 slashes + Soul Explosion).</p>
                         <p><strong>E:</strong> Charged dash (Ascended: Soul Vanisher Zone reducing Q & F cooldowns).</p>
                         <p><strong>F:</strong> Heavy knockback kick with wall-slam stun (Ascended: High-speed Soul Flame Flight).</p>
+                    </div>
+                </div>
+                <!-- Wayne Demo Card (Unlocked via D+E+V+M+O+D) -->
+                <div class="hero-card dev-demo-card" id="card-wayne" onclick="selectHero('wayne')" style="display:none; background:linear-gradient(145deg,#0f172a,#1e3a8a); color:#fff; border-color:#38bdf8;">
+                    <div class="hero-icon" style="background:linear-gradient(135deg,#38bdf8,#6366f1); color:#fff;">⏳</div><h3 style="color:#bae6fd;">WAYNE</h3><p style="color:#93c5fd;">Mage/Tank (DEMO)</p>
+                    <div class="hero-stats">
+                        <div class="ability-row"><span>Survival</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:80%; background:#4caf50;"></div></div></div>
+                        <div class="ability-row"><span>Damage</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:75%; background:#e74c3c;"></div></div></div>
+                        <div class="ability-row"><span>Agility</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:60%; background:#f1c40f;"></div></div></div>
+                        <div class="ability-row"><span>Speed</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:55%; background:#00bcd4;"></div></div></div>
+                        <div class="ability-row"><span>Difficulty</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:65%; background:#9b59b6;"></div></div></div>
+                    </div>
+                    <button class="info-btn" onclick="event.stopPropagation(); toggleHeroInfo('wayne')">Info</button>
+                    <div class="hero-description">
+                        <h4>Demo Hero — Wayne (7,400 HP)</h4>
+                        <p><strong>Passive - Magical Time Mark:</strong> Q applies up to 3 Time Mark stacks on enemies; each stack amplifies damage taken from Wayne's next Q magical spear.</p>
+                        <p><strong>Basic - Physical Spear:</strong> Thrusts a physical spear for 200 damage <em>(1.5s CD)</em>.</p>
+                        <p><strong>Q - Magical Spears:</strong> Fires magical spears dealing 1,120 damage to a single enemy; spreads to all enemies in range, losing 15% damage for each additional enemy. Applies 1 Time Mark stack. <em>(3s CD)</em></p>
+                        <p><strong>E - Chrono Blink:</strong> Blinks forward and enhances basic attack spears for 3s (0.6s CD; hitting an enemy reduces F cooldown by 1s, non-stacking per swing). <em>(8s CD)</em></p>
+                        <p><strong>F - Time Stasis:</strong> Stays immobile for 2.5s, freezing time for up to 2 closest nearby enemies/entities (cannot move, attack, recharge cooldowns, or be targeted). If Wayne survives, he returns to full HP, deals 250 true damage, and slows nearby enemies. <em>(36s CD)</em></p>
                     </div>
                 </div>
             </div>
@@ -3151,9 +3171,9 @@
         var camera = { x: 0, y: 0, zoom: 1 };
         var keys = { w: false, a: false, s: false, d: false, q: false, e: false, f: false, g: false, r: false };
         var mouse = { x: 0, y: 0, down: false };
-        window.SECRET_HERO_KEYS = new Set(['dayum', 'mecca', 'inou', 'branson', 'ronald']);
-        window.secretHeroesUnlocked = { dayum: false, mecca: false, inou: false, branson: false, ronald: false };
-        window.heroEnabled = { jeffrey: true, karen: true, dayum: false, mecca: false, inou: false, branson: false, ronald: false };
+        window.SECRET_HERO_KEYS = new Set(['dayum', 'mecca', 'inou', 'branson', 'ronald', 'wayne']);
+        window.secretHeroesUnlocked = { dayum: false, mecca: false, inou: false, branson: false, ronald: false, wayne: false };
+        window.heroEnabled = { jeffrey: true, karen: true, dayum: false, mecca: false, inou: false, branson: false, ronald: false, wayne: false };
         window.isSecretHeroSelectable = function(heroKey) {
             const k = String(heroKey || '').toLowerCase().trim();
             if (!window.SECRET_HERO_KEYS || !window.SECRET_HERO_KEYS.has(k)) return true;
@@ -4897,7 +4917,7 @@
                 });
                 return;
             }
-            if (cname === 'MeccaPolygonAttackEffect' || cname === 'InouAirSliceEffect' || cname === 'RonaldPitchEffect') {
+            if (cname === 'MeccaPolygonAttackEffect' || cname === 'InouAirSliceEffect' || cname === 'RonaldPitchEffect' || cname === 'WayneChronoEffect') {
                 queueOnlineFxEntry({
                     k: cname, t: targetArray,
                     kind: item.kind,
@@ -5365,6 +5385,11 @@
                     case 'RonaldPitchEffect':
                         if (typeof RonaldPitchEffect !== 'undefined') {
                             inst = new RonaldPitchEffect(fx.kind || 'juggle_kick', fxX, fxY, fx.angle || 0, fx.opts || {});
+                        }
+                        break;
+                    case 'WayneChronoEffect':
+                        if (typeof WayneChronoEffect !== 'undefined') {
+                            inst = new WayneChronoEffect(fx.kind || 'physical_spear', fxX, fxY, fx.angle || 0, fx.opts || {});
                         }
                         break;
                     case 'WaveShockwave':
@@ -9279,6 +9304,17 @@
                         cleanStun = Math.max(0, cleanStun) * (1 - this.stunResistance);
                     }
                     this.stunTimer = Math.min(4.0, Math.max(Number.isFinite(this.stunTimer) ? this.stunTimer : 0, cleanStun));
+                } else if (type === 'timeStop') {
+                    const dur = Math.max(0.1, Math.min(3.0, Number(value) || 1.0));
+                    if (!(this.timeStoppedTimer > 0)) {
+                        this._wayneFrozenX = this.x;
+                        this._wayneFrozenY = this.y;
+                        this._wayneFrozenAngle = this.angle;
+                        if (this._waynePrevTargetable === undefined) this._waynePrevTargetable = this.isTargetable;
+                    }
+                    this.timeStoppedTimer = Math.max(this.timeStoppedTimer || 0, dur);
+                    this._wayneTimeStopped = true;
+                    this.isTargetable = false;
                 } else if (type === 'ankleBreak') {
                     const dur = (value && typeof value === 'object') ? (Number(value.duration) || 0.5) : (Number(value) || 0.5);
                     const dir = (value && typeof value === 'object' && typeof value.dir === 'number')
@@ -9638,7 +9674,7 @@
                 return k;
             }
             takeDamage(amt, src, meta){
-                if(this.dead || this.del || this.isTargetable === false) return;
+                if(this.dead || this.del || this.isTargetable === false || (this.timeStoppedTimer && this.timeStoppedTimer > 0)) return;
                 if(src && (src === this || src === this.owner || src === this.monza || src === this.karen || src === this.caster)) return;
                 if(gameMode === 'training' && this === player && window.trainingPanelState && window.trainingPanelState.damageImmunity) {
                     this.hp = this.maxHp;
@@ -17415,7 +17451,7 @@
                     this.x + Math.cos(this.eAimAngle) * 24,
                     this.y + Math.sin(this.eAimAngle) * 24,
                     this.eAimAngle,
-                    300 + necroBonus,
+                    270 + necroBonus,
                     630,
                     64,
                     920,
@@ -37466,6 +37502,7 @@
             else if(selectedHeroType==='inou'){if(q)q.innerText='手里';if(e)e.innerText='⚡';if(f)f.innerText='🕶️';player=new Inou(WORLD_SIZE/2,WORLD_SIZE/2,true);}
             else if(selectedHeroType==='branson'){if(q)q.innerText='🎸';if(e)e.innerText='🎶';if(f)f.innerText='🎼';player=new Branson(WORLD_SIZE/2,WORLD_SIZE/2,true);}
             else if(selectedHeroType==='ronald'){if(q)q.innerText='⚽';if(e)e.innerText='⚡';if(f)f.innerText='🏟️';player=new Ronald(WORLD_SIZE/2,WORLD_SIZE/2,true);}
+            else if(selectedHeroType==='wayne'){if(q)q.innerText='🔱';if(e)e.innerText='⚡';if(f)f.innerText='⏳';player=new Wayne(WORLD_SIZE/2,WORLD_SIZE/2,true);}
             else player=new Paul(WORLD_SIZE/2,WORLD_SIZE/2,true);
             entities.push(player);
             window._equipmentFFACoins=[]; window._equipFFACoinTimer=-3.0; window._trendingZones=[]; window._backupDriveMarkers=[];
@@ -38187,7 +38224,7 @@
             { key: 'trent', name: 'Trent' }, { key: 'guest', name: 'Guest' }, { key: 'jimeka', name: 'Jimeka' },
             { key: 'zeus', name: 'Zeus' }, { key: 'kujou', name: 'Kujou' }, { key: 'caskrice', name: 'Caskrice' },
             { key: 'karen', name: 'Karen' }, { key: 'jeffrey', name: 'Jeffrey' }, { key: 'cole', name: 'Cole' }, { key: 'rico', name: 'Rico' },
-            { key: 'mecca', name: '🔥 Mecca' }, { key: 'inou', name: '⚡ Inou' }, { key: 'branson', name: '🎸 Branson' }, { key: 'ronald', name: '⚽ Ronald' }
+            { key: 'mecca', name: '🔥 Mecca' }, { key: 'inou', name: '⚡ Inou' }, { key: 'branson', name: '🎸 Branson' }, { key: 'ronald', name: '⚽ Ronald' }, { key: 'wayne', name: '⏳ Wayne' }
         ];
 
         window.createTrainingDummy = function(mode, customSpawnX, customSpawnY) {
@@ -46652,6 +46689,559 @@
             }
         }
 
+        // Chrono Spear & Time-Stop Visual Effect for Wayne
+        class WayneChronoEffect {
+            constructor(kind, x, y, angle, opts = {}) {
+                this.kind = kind;
+                this.x = x;
+                this.y = y;
+                this.angle = angle || 0;
+                this.opts = opts;
+                this.duration = opts.duration || 0.32;
+                this.maxDuration = this.duration;
+            }
+            update(dt) {
+                this.duration -= dt;
+            }
+            draw(ctx) {
+                if (this.duration <= 0) return;
+                const progress = 1 - Math.max(0, this.duration) / this.maxDuration;
+                const alpha = Math.pow(1 - progress, 0.55);
+                const sx = this.x - camera.x;
+                const sy = this.y - camera.y;
+                ctx.save();
+                if (this.kind === 'physical_spear') {
+                    // Crisp metallic/chrono spear thrust
+                    const len = this.opts.length || 145;
+                    const enhanced = !!this.opts.enhanced;
+                    ctx.translate(sx, sy);
+                    ctx.rotate(this.angle);
+                    const ext = 24 + len * (0.45 + Math.sin(progress * Math.PI) * 0.55);
+                    ctx.shadowColor = enhanced ? '#38bdf8' : '#94a3b8';
+                    ctx.shadowBlur = enhanced ? 16 : 6;
+                    ctx.strokeStyle = enhanced ? `rgba(56, 189, 248, ${0.95 * alpha})` : `rgba(226, 232, 240, ${0.92 * alpha})`;
+                    ctx.lineWidth = enhanced ? 6 : 4.2;
+                    ctx.beginPath();
+                    ctx.moveTo(8, 0);
+                    ctx.lineTo(ext - 18, 0);
+                    ctx.stroke();
+                    // Spearhead diamond
+                    ctx.fillStyle = enhanced ? `rgba(186, 230, 253, ${alpha})` : `rgba(248, 250, 252, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.moveTo(ext + 10, 0);
+                    ctx.lineTo(ext - 18, -9);
+                    ctx.lineTo(ext - 12, 0);
+                    ctx.lineTo(ext - 18, 9);
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (this.kind === 'magic_spear_bolt') {
+                    // Glowing cyan-indigo magical spear beam from Wayne to target
+                    const tx = (this.opts.tx ?? this.x) - camera.x;
+                    const ty = (this.opts.ty ?? this.y) - camera.y;
+                    ctx.shadowColor = '#38bdf8';
+                    ctx.shadowBlur = 18;
+                    ctx.strokeStyle = `rgba(99, 102, 241, ${0.85 * alpha})`;
+                    ctx.lineWidth = 9 * (1 - progress * 0.45);
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.lineTo(tx, ty);
+                    ctx.stroke();
+                    ctx.strokeStyle = `rgba(186, 230, 253, ${0.98 * alpha})`;
+                    ctx.lineWidth = 3.2 * (1 - progress * 0.35);
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.lineTo(tx, ty);
+                    ctx.stroke();
+                } else if (this.kind === 'chrono_blink') {
+                    const ex = (this.opts.ex ?? this.x) - camera.x;
+                    const ey = (this.opts.ey ?? this.y) - camera.y;
+                    ctx.strokeStyle = `rgba(56, 189, 248, ${0.8 * alpha})`;
+                    ctx.lineWidth = 4;
+                    ctx.setLineDash([10, 6]);
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.lineTo(ex, ey);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+                ctx.restore();
+            }
+        }
+
+        // DEV MODE HERO: WAYNE - MAGE/TANK (7400 HP, Unlocked via D + E + V + M + O + D)
+        class Wayne extends Entity {
+            constructor(x, y, p) {
+                super(x, y, 22, p ? '#0284c7' : '#1d4ed8', 7400);
+                this.isPlayer = p;
+                this.countsAsFFAHero = true;
+                this.heroType = 'wayne';
+                this.name = p ? 'Player (Wayne)' : 'Enemy Wayne';
+                this.currentSkin = 'default';
+                this.skinIcon = null;
+
+                this.baseSpd = 235;
+                this.speed = this.baseSpd;
+                this.basicCD = 0;
+                this.qCD = 0;
+                this.eCD = 0;
+                this.fCD = 0;
+                this.rCD = 0;
+
+                // Passive: Magical Time Mark (only applied by Q, max 3 stacks, increases next Q spear damage)
+                this.wayneTimeMarks = new Map(); // entity -> { stacks: 1..3, timer: 8.0 }
+
+                // E: Enhanced Basic Spear for 3s (0.6s CD, -1s F CD on hit, non-stacking per swing)
+                this.enhancedSpearTimer = 0;
+
+                // F: Chrono Stasis (2.5s immobile charge, stops time for up to 2 closest nearby enemies/entities)
+                this.fChanneling = false;
+                this.fChannelTimer = 0;
+                this.fChannelDuration = 2.5;
+                this.fRadius = 290;
+                this.timeStoppedTargets = [];
+                this._timeStoppedSavedCDs = new Map();
+            }
+
+            getEffectiveSpeed() {
+                if (this.fChanneling) return 0;
+                if (this.enhancedKBTimer > 0 || (this.movementLockdownTimer && this.movementLockdownTimer > 0) || (this.fightingTimer && this.fightingTimer > 0)) return 0;
+                let s = this.speed;
+                if (this.slowTimer > 0) s *= (this.slowMultiplier || 0.6);
+                if (this.speedsterTimer > 0) s *= 1.5;
+                if (this.witherBuff && this.witherBuffTimer > 0) s *= 1.25;
+                return s;
+            }
+
+            releaseTimeStoppedTargets() {
+                if (!Array.isArray(this.timeStoppedTargets)) {
+                    this.timeStoppedTargets = [];
+                    return;
+                }
+                for (let t of this.timeStoppedTargets) {
+                    if (!t) continue;
+                    t.timeStoppedTimer = 0;
+                    t.timeStoppedBy = null;
+                    if (t._waynePrevTargetable !== undefined) {
+                        t.isTargetable = t._waynePrevTargetable;
+                        delete t._waynePrevTargetable;
+                    } else {
+                        t.isTargetable = true;
+                    }
+                    t._wayneTimeStopped = false;
+                    delete t._wayneFrozenX;
+                    delete t._wayneFrozenY;
+                    delete t._wayneFrozenAngle;
+                }
+                this.timeStoppedTargets = [];
+                if (this._timeStoppedSavedCDs) this._timeStoppedSavedCDs.clear();
+            }
+
+            captureTimeStopTargets() {
+                if (!this.fChanneling) return;
+                this.timeStoppedTargets = (this.timeStoppedTargets || []).filter(t => t && !t.dead && !t.del);
+                if (this.timeStoppedTargets.length >= 2) return;
+                const candidates = [];
+                for (let e of entities) {
+                    if (!e || e === this || e.dead || e.del || !(e instanceof Entity)) continue;
+                    const eTeam = e.team !== undefined ? e.team : (e.owner ? e.owner.team : undefined);
+                    if (eTeam !== undefined && this.team !== undefined && eTeam === this.team) continue;
+                    if (this.timeStoppedTargets.includes(e)) continue;
+                    if (e.isTargetable === false) continue;
+                    const d = Math.hypot(e.x - this.x, e.y - this.y);
+                    if (d <= this.fRadius + (e.radius || 20)) {
+                        candidates.push({ e, d });
+                    }
+                }
+                candidates.sort((a, b) => a.d - b.d);
+                for (const item of candidates) {
+                    if (this.timeStoppedTargets.length >= 2) break;
+                    const tgt = item.e;
+                    if (tgt._waynePrevTargetable === undefined) tgt._waynePrevTargetable = tgt.isTargetable;
+                    tgt.isTargetable = false;
+                    tgt._wayneTimeStopped = true;
+                    tgt.timeStoppedBy = this;
+                    tgt._wayneFrozenX = tgt.x;
+                    tgt._wayneFrozenY = tgt.y;
+                    tgt._wayneFrozenAngle = tgt.angle;
+                    tgt.timeStoppedTimer = Math.max(0.15, this.fChannelTimer + 0.08);
+                    this.timeStoppedTargets.push(tgt);
+                    this._timeStoppedSavedCDs.set(tgt, {
+                        basicCD: tgt.basicCD, qCD: tgt.qCD, eCD: tgt.eCD, fCD: tgt.fCD, gCD: tgt.gCD, rCD: tgt.rCD
+                    });
+                    if (typeof safeApplyStatus === 'function') {
+                        safeApplyStatus(tgt, 'timeStop', Math.max(0.15, this.fChannelTimer), this);
+                    }
+                }
+            }
+
+            die(src) {
+                this.fChanneling = false;
+                this.fChannelTimer = 0;
+                this.releaseTimeStoppedTargets();
+                return super.die(src);
+            }
+
+            update(dt) {
+                if (this.dead) {
+                    this.releaseTimeStoppedTargets();
+                    return;
+                }
+                this.updateCommon(dt);
+
+                if (this.basicCD > 0) this.basicCD = Math.max(0, this.basicCD - dt);
+                if (this.qCD > 0) this.qCD = Math.max(0, this.qCD - dt);
+                if (this.eCD > 0) this.eCD = Math.max(0, this.eCD - dt);
+                if (this.fCD > 0) this.fCD = Math.max(0, this.fCD - dt);
+                if (this.rCD > 0) this.rCD = Math.max(0, this.rCD - dt);
+                if (this.enhancedSpearTimer > 0) this.enhancedSpearTimer = Math.max(0, this.enhancedSpearTimer - dt);
+
+                // Decay Magical Time Marks
+                for (let [enemy, data] of this.wayneTimeMarks) {
+                    if (!enemy || enemy.dead || enemy.del) {
+                        this.wayneTimeMarks.delete(enemy);
+                    } else {
+                        data.timer -= dt;
+                        if (data.timer <= 0) this.wayneTimeMarks.delete(enemy);
+                    }
+                }
+
+                // F Ultimate: 2.5s immobile charge; stops time for up to 2 closest enemies/entities in radius
+                if (this.fChanneling) {
+                    this.fChannelTimer = Math.max(0, this.fChannelTimer - dt);
+
+                    // Capture up to 2 closest enemies/enemy entities stepping into stasis radius
+                    this.captureTimeStopTargets();
+
+                    // Keep frozen enemies completely paused (position, angle, untargetable, no attacks, no cooldowns)
+                    for (let tgt of this.timeStoppedTargets) {
+                        tgt.timeStoppedTimer = Math.max(0.12, this.fChannelTimer + 0.06);
+                        tgt.isTargetable = false;
+                        tgt.attackLockoutTimer = Math.max(tgt.attackLockoutTimer || 0, 0.15);
+                        if (typeof tgt._wayneFrozenX === 'number') tgt.x = tgt._wayneFrozenX;
+                        if (typeof tgt._wayneFrozenY === 'number') tgt.y = tgt._wayneFrozenY;
+                        if (typeof tgt._wayneFrozenAngle === 'number') tgt.angle = tgt._wayneFrozenAngle;
+                        const saved = this._timeStoppedSavedCDs.get(tgt);
+                        if (saved) {
+                            if (typeof saved.basicCD === 'number') tgt.basicCD = saved.basicCD;
+                            if (typeof saved.qCD === 'number') tgt.qCD = saved.qCD;
+                            if (typeof saved.eCD === 'number') tgt.eCD = saved.eCD;
+                            if (typeof saved.fCD === 'number') tgt.fCD = saved.fCD;
+                            if (typeof saved.gCD === 'number') tgt.gCD = saved.gCD;
+                            if (typeof saved.rCD === 'number') tgt.rCD = saved.rCD;
+                        }
+                    }
+
+                    if (Math.random() < 0.7) {
+                        const a = Math.random() * Math.PI * 2;
+                        const rr = 30 + Math.random() * (this.fRadius - 30);
+                        particles.push(new Particle(this.x + Math.cos(a) * rr, this.y + Math.sin(a) * rr, Math.random() < 0.5 ? '#38bdf8' : '#818cf8', 4, 0.45));
+                    }
+
+                    if (this.fChannelTimer <= 0) {
+                        this.fChanneling = false;
+                        const releasedTargets = this.timeStoppedTargets.slice();
+                        this.releaseTimeStoppedTargets();
+
+                        // Survived 2.5s -> return to FULL HEALTH!
+                        this.hp = this.maxHp;
+
+                        // Deal 250 true damage and slow nearby enemies (including released time-stopped enemies)
+                        const blastTargets = new Set(releasedTargets);
+                        for (let e of entities) {
+                            if (!e || e === this || e.dead || e.del || !(e instanceof Entity)) continue;
+                            if (e.team !== undefined && this.team !== undefined && e.team === this.team) continue;
+                            if (e.isTargetable === false) continue;
+                            if (Math.hypot(e.x - this.x, e.y - this.y) <= this.fRadius + 55 + (e.radius || 20)) {
+                                blastTargets.add(e);
+                            }
+                        }
+                        for (let tgt of blastTargets) {
+                            if (!tgt || tgt.dead) continue;
+                            tgt.takeDamage(250, this, { isTrue: true, trueDamage: true });
+                            tgt.slowTimer = Math.max(tgt.slowTimer || 0, 2.5);
+                            tgt.slowMultiplier = 0.55;
+                            if (typeof safeApplyStatus === 'function') {
+                                safeApplyStatus(tgt, 'slow', 2.5, this);
+                            }
+                        }
+                        effectsAdd(new WaveShockwave(this.x, this.y, this.fRadius + 55, 0.55, '#38bdf8', '#818cf8'));
+                        effectsAdd(new AuraRing(this.x, this.y, 130, 0.5, '#bae6fd', 10));
+                        if (this.isPlayer) {
+                            screenShake(10);
+                            addKillMsg('⏳ Time Rewind Complete! Full HP Restored!');
+                        }
+                    }
+                    if (this.isPlayer) updateHUD(this);
+                    return;
+                }
+
+                if (this.stunTimer > 0 || this.freezeTimer > 0) {
+                    if (this.isPlayer) updateHUD(this);
+                    return;
+                }
+
+                let spd = this.getEffectiveSpeed();
+                if (this.isPlayer) {
+                    this.input(dt, spd);
+                    updateHUD(this);
+                } else {
+                    this.ai(dt, spd);
+                }
+            }
+
+            input(dt, spd) {
+                let dx = 0, dy = 0;
+                if (keys.w) dy--;
+                if (keys.s) dy++;
+                if (keys.a) dx--;
+                if (keys.d) dx++;
+                if (dx || dy) {
+                    let m = new Vector2(dx, dy).norm().mult(spd * dt);
+                    this.x = Math.max(20, Math.min(WORLD_SIZE - 20, this.x + m.x));
+                    this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + m.y));
+                }
+                this.angle = getMouseAimAngle(this.x, this.y);
+                if (mouse.down && this.basicCD <= 0) this.basicAtk();
+                if (keys.q && this.qCD <= 0 && !this._qWas) this.abilityQ();
+                if (keys.e && this.eCD <= 0 && !this._eWas) this.abilityE();
+                if (keys.f && this.fCD <= 0 && !this._fWas) this.abilityF();
+                if (keys.r && this.rCD <= 0 && !this._rWas) this.useGear();
+                this._qWas = !!keys.q;
+                this._eWas = !!keys.e;
+                this._fWas = !!keys.f;
+                this._rWas = !!keys.r;
+            }
+
+            // Basic Attack: Physical Spear thrust dealing 200 dmg (1.5s CD, buffed to 0.6s CD during E enhanced spear)
+            // Hitting with enhanced spear reduces Ultimate (F) CD by 1s (cannot stack within a single basic attack!)
+            basicAtk() {
+                this.revealTimer = 0.5;
+                const isEnhanced = this.enhancedSpearTimer > 0;
+                this.basicCD = isEnhanced ? 0.6 : 1.5;
+                const range = isEnhanced ? 175 : 155;
+                const halfWidth = 34;
+
+                visualEffects.push(new WayneChronoEffect('physical_spear', this.x, this.y, this.angle, {
+                    length: range,
+                    enhanced: isEnhanced,
+                    duration: isEnhanced ? 0.22 : 0.28
+                }));
+
+                const cosA = Math.cos(this.angle), sinA = Math.sin(this.angle);
+                let hitAnyEnemy = false;
+                for (let e of entities) {
+                    if (e === this || e.dead || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                    const dx = e.x - this.x, dy = e.y - this.y;
+                    const fwd = dx * cosA + dy * sinA;
+                    const lat = Math.abs(-dx * sinA + dy * cosA);
+                    if (fwd >= -10 && fwd <= range + (e.radius || 20) && lat <= halfWidth + (e.radius || 20)) {
+                        e.takeDamage(200, this);
+                        hitAnyEnemy = true;
+                        for (let i = 0; i < 6; i++) {
+                            particles.push(new Particle(e.x, e.y, isEnhanced ? '#38bdf8' : '#e2e8f0', 3.5, 0.32));
+                        }
+                    }
+                }
+                // Non-stacking -1s Ultimate CD reduction per enhanced basic attack swing
+                if (isEnhanced && hitAnyEnemy && this.fCD > 0) {
+                    this.fCD = Math.max(0, this.fCD - 1.0);
+                }
+            }
+
+            // Q Ability: Magical Spears (3s CD)
+            // Single enemy -> 1120 base damage; multiple enemies -> evenly spread across them, gradually losing damage per target.
+            // Passive Magical Time Mark (max 3 stacks, only from Q): each stack increases next Q spear damage by +15%!
+            abilityQ() {
+                this.revealTimer = 0.6;
+                this.qCD = 3.0;
+                const maxRange = 640;
+
+                // Gather all valid visible enemies in range (in front cone or close radius)
+                const targets = [];
+                for (let e of entities) {
+                    if (e === this || e.dead || e.del || !(e instanceof Entity) || e.team === this.team || e.isTargetable === false) continue;
+                    if (typeof e.isVisibleTo === 'function' && !e.isVisibleTo(this)) continue;
+                    const d = Math.hypot(e.x - this.x, e.y - this.y);
+                    if (d <= maxRange + (e.radius || 20)) {
+                        targets.push(e);
+                    }
+                }
+
+                if (targets.length === 0) {
+                    // Fire visual magical spear straight ahead if no targets are in range
+                    const endX = this.x + Math.cos(this.angle) * 480;
+                    const endY = this.y + Math.sin(this.angle) * 480;
+                    visualEffects.push(new WayneChronoEffect('magic_spear_bolt', this.x, this.y, this.angle, { tx: endX, ty: endY, duration: 0.30 }));
+                    return;
+                }
+
+                // Spread spears across all targets in range: 1120 for 1 enemy, losing 15% damage for each additional enemy
+                const n = targets.length;
+                const basePerTarget = Math.round(1120 * Math.pow(0.85, Math.max(0, n - 1)));
+
+                for (let tgt of targets) {
+                    const existing = this.wayneTimeMarks.get(tgt);
+                    const stacksBefore = (existing && existing.timer > 0) ? Math.min(3, existing.stacks || 0) : 0;
+                    const markMult = 1 + stacksBefore * 0.15; // +15% per Time Mark stack (up to +45% at 3 stacks)
+                    const finalDmg = Math.round(basePerTarget * markMult);
+
+                    tgt.takeDamage(finalDmg, this);
+
+                    // Add +1 Magical Time Mark stack (max 3) — ONLY applied by Q!
+                    const nextStacks = Math.min(3, stacksBefore + 1);
+                    this.wayneTimeMarks.set(tgt, { stacks: nextStacks, timer: 8.0 });
+
+                    const ang = Math.atan2(tgt.y - this.y, tgt.x - this.x);
+                    visualEffects.push(new WayneChronoEffect('magic_spear_bolt', this.x, this.y, ang, { tx: tgt.x, ty: tgt.y, duration: 0.34 }));
+                    effectsAdd(new ImpactFlash(tgt.x, tgt.y, ang, 85, 0.25, '#38bdf8'));
+                    for (let i = 0; i < 8; i++) {
+                        particles.push(new Particle(tgt.x, tgt.y, i % 2 === 0 ? '#38bdf8' : '#818cf8', 4, 0.38));
+                    }
+                }
+                if (this.isPlayer) {
+                    screenShake(n === 1 ? 6 : 4);
+                }
+            }
+
+            // E Ability: Chrono Blink (8s CD) — blinks forward and empowers basic attack spear for 3s (0.6s CD, -1s F CD on hit)
+            abilityE() {
+                this.revealTimer = 0.5;
+                this.eCD = 8.0;
+                const startX = this.x, startY = this.y;
+                const blinkDist = 260;
+                this._blinkWallGrace = 0.15;
+                this.x = Math.max(25, Math.min(WORLD_SIZE - 25, this.x + Math.cos(this.angle) * blinkDist));
+                this.y = Math.max(25, Math.min(WORLD_SIZE - 25, this.y + Math.sin(this.angle) * blinkDist));
+                this.enhancedSpearTimer = 3.0;
+
+                visualEffects.push(new WayneChronoEffect('chrono_blink', startX, startY, this.angle, { ex: this.x, ey: this.y, duration: 0.32 }));
+                effectsAdd(new AuraRing(this.x, this.y, 64, 0.35, '#38bdf8', 8));
+                for (let i = 0; i < 12; i++) {
+                    particles.push(new Particle(this.x, this.y, i % 2 === 0 ? '#38bdf8' : '#e0f2fe', 4, 0.38));
+                }
+                if (this.isPlayer) addKillMsg('⚡ Chrono Blink! Enhanced Spear (3s)');
+            }
+
+            // F Ability: Time Stasis (36s CD) — stays immobile for 2.5s, freezing time for up to 2 closest enemies/entities in radius
+            abilityF() {
+                if (this.fChanneling) return;
+                this.revealTimer = 1.0;
+                this.fCD = 36.0;
+                this.fChanneling = true;
+                this.fChannelTimer = this.fChannelDuration;
+                this.timeStoppedTargets = [];
+                this._timeStoppedSavedCDs = new Map();
+                this.captureTimeStopTargets();
+                effectsAdd(new WaveShockwave(this.x, this.y, this.fRadius, 0.45, '#38bdf8', '#6366f1'));
+                if (this.isPlayer) addKillMsg('⏳ TIME STASIS! Hold out 2.5s for Full HP!');
+            }
+
+            ai(dt, spd) {
+                if (this.handleSafeZone(dt)) return;
+                const t = this.findTarget();
+                if (!t) { this.wander(dt, spd); return; }
+                const dx = t.x - this.x, dy = t.y - this.y;
+                const d = Math.hypot(dx, dy);
+                this.angle = Math.atan2(dy, dx);
+                if (d > 240) {
+                    this.x += Math.cos(this.angle) * spd * dt;
+                    this.y += Math.sin(this.angle) * spd * dt;
+                }
+                if (this.fCD <= 0 && this.hp < this.maxHp * 0.45 && d < 320) this.abilityF();
+                if (this.qCD <= 0 && d <= 600) this.abilityQ();
+                if (this.eCD <= 0 && d > 180 && d < 460) this.abilityE();
+                if (this.basicCD <= 0 && d <= 165) this.basicAtk();
+            }
+
+            draw(ctx) {
+                const sx = this.x - camera.x;
+                const sy = this.y - camera.y;
+
+                // Draw Chrono Stasis field while channeling F
+                if (this.fChanneling) {
+                    const prog = 1 - (this.fChannelTimer / this.fChannelDuration);
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.lineWidth = 3.5;
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, this.fRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Rotating clock hands inside stasis circle
+                    ctx.strokeStyle = 'rgba(186, 230, 253, 0.7)';
+                    ctx.lineWidth = 2.5;
+                    const handA = prog * Math.PI * 2 - Math.PI / 2;
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.lineTo(sx + Math.cos(handA) * (this.fRadius * 0.7), sy + Math.sin(handA) * (this.fRadius * 0.7));
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // Draw frozen time-stop crystal shells around frozen enemies
+                    for (let tgt of (this.timeStoppedTargets || [])) {
+                        if (!tgt || tgt.dead) continue;
+                        const tx = tgt.x - camera.x, ty = tgt.y - camera.y;
+                        ctx.save();
+                        ctx.strokeStyle = '#bae6fd';
+                        ctx.fillStyle = 'rgba(56, 189, 248, 0.28)';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.arc(tx, ty, (tgt.radius || 20) + 12, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.font = 'bold 16px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillStyle = '#e0f2fe';
+                        ctx.fillText('⏳', tx, ty - (tgt.radius || 20) - 16);
+                        ctx.restore();
+                    }
+                }
+
+                super.draw(ctx);
+
+                // Draw spear held by Wayne
+                ctx.save();
+                ctx.translate(sx, sy);
+                ctx.rotate(this.angle);
+                const enh = this.enhancedSpearTimer > 0;
+                ctx.strokeStyle = enh ? '#38bdf8' : '#cbd5e1';
+                ctx.lineWidth = enh ? 4 : 3;
+                ctx.beginPath();
+                ctx.moveTo(-10, 12);
+                ctx.lineTo(30, 12);
+                ctx.stroke();
+                ctx.fillStyle = enh ? '#bae6fd' : '#f8fafc';
+                ctx.beginPath();
+                ctx.moveTo(38, 12);
+                ctx.lineTo(27, 7);
+                ctx.lineTo(27, 17);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+
+                // Draw Magical Time Mark stacks (1..3) above marked enemies
+                if (this.wayneTimeMarks && this.wayneTimeMarks.size > 0) {
+                    for (let [enemy, data] of this.wayneTimeMarks) {
+                        if (!enemy || enemy.dead || !data || data.timer <= 0) continue;
+                        const ex = enemy.x - camera.x;
+                        const ey = enemy.y - camera.y - (enemy.radius || 20) - 24;
+                        ctx.save();
+                        ctx.font = 'bold 13px Inter, Arial, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillStyle = '#38bdf8';
+                        ctx.strokeStyle = '#0f172a';
+                        ctx.lineWidth = 3;
+                        const txt = '⏳'.repeat(Math.min(3, data.stacks || 1));
+                        ctx.strokeText(txt, ex, ey);
+                        ctx.fillText(txt, ex, ey);
+                        ctx.restore();
+                    }
+                }
+            }
+        }
+
         // SECRET HERO: BRANSON - PURE SUPPORT (Unlocked only by pressing B + R + A + N + S simultaneously)
         class Branson extends Entity {
             constructor(x, y, p) {
@@ -50890,6 +51480,10 @@
                 if(q) q.innerText = p.hasBall ? '⚽' : '🚫';
                 if(e) e.innerText = p.hasBall ? '⚡' : '👟';
                 if(f) f.innerText = '🏟️';
+            } else if (typeof Wayne !== 'undefined' && p instanceof Wayne) {
+                if(q) q.innerText = '🔱';
+                if(e) e.innerText = '⚡';
+                if(f) f.innerText = '⏳';
             }
         }
 
@@ -51094,6 +51688,7 @@
             else if(typeof Inou !== 'undefined' && p instanceof Inou){c1=p.qCD;m1=4.5;c2=p.eCD;m2=6.5;c3=p.fCD;m3=45;c4=0;m4=1;}
             else if(typeof Branson !== 'undefined' && p instanceof Branson){c1=p.qCD;m1=3;c2=p.eCD;m2=9;c3=p.fCD;m3=22;c4=0;m4=1;}
             else if(typeof Ronald !== 'undefined' && p instanceof Ronald){c1=p.hasBall?0:1;m1=1;c2=p.eCD;m2=3;c3=p.fCD;m3=19;c4=0;m4=1;}
+            else if(typeof Wayne !== 'undefined' && p instanceof Wayne){c1=p.qCD;m1=3;c2=p.eCD;m2=8;c3=p.fCD;m3=36;c4=0;m4=1;}
             else{c1=0;m1=1;c2=0;m2=1;c3=0;m3=1;c4=0;m4=1;}
             if(p instanceof Melvin) {
                 document.getElementById('eCharge').style.display = 'block';
@@ -52291,6 +52886,29 @@
                 }
 
                 entities.forEach(e=>{
+                    if (e && e.timeStoppedTimer > 0 && !(typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy)) {
+                        if (typeof e._wayneFrozenX === 'number') e.x = e._wayneFrozenX;
+                        if (typeof e._wayneFrozenY === 'number') e.y = e._wayneFrozenY;
+                        if (typeof e._wayneFrozenAngle === 'number') e.angle = e._wayneFrozenAngle;
+                        e.isTargetable = false;
+                        e.attackLockoutTimer = Math.max(e.attackLockoutTimer || 0, 0.12);
+                        const holder = e.timeStoppedBy;
+                        const heldByActiveWayne = !!(holder && !holder.dead && !holder.del && holder.fChanneling && Array.isArray(holder.timeStoppedTargets) && holder.timeStoppedTargets.includes(e));
+                        if (!heldByActiveWayne) {
+                            e.timeStoppedTimer = Math.max(0, e.timeStoppedTimer - dt);
+                            if (e.timeStoppedTimer <= 0) {
+                                e._wayneTimeStopped = false;
+                                e.timeStoppedBy = null;
+                                e.isTargetable = e._waynePrevTargetable !== undefined ? e._waynePrevTargetable : true;
+                                delete e._waynePrevTargetable;
+                                delete e._wayneFrozenX;
+                                delete e._wayneFrozenY;
+                                delete e._wayneFrozenAngle;
+                            }
+                        }
+                        if (e.isPlayer && typeof updateHUD === 'function') updateHUD(e);
+                        return;
+                    }
                     const movementStartX = e && typeof e.x === 'number' ? e.x : 0;
                     const movementStartY = e && typeof e.y === 'number' ? e.y : 0;
                     const storeBoosted = e instanceof Entity && e.countsAsFFAHero === true && isInsideConvenienceStore(e);
@@ -52308,7 +52926,7 @@
                         // Universal AI Combat-Footwork Fallback: ensure no AI hero ever stands frozen when able to move (excluding stationary Practice Dummy, online proxies, and units being knocked back)
                         if (e && !e.isPlayer && !(typeof OnlinePlayerProxy !== 'undefined' && e instanceof OnlinePlayerProxy) && (!(gameMode && gameMode.includes('online')) || gameMode === '5v5_online') && !e.isTrainingPracticeDummy && !(gameMode === 'training' && trainingDummyMode === 'practice' && e === trainingDummy) && e.countsAsFFAHero === true && !e.dead && !(e instanceof FallenStatue) && !(e instanceof DefenseTower) && !(e instanceof MainTower)) {
                             const beingKnocked = Math.hypot(e.kbx || 0, e.kby || 0) > 10 || (e.knockbackDuration > 0 && !(typeof Twins !== 'undefined' && e instanceof Twins)) || ((Date.now() - (e._lastKnockbackOrHitMs || 0)) < 220);
-                            const canMove = !beingKnocked && !(e.stunTimer > 0) && !(e.freezeTimer > 0) && !(e.fightingTimer > 0) && !(e.movementLockdownTimer > 0) && !e.eCharging && !(e.deathLaserTimer > 0) && !(e.droneActive) && !(e.mountedTarget) && (e.baseSpd !== 0) && (e.speed !== 0);
+                            const canMove = !beingKnocked && !(e.stunTimer > 0) && !(e.freezeTimer > 0) && !(e.timeStoppedTimer > 0) && !(e.fightingTimer > 0) && !(e.movementLockdownTimer > 0) && !e.eCharging && !(e.deathLaserTimer > 0) && !(e.droneActive) && !(e.mountedTarget) && (e.baseSpd !== 0) && (e.speed !== 0);
                             const movedDist = Math.hypot((e.x || 0) - movementStartX, (e.y || 0) - movementStartY);
                             if (canMove && movedDist < 0.05 && dt > 0) {
                                 const rawSpd = typeof e.getEffectiveSpeed === 'function' ? e.getEffectiveSpeed() : (typeof e.speed === 'number' ? e.speed : 220);
@@ -56741,7 +57359,7 @@
                 }
                 const modeTitle = document.getElementById('modeTitle');
                 if (modeTitle) {
-                    modeTitle.innerHTML = '🎸 SECRET HERO SELECTED: <span style="color:#ec4899;">BRANSON</span> (Pure Support) 🎸';
+                    modeTitle.innerHTML = '🎸 SECRET HERO SELECTED: <span style="color:#ec4899;">BRANSON</span> (Support) 🎸';
                 }
                 let toast = document.getElementById('meccaSecretToast');
                 if (!toast) {
@@ -56751,7 +57369,7 @@
                     document.body.appendChild(toast);
                 }
                 toast.style.borderColor = '#ec4899';
-                toast.innerHTML = '🎸 <span style="color:#38bdf8;">SECRET HERO UNLOCKED:</span> <span style="color:#ec4899;">BRANSON</span> (Pure Support) SELECTED! 🎸';
+                toast.innerHTML = '🎸 <span style="color:#38bdf8;">SECRET HERO UNLOCKED:</span> <span style="color:#ec4899;">BRANSON</span> (Support) SELECTED! 🎸';
                 toast.style.opacity = '1';
                 toast.style.display = 'block';
                 clearTimeout(window._meccaToastTimer);
@@ -56811,7 +57429,7 @@
                 window._devModeUnlocked = true;
                 window.secretHeroesUnlocked = window.secretHeroesUnlocked || {};
                 window.heroEnabled = window.heroEnabled || {};
-                for (const hk of ['inou', 'ronald', 'branson', 'mecca']) {
+                for (const hk of ['inou', 'ronald', 'branson', 'mecca', 'wayne']) {
                     window.secretHeroesUnlocked[hk] = true;
                     window.heroEnabled[hk] = true;
                     const card = document.getElementById('card-' + hk);
@@ -56831,7 +57449,7 @@
                     document.body.appendChild(toast);
                 }
                 toast.style.borderColor = '#38bdf8';
-                toast.innerHTML = '🛠️ <span style="color:#38bdf8;">DEV MODE UNLOCKED!</span> Demo Heroes (Inou, Ronald, Branson, Mecca) & Modes (Solo Levelling, Equipment FFA) Ready!';
+                toast.innerHTML = '🛠️ <span style="color:#38bdf8;">DEV MODE UNLOCKED!</span> Demo Heroes (Inou, Ronald, Branson, Mecca, Wayne) & Modes (Solo Levelling, Equipment FFA) Ready!';
                 toast.style.opacity = '1';
                 toast.style.display = 'block';
                 clearTimeout(window._meccaToastTimer);
@@ -58499,6 +59117,7 @@
                         inou: '#facc15',
                         branson: '#ec4899',
                         ronald: '#16a34a',
+                        wayne: '#0284c7',
                         guest: '#8B4513',
                         jimeka: '#FF1493',
                         dayum: '#000000',
@@ -58579,6 +59198,7 @@
                         inou: '#eab308',
                         branson: '#db2777',
                         ronald: '#dc2626',
+                        wayne: '#1d4ed8',
                         guest: '#654321',
                         jimeka: '#8B008B',
                         dayum: '#000000',
@@ -58616,7 +59236,7 @@
                 bountyhunter: 26, karen: 20, caskrice: 20, jeffrey: 13, don: 20, monza: 20, christian: 24,
                 faik: 22, fletcher: 20, darrick: 20, twins: 22, trent: 22, guest: 20, jimeka: 25,
                 dayum: 30, ash: 19, zappa: 18, cyrus: 18, ambrose: 20, austin: 20, winston: 16,
-                amir: 18, steven: 20, cole: 20, rico: 20, mecca: 21, inou: 18, branson: 19, ronald: 22
+                amir: 18, steven: 20, cole: 20, rico: 20, mecca: 21, inou: 18, branson: 19, ronald: 22, wayne: 22
             };
             return manual[String(heroType).toLowerCase()] || 20;
         }
@@ -58976,6 +59596,7 @@
             else if(heroType==='inou')player=new Inou(playerData.x,playerData.y,true);
             else if(heroType==='branson')player=new Branson(playerData.x,playerData.y,true);
             else if(heroType==='ronald')player=new Ronald(playerData.x,playerData.y,true);
+            else if(heroType==='wayne')player=new Wayne(playerData.x,playerData.y,true);
             else player=new Paul(playerData.x,playerData.y,true);
             
             // Set socketId for damage reporting and distinct local team (1) so all enemy proxies (team >= 2) always collide
@@ -59288,6 +59909,7 @@
                 'inou': typeof Inou !== 'undefined' ? Inou : null,
                 'branson': typeof Branson !== 'undefined' ? Branson : null,
                 'ronald': typeof Ronald !== 'undefined' ? Ronald : null,
+                'wayne': typeof Wayne !== 'undefined' ? Wayne : null,
                 'lune': typeof Lune !== 'undefined' ? Lune : null,
                 'everdawn': typeof Everdawn !== 'undefined' ? Everdawn : null,
                 'gormo': typeof Gormo !== 'undefined' ? Gormo : null,
@@ -62587,6 +63209,7 @@
                 else if(heroType==='inou')player=new Inou(playerData.x,playerData.y,true);
                 else if(heroType==='branson')player=new Branson(playerData.x,playerData.y,true);
             else if(heroType==='ronald')player=new Ronald(playerData.x,playerData.y,true);
+            else if(heroType==='wayne')player=new Wayne(playerData.x,playerData.y,true);
                 else if(heroType==='everdawn')player=new Everdawn(playerData.x,playerData.y,true);
                 else player=new Paul(playerData.x,playerData.y,true);
 
@@ -62828,6 +63451,7 @@
             else if (selectedHeroType === 'inou') { if (q) q.innerText = '手里'; if (e) e.innerText = '⚡'; if (f) f.innerText = '🕶️'; player = new Inou(750, 750, true); }
             else if (selectedHeroType === 'branson') { if (q) q.innerText = '🎸'; if (e) e.innerText = '🎶'; if (f) f.innerText = '🎼'; player = new Branson(750, 750, true); }
             else if (selectedHeroType === 'ronald') { if (q) q.innerText = '⚽'; if (e) e.innerText = '⚡'; if (f) f.innerText = '🏟️'; player = new Ronald(750, 750, true); }
+            else if (selectedHeroType === 'wayne') { if (q) q.innerText = '🔱'; if (e) e.innerText = '⚡'; if (f) f.innerText = '⏳'; player = new Wayne(750, 750, true); }
             else if (selectedHeroType === 'everdawn') { if (q) q.innerText = '✨'; if (e) e.innerText = '🪞'; if (f) f.innerText = '⛓️'; if (g) g.innerText = '🔮'; player = new Everdawn(750, 750, true); }
             else player = new Paul(750, 750, true);
             
@@ -67068,14 +67692,14 @@ if (typeof module !== 'undefined' && module.exports) {
                 if (typeof proto.input === 'function') {
                     const origInput = proto.input;
                     proto.input = function(dt, spd) {
-                        if ((this.afraidTimer && this.afraidTimer > 0) || (this.ankleBreakTimer && this.ankleBreakTimer > 0)) return;
+                        if ((this.afraidTimer && this.afraidTimer > 0) || (this.ankleBreakTimer && this.ankleBreakTimer > 0) || (this.timeStoppedTimer && this.timeStoppedTimer > 0)) return;
                         return origInput.call(this, dt, spd);
                     };
                 }
                 if (typeof proto.ai === 'function') {
                     const origAi = proto.ai;
                     proto.ai = function(dt, spd) {
-                        if ((this.afraidTimer && this.afraidTimer > 0) || (this.ankleBreakTimer && this.ankleBreakTimer > 0)) return;
+                        if ((this.afraidTimer && this.afraidTimer > 0) || (this.ankleBreakTimer && this.ankleBreakTimer > 0) || (this.timeStoppedTimer && this.timeStoppedTimer > 0)) return;
                         return origAi.call(this, dt, spd);
                     };
                 }
@@ -67083,7 +67707,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     if (typeof proto[atkFn] === 'function') {
                         const origAtk = proto[atkFn];
                         proto[atkFn] = function(...args) {
-                            if (this.ankleBreakTimer && this.ankleBreakTimer > 0) return;
+                            if ((this.ankleBreakTimer && this.ankleBreakTimer > 0) || (this.timeStoppedTimer && this.timeStoppedTimer > 0)) return;
                             return origAtk.apply(this, args);
                         };
                     }
@@ -67111,6 +67735,15 @@ if (typeof module !== 'undefined' && module.exports) {
                         if (fleeSpd > 0 && !(this.stunTimer > 0) && !(this.freezeTimer > 0)) {
                             this.x = Math.max(20, Math.min(WORLD_SIZE - 20, this.x + Math.cos(awayAngle) * fleeSpd * dt));
                             this.y = Math.max(20, Math.min(WORLD_SIZE - 20, this.y + Math.sin(awayAngle) * fleeSpd * dt));
+                        }
+                    }
+                    if (this.timeStoppedTimer && this.timeStoppedTimer > 0) {
+                        this.timeStoppedTimer = Math.max(0, this.timeStoppedTimer - dt);
+                        this.attackLockoutTimer = Math.max(this.attackLockoutTimer || 0, 0.12);
+                        if (this.timeStoppedTimer <= 0 && this._wayneTimeStopped) {
+                            this._wayneTimeStopped = false;
+                            this.isTargetable = this._waynePrevTargetable !== undefined ? this._waynePrevTargetable : true;
+                            delete this._waynePrevTargetable;
                         }
                     }
                     if (this.ankleBreakTimer && this.ankleBreakTimer > 0) {

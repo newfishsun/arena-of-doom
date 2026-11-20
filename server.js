@@ -144,6 +144,7 @@ function getHeroBaseHp(heroType) {
   inou: 4500,
   branson: 5400,
     ronald: 7750,
+    wayne: 7400,
     guest: 7200,
     jimeka: 5600,
     dayum: 69420,
